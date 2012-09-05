@@ -1,0 +1,3 @@
+EXPORTS
+ext_dns_ctx_new
+ext_dns_init_ctx
