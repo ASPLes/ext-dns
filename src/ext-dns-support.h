@@ -35,25 +35,18 @@
  *      Email address:
  *         info@aspl.es - http://www.aspl.es/ext-dns
  */
-#ifndef __EXT_DNS_CTX_H__
-#define __EXT_DNS_CTX_H__
+#ifndef __EXT_DNS_SUPPORT_H__
+#define __EXT_DNS_SUPPORT_H__
 
 #include <ext-dns.h>
 
-extDnsCtx * ext_dns_ctx_new (void);
+int      ext_dns_support_getenv_int                 (const char * env_name);
 
-void        ext_dns_ctx_ref                       (extDnsCtx  * ctx);
+char *   ext_dns_support_getenv                     (const char * env_name);
 
-void        ext_dns_ctx_ref2                      (extDnsCtx  * ctx, const char * who);
+axl_bool ext_dns_support_setenv                     (const char * env_name, 
+						    const char * env_value);
 
-void        ext_dns_ctx_unref                     (extDnsCtx ** ctx);
+axl_bool ext_dns_support_unsetenv                   (const char * env_name);
 
-void        ext_dns_ctx_unref2                    (extDnsCtx ** ctx, const char * who);
-
-int         ext_dns_ctx_ref_count                 (extDnsCtx  * ctx);
-
-void        ext_dns_ctx_free                      (extDnsCtx * ctx);
-
-void        ext_dns_ctx_free2                     (extDnsCtx * ctx, const char * who);
-
-#endif /* __EXT_DNS_CTX_H__ */
+#endif /* __EXT_DNS_SUPPORT_H__ */

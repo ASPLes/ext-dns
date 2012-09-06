@@ -35,25 +35,46 @@
  *      Email address:
  *         info@aspl.es - http://www.aspl.es/ext-dns
  */
-#ifndef __EXT_DNS_CTX_H__
-#define __EXT_DNS_CTX_H__
+
+#ifndef __EXT_DNS_SESSION_H__
+#define __EXT_DNS_SESSION_H__
 
 #include <ext-dns.h>
 
-extDnsCtx * ext_dns_ctx_new (void);
+int               ext_dns_session_get_id     (extDnsSession * session);
 
-void        ext_dns_ctx_ref                       (extDnsCtx  * ctx);
+const char      * ext_dns_session_get_port   (extDnsSession * session);
 
-void        ext_dns_ctx_ref2                      (extDnsCtx  * ctx, const char * who);
+const char      * ext_dns_session_get_host   (extDnsSession * session);
 
-void        ext_dns_ctx_unref                     (extDnsCtx ** ctx);
+extDnsCtx       * ext_dns_session_get_ctx    (extDnsSession * session);
 
-void        ext_dns_ctx_unref2                    (extDnsCtx ** ctx, const char * who);
+EXT_DNS_SOCKET    ext_dns_session_get_socket (extDnsSession * session);
 
-int         ext_dns_ctx_ref_count                 (extDnsCtx  * ctx);
+extDnsPeerRole    ext_dns_session_get_role   (extDnsSession * session);
 
-void        ext_dns_ctx_free                      (extDnsCtx * ctx);
+axl_bool          ext_dns_session_is_ok      (extDnsSession * session, axl_bool close_on_failure);
 
-void        ext_dns_ctx_free2                     (extDnsCtx * ctx, const char * who);
+axl_bool          ext_dns_session_close      (extDnsSession * session);
 
-#endif /* __EXT_DNS_CTX_H__ */
+axl_bool          ext_dns_session_ref        (extDnsSession * session, 
+					      const char    * who);
+
+void              ext_dns_session_unref      (extDnsSession * session, 
+					      char const    * who);
+
+void              ext_dns_session_free       (extDnsSession * session);
+
+void              ext_dns_session_push_error  (extDnsSession  * session, 
+					       int              code,
+					       const char     * msg);
+
+axl_bool         ext_dns_session_set_nonblocking_socket (extDnsSession * session);
+
+/** private functions */
+void                __ext_dns_session_shutdown_and_record_error (extDnsSession    * session,
+								 extDnsStatus       status,
+								 const char       * message,
+								 ...);
+
+#endif /* __EXT_DNS_SESSION_H__ */

@@ -84,7 +84,7 @@ typedef struct _extDnsCtx extDnsCtx;
 
 /** 
  * @internal Definitions to accomodate the underlaying thread
- * interface to the Vortex thread API.
+ * interface to the extDns thread API.
  */
 #if defined(AXL_OS_WIN32)
 
@@ -174,10 +174,10 @@ typedef struct _extDnsAsyncQueue extDnsAsyncQueue;
 
 /** 
  * @brief Handle definition for the family of function that is able to
- * accept the function \ref vortex_thread_create.
+ * accept the function \ref ext_dns_thread_create.
  *
  * The function receive a user defined pointer passed to the \ref
- * vortex_thread_create function, and returns an pointer reference
+ * ext_dns_thread_create function, and returns an pointer reference
  * that must be used as integer value that could be retrieved if the
  * thread is joined.
  *
@@ -207,17 +207,17 @@ typedef axlPointer (* extDnsThreadFunc) (axlPointer user_data);
  */
 typedef enum  {
 	/** 
-	 * @brief Marker used to signal \ref vortex_thread_create that
+	 * @brief Marker used to signal \ref ext_dns_thread_create that
 	 * the configuration list is finished.
 	 * 
 	 * The following is an example on how to create a new thread
 	 * without providing any configuration, using defaults:
 	 *
 	 * \code
-	 * VortexThread thread;
-	 * if (! vortex_thread_created (&thread, 
+	 * extDnsThread thread;
+	 * if (! ext_dns_thread_created (&thread, 
 	 *                              some_start_function, NULL,
-	 *                              VORTEX_THREAD_CONF_END)) {
+	 *                              EXT_DNS_THREAD_CONF_END)) {
 	 *      // failed to create the thread 
 	 * }
 	 * // thread created
@@ -254,6 +254,235 @@ typedef enum  {
 	 */
 	EXT_DNS_THREAD_CONF_DETACHED = 2,
 }extDnsThreadConf;
+
+/**
+ * @brief Enumeration type that allows to use the waiting mechanism to
+ * be used by the core library to perform wait on changes on sockets
+ * handled.
+ */
+
+typedef enum {
+	/**
+	 * @brief Allows to configure the select(2) system call based
+	 * mechanism. It is known to be available on any platform,
+	 * however it has some limitations while handling big set of
+	 * sockets, and it is limited to a maximum number of sockets,
+	 * which is configured at the compilation process.
+	 *
+         * Its main disadvantage it that it can't handle
+	 * more connections than the number provided at the
+	 * compilation process. See <ext_dns.h> file, variable
+	 * FD_SETSIZE and EXT_DNS_FD_SETSIZE.
+	 */
+	EXT_DNS_IO_WAIT_SELECT = 1,
+	/**
+	 * @brief Allows to configure the poll(2) system call based
+	 * mechanism. 
+	 * 
+	 * It is also a widely available mechanism on POSIX
+	 * envirionments, but not on Microsoft Windows. It doesn't
+	 * have some limitations found on select(2) call, but it is
+	 * known to not scale very well handling big socket sets as
+	 * happens with select(2) (\ref EXT_DNS_IO_WAIT_SELECT).
+	 *
+	 * This mechanism solves the runtime limitation that provides
+	 * select(2), making it possible to handle any number of
+	 * connections without providing any previous knowledge during
+	 * the compilation process. 
+	 * 
+	 * Several third party tests shows it performs badly while
+	 * handling many connections compared to (\ref EXT_DNS_IO_WAIT_EPOLL) epoll(2).
+	 *
+	 * However, reports showing that results, handles over 50.000
+	 * connections at the same time (up to 400.000!). In many
+	 * cases this is not going your production environment.
+	 *
+	 * At the same time, many reports (and our test results) shows
+	 * that select(2), poll(2) and epoll(2) performs the same
+	 * while handling up to 10.000 connections at the same time.
+	 */
+	EXT_DNS_IO_WAIT_POLL   = 2,
+	/**
+	 * @brief Allows to configure the epoll(2) system call based
+	 * mechanism.
+	 * 
+	 * It is a mechanism available on GNU/Linux starting from
+	 * kernel 2.6. It is supposed to be a better implementation
+	 * than poll(2) and select(2) due the way notifications are
+	 * done.
+	 *
+	 * It is currently selected by default if your kernel support
+	 * it. It has the advantage that performs very well with
+	 * little set of connections (0-10.000) like
+	 * (\ref EXT_DNS_IO_WAIT_POLL) poll(2) and (\ref EXT_DNS_IO_WAIT_SELECT)
+	 * select(2), but scaling much better when going to up heavy
+	 * set of connections (50.000-400.000).
+	 *
+	 * It has also the advantage to not require defining a maximum
+	 * socket number to be handled at the compilation process.
+	 */
+	EXT_DNS_IO_WAIT_EPOLL  = 3,
+} extDnsIoWaitingType;
+
+/** 
+ * @brief Allows to specify which type of operation should be
+ * implemented while calling to extDns Library internal IO blocking
+ * abstraction.
+ */
+typedef enum {
+	/** 
+	 * @brief A read watching operation is requested. If this
+	 * value is received, the fd set containins a set of socket
+	 * descriptors which should be watched for incoming data to be
+	 * received.
+	 */
+	READ_OPERATIONS  = 1 << 0, 
+	/** 
+	 * @brief A write watching operation is requested. If this
+	 * value is received, the fd set contains a set of socket that
+	 * is being requested for its availability to perform a write
+	 * operation on them.
+	 */
+	WRITE_OPERATIONS = 1 << 1
+} extDnsIoWaitingFor;
+
+/** 
+ * @brief Structure that represents a single session server (name
+ * server) or client session (resolver)
+ */
+typedef struct _extDnsSession extDnsSession;
+
+/** 
+ * @brief extDns Operation Status.
+ * 
+ * This enum is used to represent different extDns Library status,
+ * especially while operating with \ref extDnsSession
+ * references. Values described by this enumeration are returned by
+ * \ref ext_dns_session_get_status.
+ */
+typedef enum {
+	/** 
+	 * @brief Represents an Error while extDns Library was operating.
+	 *
+	 * The operation asked to be done by extDns Library could be
+	 * completed.
+	 */
+	extDnsError                  = 1,
+	/** 
+	 * @brief Represents the operation have been successfully completed.
+	 *
+	 * The operation asked to be done by extDns Library have been
+	 * completed.
+	 */
+	extDnsOk                     = 2,
+
+	/** 
+	 * @brief The operation wasn't completed because an error to
+	 * tcp bind call. This usually means the listener can be
+	 * started because the port is already in use.
+	 */
+	extDnsBindError              = 3,
+
+	/** 
+	 * @brief The operation can't be completed because a wrong
+	 * reference (memory address) was received. This also include
+	 * NULL references where this is not expected.
+	 */
+	extDnsWrongReference         = 4,
+
+	/** 
+	 * @brief The operation can't be completed because a failure
+	 * resolving a name was found (usually a failure in the
+	 * gethostbyname function). 
+	 */ 
+	extDnsNameResolvFailure      = 5,
+
+	/** 
+	 * @brief A failure was found while creating a socket.
+	 */
+	extDnsSocketCreationError    = 6,
+
+	/** 
+	 * @brief Found socket created to be using reserved system
+	 * socket descriptors. This will cause problems.
+	 */
+	extDnsSocketSanityError      = 7,
+
+	/** 
+	 * @brief Session error. Unable to connect to remote
+	 * host. Remote hosting is refusing the session.
+	 */
+	extDnsSessionError           = 8,
+
+	/** 
+	 * @brief Session error after timeout. Unable to connect to
+	 * remote host after after timeout expired.
+	 */
+	extDnsSessionTimeoutError    = 9,
+	/** 
+	 * @brief Session is in transit to be closed. This is not
+	 * an error just an indication that the session is being
+	 * closed at the time the call to \ref
+	 * ext_dns_session_get_status was done.
+	 */
+	extDnsSessionCloseCalled     = 10,
+	/** 
+	 * @brief The session was terminated due to a call to \ref
+	 * ext_dns_session_shutdown or an internal implementation
+	 * that closes the session without taking place the DNS
+	 * session close negociation.
+	 */
+	extDnsSessionForcedClose     = 11,
+	/** 
+	 * @brief Found a protocol error while operating.
+	 */
+	extDnsProtocolError          = 12,
+	/** 
+	 * @brief  The session was closed or not accepted due to a filter installed. 
+	 */
+	extDnsSessionFiltered        = 13,
+	/** 
+	 * @brief Memory allocation failed.
+	 */
+	extDnsMemoryFail             = 14,
+	/** 
+	 * @brief When a session is closed by the remote side but
+	 * without going through the DNS clean close.
+	 */
+	extDnsUnnotifiedSessionClose = 15
+} extDnsStatus;
+
+/** 
+ * @brief Allows to classify the role of the connection.
+ *
+ * You can get current role for a given connection using \ref
+ * ext_dns_session_get_role.
+ * 
+ */
+typedef enum {
+	/** 
+	 * @brief This value is used to represent an unknown role state.
+	 */
+	extDnsRoleUnknown,
+	
+	/** 
+	 * @brief The connection is acting as a Resolver one.
+	 */
+	extDnsRoleResolver,
+
+	/** 
+	 * @brief The connection is acting as a Listener one.
+	 */
+	extDnsRoleListener,
+	
+	/** 
+	 * @brief Special case that represents listener connections
+	 * (TCP) that accepts connections to process DNS requests via
+	 * TCP
+	 */
+	extDnsRoleMasterListener
+	
+} extDnsPeerRole;
 
 
 #endif /* __EXT_DNS_TYPES_H__ */
