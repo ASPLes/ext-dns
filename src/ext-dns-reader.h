@@ -35,25 +35,44 @@
  *      Email address:
  *         info@aspl.es - http://www.aspl.es/ext-dns
  */
-#ifndef __EXT_DNS_CTX_H__
-#define __EXT_DNS_CTX_H__
+#ifndef __EXT_DNS_READER_H__
+#define __EXT_DNS_READER_H__
 
 #include <ext-dns.h>
 
-extDnsCtx * ext_dns_ctx_new (void);
+void ext_dns_reader_watch_listener              (extDnsCtx     * ctx,
+						 extDnsSession * session);
 
-void        ext_dns_ctx_ref                       (extDnsCtx  * ctx);
+void ext_dns_reader_watch_connection            (extDnsCtx     * ctx,
+						 extDnsSession * session);
 
-void        ext_dns_ctx_ref2                      (extDnsCtx  * ctx, const char * who);
+int  ext_dns_reader_connections_watched         (extDnsCtx     * ctx);
 
-void        ext_dns_ctx_unref                     (extDnsCtx ** ctx);
+int  ext_dns_reader_run                         (extDnsCtx * ctx);
 
-void        ext_dns_ctx_unref2                    (extDnsCtx ** ctx, const char * who);
+void ext_dns_reader_stop                        (extDnsCtx * ctx);
 
-int         ext_dns_ctx_ref_count                 (extDnsCtx  * ctx);
+int  ext_dns_reader_notify_change_io_api        (extDnsCtx * ctx);
 
-void        ext_dns_ctx_free                      (extDnsCtx * ctx);
+void ext_dns_reader_notify_change_done_io_api   (extDnsCtx * ctx);
 
-void        ext_dns_ctx_free2                     (extDnsCtx * ctx, const char * who);
+/* internal API */
+typedef void (*extDnsForeachFunc) (extDnsSession * conn, axlPointer user_data);
+typedef void (*extDnsForeachFunc3) (extDnsSession * conn, 
+				    axlPointer         user_data, 
+				    axlPointer         user_data2,
+				    axlPointer         user_data3);
 
-#endif /* __EXT_DNS_CTX_H__ */
+extDnsAsyncQueue * ext_dns_reader_foreach       (extDnsCtx            * ctx,
+						extDnsForeachFunc      func,
+						axlPointer             user_data);
+
+void               ext_dns_reader_foreach_offline (extDnsCtx           * ctx,
+						  extDnsForeachFunc3    func,
+						  axlPointer            user_data,
+						  axlPointer            user_data2,
+						  axlPointer            user_data3);
+
+void               ext_dns_reader_restart (extDnsCtx * ctx);
+
+#endif

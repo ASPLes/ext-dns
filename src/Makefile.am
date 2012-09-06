@@ -33,14 +33,26 @@ lib_LTLIBRARIES = libext-dns.la
 libext_dns_la_SOURCES =	\
 	ext-dns.c \
 	ext-dns-ctx.c \
-	ext-dns-thread.c 
+	ext-dns-thread.c  \
+	ext-dns-io.c \
+	ext-dns-session.c \
+	ext-dns-errno.c \
+	ext-dns-reader.c \
+	ext-dns-thread-pool.c \
+	ext-dns-support.c
 
 libext_dns_include_HEADERS = \
 	ext-dns.h \
 	ext-dns-types.h \
 	ext-dns-private.h \
 	ext-dns-ctx.h \
-	ext-dns-thread.h
+	ext-dns-thread.h \
+	ext-dns-io.h \
+	ext-dns-session.h \
+	ext-dns-errno.h \
+	ext-dns-reader.h \
+	ext-dns-thread-pool.h \
+	ext-dns-support.h
 
 libext_dns_la_LIBADD = \
 	$(AXL_LIBS) $(PTHREAD_LIBS) $(ADDITIONAL_LIBS)

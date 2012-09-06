@@ -234,7 +234,13 @@ BEGIN_C_DECLS
 #include <ext-dns-types.h>
 #include <ext-dns-handlers.h>
 #include <ext-dns-ctx.h>
+#include <ext-dns-support.h>
 #include <ext-dns-thread.h>
+#include <ext-dns-thread-pool.h>
+#include <ext-dns-io.h>
+#include <ext-dns-session.h>
+#include <ext-dns-errno.h>
+#include <ext-dns-reader.h>
 
 END_C_DECLS
 
@@ -358,6 +364,90 @@ void     _ext_dns_log2                (extDnsCtx        * ctx,
 				       extDnsDebugLevel   level, 
 				       const char       * message, 
 				       ...);
+
+/**
+ * @brief Allowed items to use for \ref ext_dns_conf_get.
+ */
+typedef enum {
+	/** 
+	 * @brief Gets/sets current soft limit to be used by the library,
+	 * regarding the number of connections handled. Soft limit
+	 * means it is can be moved to hard limit.
+	 *
+	 * To configure this value, use the integer parameter at \ref ext_dns_conf_set. Example:
+	 * \code
+	 * ext_dns_conf_set (EXT_DNS_SOFT_SOCK_LIMIT, 4096, NULL);
+	 * \endcode
+	 */
+	EXT_DNS_SOFT_SOCK_LIMIT = 1,
+	/** 
+	 * @brief Gets/sets current hard limit to be used by the
+	 * library, regarding the number of connections handled. Hard
+	 * limit means it is not possible to exceed it.
+	 *
+	 * To configure this value, use the integer parameter at \ref ext_dns_conf_set. Example:
+	 * \code
+	 * ext_dns_conf_set (EXT_DNS_HARD_SOCK_LIMIT, 4096, NULL);
+	 * \endcode
+	 */
+	EXT_DNS_HARD_SOCK_LIMIT = 2,
+	/** 
+	 * @brief Gets/sets current backlog configuration for listener
+	 * connections.
+	 *
+	 * Once a listener is activated, the backlog is the number of
+	 * complete connections (with the finished tcp three-way
+	 * handshake), that are ready to be accepted by the
+	 * application. The default value is 5.
+	 *
+	 * Once a listener is activated, and its backlog is
+	 * configured, it can't be changed. In the case you configure
+	 * this value, you must set it (\ref ext_dns_conf_set) after
+	 * calling to the family of functions to create ext_dns
+	 * listeners (\ref ext_dns_listener_new).
+	 *
+	 * To configure this value, use the integer parameter at \ref ext_dns_conf_set. Example:
+	 * \code
+	 * ext_dns_conf_set (EXT_DNS_LISTENER_BACKLOG, 64, NULL);
+	 * \endcode
+	 */
+	EXT_DNS_LISTENER_BACKLOG = 3,
+	/** 
+	 * @brief Allows to skip thread pool waiting on ext_dns ctx finalization.
+	 *
+	 * By default, when ext_dns context is finished by calling \ref
+	 * ext_dns_exit_ctx, the function waits for all threads running
+	 * the in thread pool to finish. However, under some
+	 * conditions, this may cause a dead-lock problem especially
+	 * when blocking operations are triggered from threads inside the
+	 * pool at the time the exit operation happens.
+	 *
+	 * This parameter allows to signal this ext_dns context to not
+	 * wait for threads running in the thread pool.
+	 *
+	 * To set the value to make ext_dns ctx exit to not wait for
+	 * threads in the pool to finish use:
+	 *
+	 * \code
+	 * ext_dns_conf_set (ctx, EXT_DNS_SKIP_THREAD_POOL_WAIT, axl_true, NULL);
+	 * \endcode
+	 */
+	EXT_DNS_SKIP_THREAD_POOL_WAIT = 4
+} extDnsConfItem;
+
+axl_bool  ext_dns_conf_get             (extDnsCtx      * ctx,
+					extDnsConfItem   item, 
+					int            * value);
+
+axl_bool  ext_dns_conf_set             (extDnsCtx      * ctx,
+					extDnsConfItem   item, 
+					int              value, 
+					const char     * str_value);
+
+int      ext_dns_timeval_substract     (struct timeval * a, 
+					struct timeval * b,
+					struct timeval * result);
+
 
 #if defined(__COMPILING_EXT_DNS__) && defined(__GNUC__)
 /* makes gcc happy, by prototyping functions which aren't exported

@@ -42,8 +42,8 @@
 #include <ext-dns.h>
 
 /** 
- * @brief Handler used by Vortex library to create a new thread. A custom handler
- * can be specified using \ref vortex_thread_set_create
+ * @brief Handler used by extDns library to create a new thread. A custom handler
+ * can be specified using \ref ext_dns_thread_set_create
  *
  * @param thread_def A reference to the thread identifier created by
  * the function. This parameter is not optional.
@@ -57,7 +57,7 @@
  * properly and the variable thread_def is defined with the particular
  * thread reference created.
  *
- * @see vortex_thread_create
+ * @see ext_dns_thread_create
  */
 typedef axl_bool (* extDnsThreadCreateFunc) (extDnsThread      * thread_def,
                                              extDnsThreadFunc    func,
@@ -66,7 +66,7 @@ typedef axl_bool (* extDnsThreadCreateFunc) (extDnsThread      * thread_def,
 
 /** 
  * @brief Handler used by extDns Library to release a thread's resources.
- * A custom handler can be specified using \ref vortex_thread_set_destroy
+ * A custom handler can be specified using \ref ext_dns_thread_set_destroy
  *
  * @param thread_def A reference to the thread that must be destroyed.
  *
@@ -76,13 +76,13 @@ typedef axl_bool (* extDnsThreadCreateFunc) (extDnsThread      * thread_def,
  * @return axl_true if the destroy operation was ok, otherwise axl_false is
  * returned.
  *
- * @see vortex_thread_destroy
+ * @see ext_dns_thread_destroy
  */
 typedef axl_bool (* extDnsThreadDestroyFunc) (extDnsThread      * thread_def,
                                               axl_bool            free_data);
 
 /** 
- * @brief Handler definition used by \ref vortex_async_queue_foreach
+ * @brief Handler definition used by \ref ext_dns_async_queue_foreach
  * to implement a foreach operation over all items inside the provided
  * queue, blocking its access during its process.
  *
@@ -100,5 +100,190 @@ typedef void (*extDnsAsyncQueueForeach) (extDnsAsyncQueue * queue,
 					 axlPointer         item_stored,
 					 int                position,
 					 axlPointer         user_data);
+
+/** 
+ * @brief IO handler definition to allow defining the method to be
+ * invoked while createing a new fd set.
+ *
+ * @param ctx The context where the IO set will be created.
+ *
+ * @param wait_to Allows to configure the file set to be prepared to
+ * be used for the set of operations provided. 
+ * 
+ * @return A newly created fd set pointer, opaque to extDns, to a
+ * structure representing the fd set, that will be used to perform IO
+ * waiting operation at the \ref ext_dns_io "extDns IO module".
+ * 
+ */
+typedef axlPointer   (* extDnsIoCreateFdGroup)        (extDnsCtx * ctx, extDnsIoWaitingFor wait_to);
+
+/** 
+ * @brief IO handler definition to allow defining the method to be
+ * invoked while destroying a fd set. 
+ *
+ * The reference that the handler will receive is the one created by
+ * the \ref extDnsIoCreateFdGroup handler.
+ * 
+ * @param extDnsIoDestroyFdGroup The fd_set, opaque to ext_dns, pointer
+ * to a structure representing the fd set to be destroy.
+ * 
+ */
+typedef void     (* extDnsIoDestroyFdGroup)        (axlPointer             fd_set);
+
+/** 
+ * @brief IO handler definition to allow defining the method to be
+ * invoked while clearing a fd set.
+ * 
+ * @param extDnsIoClearFdGroup The fd_set, opaque to ext_dns, pointer
+ * to a structure representing the fd set to be clear.
+ * 
+ */
+typedef void     (* extDnsIoClearFdGroup)        (axlPointer             fd_set);
+
+/** 
+ * @brief IO handler definition to perform the "add to" the fd set
+ * operation.
+ * 
+ * @param fds The socket descriptor to be added.
+ *
+ * @param fd_group The socket descriptor group to be used as
+ * destination for the socket.
+ * 
+ * @return returns axl_true if the socket descriptor was added, otherwise,
+ * axl_false is returned.
+ */
+typedef axl_bool      (* extDnsIoAddToFdGroup)        (int                    fds,
+						       extDnsSession        * session,
+						       axlPointer             fd_group);
+
+/** 
+ * @brief IO handler definition to perform the "is set" the fd set
+ * operation.
+ * 
+ * @param fds The socket descriptor to be added.
+ *
+ * @param fd_group The socket descriptor group to be used as
+ * destination for the socket.
+ *
+ * @param user_data User defined pointer provided to the function.
+ *
+ * @return axl_true if the socket descriptor is active in the given fd
+ * group.
+ *
+ */
+typedef axl_bool      (* extDnsIoIsSetFdGroup)        (int                    fds,
+						       axlPointer             fd_group,
+						       axlPointer             user_data);
+
+/** 
+ * @brief Handler definition to allow implementing the have dispatch
+ * function at the ext_dns io module.
+ *
+ * An I/O wait implementation must return axl_true to notify ext_dns engine
+ * it support automatic dispatch (which is a far better mechanism,
+ * supporting better large set of descriptors), or axl_false, to notify
+ * that the \ref ext_dns_io_waiting_set_is_set_fd_group mechanism must
+ * be used.
+ *
+ * In the case the automatic dispatch is implemented, it is also
+ * required to implement the \ref extDnsIoDispatch handler.
+ * 
+ * @param fd_group A reference to the object created by the I/O waiting mechanism.
+ * p
+ * @return Returns axl_true if the I/O waiting mechanism support automatic
+ * dispatch, otherwise axl_false is returned.
+ */
+typedef axl_bool      (* extDnsIoHaveDispatch)         (axlPointer             fd_group);
+
+/** 
+ * @brief User space handler to implement automatic dispatch for I/O
+ * waiting mechanism implemented at ext_dns io module.
+ *
+ * This handler definition is used by:
+ * - \ref ext_dns_io_waiting_invoke_dispatch
+ *
+ * Do not confuse this handler definition with \ref extDnsIoDispatch,
+ * which is the handler definition for the actual implemenation for
+ * the I/O mechanism to implement automatic dispatch.
+ * 
+ * @param fds The socket that is being notified and identified to be dispatched.
+ * 
+ * @param wait_to The purpose of the created I/O waiting mechanism.
+ *
+ * @param connection Connection where the dispatch operation takes
+ * place.
+ * 
+ * @param user_data Reference to the user data provided to the dispatch function.
+ */
+typedef void     (* extDnsIoDispatchFunc)         (int                    fds,
+						   extDnsIoWaitingFor     wait_to,
+						   extDnsSession        * session,
+						   axlPointer             user_data);
+
+/** 
+ * @brief Handler definition for the automatic dispatch implementation
+ * for the particular I/O mechanism selected.
+ *
+ * This handler is used by:
+ *  - \ref ext_dns_io_waiting_set_dispatch
+ *  - \ref ext_dns_io_waiting_invoke_dispatch (internally)
+ *
+ * If this handler is implemented, the \ref extDnsIoHaveDispatch must
+ * also be implemented, making it to always return axl_true. If this two
+ * handler are implemented, its is not required to implement the "is
+ * set?" functionality provided by \ref extDnsIoIsSetFdGroup (\ref
+ * ext_dns_io_waiting_set_is_set_fd_group).
+ * 
+ * @param fd_group A reference to the object created by the I/O
+ * waiting mechanism.
+ * 
+ * @param dispatch_func The dispatch user space function to be called.
+ *
+ * @param changed The number of descriptors that changed, so, once
+ * inspected that number, it is not required to continue.
+ *
+ * @param user_data User defined data provided to the dispatch
+ * function once called.
+ */
+typedef void     (* extDnsIoDispatch)             (axlPointer             fd_group,
+						   extDnsIoDispatchFunc   dispatch_func,
+						   int                    changed,
+						   axlPointer             user_data);
+
+/** 
+ * @brief IO handler definition to allow defining the method to be
+ * used while performing a IO blocking wait, by default implemented by
+ * the IO "select" call.
+ *
+ * @param extDnsIoWaitOnFdGroup The handler to set.
+ *
+ * @param The maximum value for the socket descriptor being watched.
+ *
+ * @param The requested operation to perform.
+ * 
+ * @return An error code according to the description found on this
+ * function: \ref ext_dns_io_waiting_set_wait_on_fd_group.
+ */
+typedef int      (* extDnsIoWaitOnFdGroup)       (axlPointer             fd_group,
+						  int                    max_fds,
+						  extDnsIoWaitingFor     wait_to);
+
+/** 
+ * @brief Handler used by async event handlers activated via \ref
+ * ext_dns_thread_pool_new_event, which causes the handler definition
+ * to be called at the provided milliseconds period.
+ *
+ * @param ctx The ext_dns context where the async event will be fired.
+ * @param user_data User defined pointer that was defined at \ref ext_dns_thread_pool_new_event function.
+ * @param user_data2 Second User defined pointer that was defined at \ref ext_dns_thread_pool_new_event function.
+ *
+ * @return The function returns axl_true to signal the system to
+ * remove the handler. Otherwise, axl_false must be returned to cause
+ * the event to be fired again in the future at the provided period.
+ */
+typedef axl_bool (* extDnsThreadAsyncEvent)        (extDnsCtx  * ctx, 
+						    axlPointer   user_data,
+						    axlPointer   user_data2);
+
 
 #endif /* __EXT_DNS_HANDLERS_H__ */
