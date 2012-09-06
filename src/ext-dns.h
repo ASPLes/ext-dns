@@ -232,7 +232,9 @@ BEGIN_C_DECLS
 /* Internal includes and external includes for ext-DNS API
  * consumers. */
 #include <ext-dns-types.h>
+#include <ext-dns-handlers.h>
 #include <ext-dns-ctx.h>
+#include <ext-dns-thread.h>
 
 END_C_DECLS
 
