@@ -39,7 +39,8 @@ libext_dns_la_SOURCES =	\
 	ext-dns-errno.c \
 	ext-dns-reader.c \
 	ext-dns-thread-pool.c \
-	ext-dns-support.c
+	ext-dns-support.c \
+	ext-dns-message.c
 
 libext_dns_include_HEADERS = \
 	ext-dns.h \
@@ -52,7 +53,8 @@ libext_dns_include_HEADERS = \
 	ext-dns-errno.h \
 	ext-dns-reader.h \
 	ext-dns-thread-pool.h \
-	ext-dns-support.h
+	ext-dns-support.h \
+	ext-dns-message.h
 
 libext_dns_la_LIBADD = \
 	$(AXL_LIBS) $(PTHREAD_LIBS) $(ADDITIONAL_LIBS)

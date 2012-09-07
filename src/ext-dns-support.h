@@ -49,4 +49,11 @@ axl_bool ext_dns_support_setenv                     (const char * env_name,
 
 axl_bool ext_dns_support_unsetenv                   (const char * env_name);
 
+int      ext_dns_support_itoa                       (unsigned int   value,
+						     char         * buffer,
+						     int            buffer_size);
+
+char   * ext_dns_support_inet_ntoa                  (extDnsCtx          * ctx, 
+						     struct sockaddr_in * sin);
+
 #endif /* __EXT_DNS_SUPPORT_H__ */

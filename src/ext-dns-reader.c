@@ -102,9 +102,32 @@ typedef struct _extDnsReaderData {
  * @param connection the connection which have something to be read
  * 
  **/
-void __ext_dns_reader_process_socket (extDnsCtx        * ctx, 
-				     extDnsSession * connection)
+void __ext_dns_reader_process_socket (extDnsCtx     * ctx, 
+				      extDnsSession * session)
 {
+
+	char buf[1024];
+	struct sockaddr_in si_other;
+	socklen_t sin_size;
+	int bytes_read;
+	extDnsHeader * header;
+
+	/* read content from socket */
+	sin_size       = sizeof (si_other);
+	bytes_read = recvfrom (session->session, buf, 1023, 0, (struct sockaddr *) &si_other, &sin_size);
+	buf[bytes_read] = 0;
+
+	header = ext_dns_message_parse_header (ctx, buf, bytes_read);
+
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Received query over session id=%d, content is (size: %d): %s", 
+		     ext_dns_session_get_id (session), bytes_read, buf);
+
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Received header id: %u, is query: %d, opcode: %d, AA: %d, TC: %d, RD: %d, RD: %d\n      rcode: %d, qcount: %d, ancount: %d, nscount: %d, arcount: %d", 
+		     header->id, header->is_query, header->opcode, header->is_authorative_answer, header->was_truncated, 
+		     header->recursion_desired, header->recursion_available, header->rcode, header->query_count, header->answer_count,
+		     header->resources_count, header->additional_records_count);
+	
+	axl_free (header);
 
 	/* that's all I can do */
 	return;

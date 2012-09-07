@@ -49,6 +49,27 @@ struct _extDnsCtx {
 	 */
 	axl_bool skip_thread_pool_wait;
 
+	/* local log variables */
+	axl_bool             debug_checked;
+	axl_bool             debug;
+	
+	axl_bool             debug2_checked;
+	axl_bool             debug2;
+	
+	axl_bool             debug_color_checked;
+	axl_bool             debug_color;
+
+	extDnsLogHandler     debug_handler;
+
+	int                  debug_filter;
+	axl_bool             debug_filter_checked;
+	axl_bool             debug_filter_is_enabled;
+
+	axl_bool             prepare_log_string;
+
+	extDnsMutex          log_mutex;
+	axl_bool             use_log_mutex;
+
 	/**** ext-dns io waiting module state ****/
 	extDnsIoCreateFdGroup  waiting_create;
 	extDnsIoDestroyFdGroup waiting_destroy;
@@ -60,14 +81,13 @@ struct _extDnsCtx {
 	extDnsIoDispatch       waiting_dispatch;
 	extDnsIoWaitingType    waiting_type;
 
-	extDnsMutex       log_mutex;
-
 	/** reference counting **/
 	extDnsMutex       ref_mutex;
 	int               ref_count;
 
 	/** hash reference **/
 	axlHash         * data;
+	extDnsMutex       data_mutex;
 
 	/*** ext-dns reader module ***/
 	extDnsAsyncQueue        * reader_queue;
@@ -95,15 +115,33 @@ struct _extDnsCtx {
 	 * transit.
 	 */
 	axl_bool             exit;
+	extDnsMutex          exit_mutex;
 	/* @internal Allows to check if the provided ext-dns context is initialized
 	 */
 	axl_bool             initialized;
+
+	/*** listener unlock mutex ***/
+	extDnsMutex          listener_mutex;
+	extDnsMutex          listener_unlock;
+	extDnsAsyncQueue   * listener_wait_lock;
+
+	/* external cleanup functions */
+	axlList            * cleanups;
+
+	extDnsMutex          session_id_mutex;
+	int                  session_id;
+	axl_bool             session_enable_sanity_check;
+
+	extDnsMutex          inet_ntoa_mutex;
 };
 
 struct _extDnsSession {
 
 	/* unique session indentification */
 	int               id;
+
+	/* get session type */
+	extDnsSessionType type;
 
 	/* the socket this session is associated to */
 	EXT_DNS_SOCKET    session;
@@ -153,6 +191,16 @@ struct _extDnsSession {
 
 	/*** session role indication ***/
 	extDnsPeerRole    role;
+
+	/** 
+	 * @brief Writer function used by the extDns Library to actually send data.
+	 */
+	extDnsSendHandler    send;
+
+	/** 
+	 * @brief Writer function used by the extDns Library to actually received data
+	 */
+	extDnsReceiveHandler receive;
 };
 
 /** 
