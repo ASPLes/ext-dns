@@ -241,6 +241,7 @@ BEGIN_C_DECLS
 #include <ext-dns-session.h>
 #include <ext-dns-errno.h>
 #include <ext-dns-reader.h>
+#include <ext-dns-message.h>
 
 END_C_DECLS
 
@@ -330,7 +331,7 @@ axl_bool ext_dns_init_ctx             (extDnsCtx * ctx);
 axl_bool ext_dns_init_check           (extDnsCtx * ctx);
 
 void     ext_dns_exit_ctx             (extDnsCtx * ctx, 
-				      axl_bool    free_ctx);
+				       axl_bool    free_ctx);
 
 axl_bool ext_dns_is_exiting           (extDnsCtx * ctx);
 
@@ -348,6 +349,16 @@ axl_bool ext_dns_color_log_is_enabled (extDnsCtx * ctx);
 
 void     ext_dns_color_log_enable     (extDnsCtx * ctx, 
 				      axl_bool    status);
+
+void     ext_dns_log_set_handler      (extDnsCtx         * ctx,
+				       extDnsLogHandler    handler);
+
+void     ext_dns_log_set_prepare_log  (extDnsCtx         * ctx,
+				       axl_bool            prepare_string);
+
+extDnsLogHandler vortex_log_get_handler (extDnsCtx      * ctx);
+
+void     vortex_log_filter_level     (extDnsCtx * ctx, const char * filter_string);
 
 axl_bool ext_dns_log_is_enabled_acquire_mutex (extDnsCtx * ctx);
 
@@ -448,6 +459,15 @@ int      ext_dns_timeval_substract     (struct timeval * a,
 					struct timeval * b,
 					struct timeval * result);
 
+int    ext_dns_extract_bit (char byte, int position);
+
+void   ext_dns_show_byte (extDnsCtx * ctx, char byte, const char * label);
+
+char * ext_dns_int2bin (int a, char *buffer, int buf_size);
+
+void   ext_dns_int2bin_print (extDnsCtx * ctx, int value);
+
+int    ext_dns_get_16bit (const char * buffer);
 
 #if defined(__COMPILING_EXT_DNS__) && defined(__GNUC__)
 /* makes gcc happy, by prototyping functions which aren't exported

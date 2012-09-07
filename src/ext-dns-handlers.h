@@ -285,5 +285,124 @@ typedef axl_bool (* extDnsThreadAsyncEvent)        (extDnsCtx  * ctx,
 						    axlPointer   user_data,
 						    axlPointer   user_data2);
 
+/** 
+ * @brief Handler definition that allows a client to print log
+ * messages itself.
+ *
+ * This function is used by: 
+ * 
+ * - \ref vortex_log_set_handler
+ * - \ref vortex_log_get_handler
+ *
+ * @param file The file that produced the log.
+ *
+ * @param line The line where the log was produced.
+ *
+ * @param log_level The level of the log
+ *
+ * @param message The message being reported.
+ *
+ * @param args Arguments for the message.
+ */
+typedef void (*extDnsLogHandler) (const char       * file,
+				  int                line,
+				  extDnsDebugLevel   log_level,
+				  const char       * message,
+				  va_list            args);
+
+/** 
+ * @brief Async notification for listener creation.
+ *
+ * Functions using this handler:
+ * - \ref ext_dns_listener_new
+ *
+ * Optional handler defined to report which host and port have
+ * actually allocated a listener peer. If host and port is null means
+ * listener have failed to run.
+ *
+ * You should not free any parameter received, ext_dns system will do
+ * this for you.  If you want to actually keep a copy you should use
+ * axl_strdup.
+ * 
+ * @param host the final host binded
+ * @param port the final port binded
+ * @param status the listener creation status.
+ * @param message the message reporting the listener status creation.
+ * @param user_data user data passed in to this async notifier.
+ */
+typedef void (*extDnsListenerReady)           (char  * host, int  port, extDnsStatus status, 
+					       char  * message, axlPointer user_data);
+
+/** 
+ * @brief Async notification for listener creation, similar to \ref
+ * extDnsListenerReady but providing the reference for the \ref
+ * extDnsConnection created (representing the listener created).
+ *
+ * Functions using this handler:
+ * - \ref ext_dns_listener_new_full
+ *
+ * Optional handler defined to report which host and port have
+ * actually allocated a listener peer. If host and port is null means
+ * listener have failed to run.
+ *
+ * You should not free any parameter received, ext_dns system will do
+ * this for you.  If you want to actually keep a copy you should use
+ * axl_strdup (deallocating your copy with axl_free).
+ *
+ * This function is similar to \ref extDnsListenerReady but it also
+ * notifies the connection created.
+ * 
+ * @param host The final host binded.
+ *
+ * @param port The final port binded.
+ *
+ * @param status The listener creation status.
+ *
+ * @param message The message reporting the listener status creation.
+ *
+ * @param connection The connection representing the listener created
+ * (or a NULL reference if status is not \ref extDnsOk).
+ * 
+ * @param user_data user data passed in to this async notifier.
+ */
+typedef void (*extDnsListenerReadyFull)           (char  * host, int  port, extDnsStatus status, 
+						   char  * message, extDnsSession * connection, 
+						   axlPointer user_data);
+
+/** 
+ * @brief Defines the writers handlers used to actually send data
+ * through the underlaying socket descriptor.
+ * 
+ * This handler is used by: 
+ *  - \ref vortex_connection_set_send_handler
+ * 
+ * @param connection extDns Session where the data will be sent.
+ * @param buffer     The buffer holding data to be sent
+ * @param buffer_len The buffer len.
+ * 
+ * @return     How many data was actually sent.
+ */
+typedef int      (*extDnsSendHandler)         (extDnsSession * session,
+					       const char    * buffer,
+					       int             buffer_len);
+
+/** 
+ * @brief Defines the readers handlers used to actually received data
+ * from the underlying socket descriptor.
+ *  
+ * This handler is used by: 
+ *  - \ref vortex_connection_set_receive_handler
+ * 
+ * @param connection The extDns connection where the data will be received.
+ * @param buffer     The buffer reference used as container for data received.
+ * @param buffer_len The buffer len use to know the limits of the buffer.
+ * 
+ * @return How many data was actually received.
+ */
+typedef int      (*extDnsReceiveHandler)         (extDnsSession    * session,
+						  char             * buffer,
+						  int                buffer_len);
+
+
 
 #endif /* __EXT_DNS_HANDLERS_H__ */

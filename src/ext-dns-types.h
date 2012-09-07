@@ -484,5 +484,90 @@ typedef enum {
 	
 } extDnsPeerRole;
 
+/** 
+ * @brief Allows to signal which type of session is running a \ref
+ * extDnsSession object.
+ */
+typedef enum {
+	/** 
+	 * @brief TCP based DNS session
+	 */
+	extDnsTcpSession = 1,
+	/** 
+	 * @brief UDP based DNS session
+	 */
+	extDnsUdpSession = 2
+} extDnsSessionType;
+
+typedef enum {
+	/**
+	 * Unknown query value received. 
+	 */
+	extDnsUnknownQueryType = 1,
+	/** 
+	 * Standard query (RFC opcode 0 QUERY)
+	 */
+	extDnsStandardQuery    = 2,
+	/** 
+	 * Inverse query (RFC opcode 1 IQUERY)
+	 */
+	extDnsInverseQuery     = 3,
+	/** 
+	 * Server status request (RFC opcode 2 STATUS)
+	 */
+	extDnsSeverStatusQuery = 4
+} extDnsQueryType;
+
+typedef enum {
+	/** 
+	 * @brief No error condition.
+	 */
+	extDnsResponseNoError            = 0,
+	/** 
+	 * @brief Format error - The name server was unable to
+	 * interpret the query.
+	 */
+	extDnsResponseFormarError        = 1,
+	/** 
+	 * @brief Server failure - The name server was unable to
+	 * process this query due to a problem with the name server.
+	 */
+	extDnsResponseServerFailure      = 2,
+	/** 
+	 * @brief Name Error - Meaningful only for responses from an
+	 * authoritative name server, this code signifies that the
+	 * domain name referenced in the query does not exist.
+	 */
+	extDnsResponseNameError          = 3,
+	/** 
+	 * @brief Not Implemented - The name server does not support
+	 * the requested kind of query.
+	 */
+	extDnsResponseNoImplementedError = 4,
+	/** 
+	 * @brief Refused - The name server refuses to perform the
+	 * specified operation for policy reasons. For example, a name
+	 * server may not wish to provide the information to ahe
+	 * particular requester, or a name server may not wish to
+	 * perform a particular operation.
+	 */
+	extDnsResponseRefused            = 5
+} extDnsResponseType;
+
+typedef struct _extDnsHeader {
+	/* message id */
+	unsigned int       id;
+	axl_bool           is_query;
+	extDnsQueryType    opcode;
+	axl_bool           is_authorative_answer;
+	axl_bool           was_truncated;
+	axl_bool           recursion_desired;
+	axl_bool           recursion_available;
+	extDnsResponseType rcode;
+	int                query_count;
+	int                answer_count;
+	int                resources_count;
+	int                additional_records_count;
+} extDnsHeader;
 
 #endif /* __EXT_DNS_TYPES_H__ */

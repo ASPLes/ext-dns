@@ -35,42 +35,55 @@
  *      Email address:
  *         info@aspl.es - http://www.aspl.es/ext-dns
  */
-#ifndef __EXT_DNS_CTX_H__
-#define __EXT_DNS_CTX_H__
-
 #include <ext-dns.h>
 
-extDnsCtx * ext_dns_ctx_new (void);
 
-void        ext_dns_ctx_ref                       (extDnsCtx  * ctx);
+extDnsHeader * ext_dns_message_parse_header (extDnsCtx * ctx, const char * buf, int buf_size)
+{
+	extDnsHeader * header;
 
-void        ext_dns_ctx_ref2                      (extDnsCtx  * ctx, const char * who);
+	/* return NULL if wrong values are received */
+	if (buf == NULL || buf_size == 0)
+		return NULL;
 
-void        ext_dns_ctx_unref                     (extDnsCtx ** ctx);
+	/* get header */
+	header           = axl_new (extDnsHeader, 1);
+	if (header == NULL)
+		return NULL;
 
-void        ext_dns_ctx_unref2                    (extDnsCtx ** ctx, const char * who);
+	/* process values */
+	ext_dns_show_byte (ctx, buf[0], "buf[0]");
+	ext_dns_show_byte (ctx, buf[1], "buf[1]");
 
-int         ext_dns_ctx_ref_count                 (extDnsCtx  * ctx);
+	/* get 16 bit integer */
+	header->id       = ext_dns_get_16bit (buf);
 
-void        ext_dns_ctx_free                      (extDnsCtx * ctx);
+	ext_dns_int2bin_print (ctx, header->id);
 
-void        ext_dns_ctx_free2                     (extDnsCtx * ctx, const char * who);
+	header->is_query              = ext_dns_extract_bit (buf[2], 7);
 
-void        ext_dns_ctx_set_data                  (extDnsCtx       * ctx, 
-						   const char      * key, 
-						   axlPointer        value);
+	/* get opcode */
+	header->opcode                = (buf[2] >> 3 ) & 240;
+	ext_dns_show_byte (ctx, buf[2], "buf[2]");
+	ext_dns_show_byte (ctx, header->opcode, "header->opcode");
 
-void        ext_dns_ctx_set_data_full             (extDnsCtx       * ctx, 
-						   const char      * key, 
-						   axlPointer        value,
-						   axlDestroyFunc    key_destroy,
-						   axlDestroyFunc    value_destroy);
+	/* get other flags */
+	header->is_authorative_answer = ext_dns_extract_bit (buf[2], 2);
+	header->was_truncated         = ext_dns_extract_bit (buf[2], 1);
+	header->recursion_desired     = ext_dns_extract_bit (buf[2], 0);
 
-axlPointer  ext_dns_ctx_get_data                  (extDnsCtx       * ctx,
-						   const char      * key);
+	header->recursion_available   = ext_dns_extract_bit (buf[3], 7);
 
-void        ext_dns_ctx_wait                      (extDnsCtx * ctx);
+	/* get response code */
+	header->rcode                 = buf[3] & 240;
 
-void        ext_dns_ctx_unlock                    (extDnsCtx * ctx);
+	/* get counters */
+	header->query_count               = ext_dns_get_16bit (buf + 4);
+	header->answer_count              = ext_dns_get_16bit (buf + 6);
+	header->resources_count           = ext_dns_get_16bit (buf + 8);
+	header->additional_records_count  = ext_dns_get_16bit (buf + 10);
 
-#endif /* __EXT_DNS_CTX_H__ */
+	return header;
+}
+
+

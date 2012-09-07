@@ -45,8 +45,33 @@
  * ext_dns_ctx_init to start it.
  */
 extDnsCtx * ext_dns_ctx_new (void) {
+	extDnsCtx * ctx;
 
-	return NULL;
+	/* create a new context */
+	ctx           = axl_new (extDnsCtx, 1);
+	EXT_DNS_CHECK_REF (ctx, NULL);
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "created extDnsCtx reference %p", ctx);
+
+	/* create the hash to store data */
+	ctx->data     = axl_hash_new (axl_hash_string, axl_hash_equal_string);
+	EXT_DNS_CHECK_REF2 (ctx->data, NULL, ctx, axl_free);
+
+	/* init mutex for the log */
+	ext_dns_mutex_create (&ctx->log_mutex);
+
+	/**** ext_dns_thread_pool.c: init ****/
+	ctx->thread_pool_exclusive = axl_true;
+
+	/* init reference counting */
+	ext_dns_mutex_create (&ctx->ref_mutex);
+	ctx->ref_count = 1;
+
+	/* init session id */
+	ctx->session_id = 1;
+	ext_dns_mutex_create (&ctx->session_id_mutex);
+
+	/* return context created */
+	return ctx;
 }
 
 /** 
@@ -226,6 +251,204 @@ void        ext_dns_ctx_free2 (extDnsCtx * ctx, const char * who)
 	/* free the context */
 	axl_free (ctx);
 	
+	return;
+}
+
+/** 
+ * @brief Allows to store arbitrary data associated to the provided
+ * context, which can later retrieved using a particular key. 
+ * 
+ * @param ctx The ctx where the data will be stored.
+ *
+ * @param key The key to index the value stored. The key must be a
+ * string.
+ *
+ * @param value The value to be stored. 
+ */
+void        ext_dns_ctx_set_data (extDnsCtx       * ctx, 
+				 const char      * key, 
+				 axlPointer        value)
+{
+	v_return_if_fail (ctx && key);
+
+	/* call to configure using full version */
+	ext_dns_ctx_set_data_full (ctx, key, value, NULL, NULL);
+	return;
+}
+
+
+/** 
+ * @brief Allows to store arbitrary data associated to the provided
+ * context, which can later retrieved using a particular key. It is
+ * also possible to configure a destroy handler for the key and the
+ * value stored, ensuring the memory used will be deallocated once the
+ * context is terminated (\ref ext_dns_ctx_free) or the value is
+ * replaced by a new one.
+ * 
+ * @param ctx The ctx where the data will be stored.
+ * @param key The key to index the value stored. The key must be a string.
+ * @param value The value to be stored. If the value to be stored is NULL, the function calls to remove previous content stored on the same key.
+ * @param key_destroy Optional key destroy function (use NULL to set no destroy function).
+ * @param value_destroy Optional value destroy function (use NULL to set no destroy function).
+ */
+void        ext_dns_ctx_set_data_full (extDnsCtx       * ctx, 
+				      const char      * key, 
+				      axlPointer        value,
+				      axlDestroyFunc    key_destroy,
+				      axlDestroyFunc    value_destroy)
+{
+	v_return_if_fail (ctx && key);
+
+	ext_dns_mutex_lock (&ctx->data_mutex);
+
+	/* check if the value is not null. It it is null, remove the
+	 * value. */
+	if (value == NULL) {
+		axl_hash_remove (ctx->data, (axlPointer) key);
+		ext_dns_mutex_unlock (&ctx->data_mutex);
+		return;
+	} /* end if */
+
+	/* store the data */
+	axl_hash_insert_full (ctx->data, 
+			      /* key and function */
+			      (axlPointer) key, key_destroy,
+			      /* value and function */
+			      value, value_destroy);
+
+	ext_dns_mutex_unlock (&ctx->data_mutex);
+	return;
+}
+
+
+/** 
+ * @brief Allows to retreive data stored on the given context (\ref
+ * ext_dns_ctx_set_data) using the provided index key.
+ * 
+ * @param ctx The context where to lookup the data.
+ * @param key The key to use as index for the lookup.
+ * 
+ * @return A reference to the pointer stored or NULL if it fails.
+ */
+axlPointer  ext_dns_ctx_get_data (extDnsCtx       * ctx,
+				 const char      * key)
+{
+	axlPointer  data;
+
+	v_return_val_if_fail (ctx && key, NULL);
+
+	/* lookup */
+	ext_dns_mutex_lock (&ctx->data_mutex);
+	data = axl_hash_get (ctx->data, (axlPointer) key);
+	ext_dns_mutex_unlock (&ctx->data_mutex);
+
+	return data;
+}
+
+
+/** 
+ * @brief Blocks the caller until the provided ext-dns context is
+ * finished.
+ * 
+ * This function should be called after creating a listener (o
+ * listeners) calling to \ref ext_dns_server_new to block current
+ * thread.
+ * 
+ * This function can be avoided if the program structure can ensure
+ * that the programm will not exist after calling \ref
+ * ext_dns_listener_new. This happens when the program is linked to (or
+ * implements) and internal event loop.
+ *
+ * This function will be unblocked when the ext-dns servers created
+ * ends or a failure have occur while creating the listener. To force
+ * an unlocking, a call to \ref ext_dns_session_unlock must be done.
+ * 
+ * @param ctx The context where the operation will be performed.
+ */
+void ext_dns_ctx_wait (extDnsCtx * ctx)
+{
+	extDnsAsyncQueue * temp;
+
+	/* check reference received */
+	if (ctx == NULL)
+		return;
+
+	/* check and init listener_wait_lock if it wasn't: init
+	   lock */
+	ext_dns_mutex_lock (&ctx->listener_mutex);
+
+	if (PTR_TO_INT (ext_dns_ctx_get_data (ctx, "ed:listener:skip:wait"))) {
+		/* seems someone called to unlock before we get
+		 * here */
+		/* unlock */
+		ext_dns_mutex_unlock (&ctx->listener_mutex);
+		return;
+	} /* end if */
+	
+	/* create listener locker */
+	if (ctx->listener_wait_lock == NULL) 
+		ctx->listener_wait_lock = ext_dns_async_queue_new ();
+
+	/* unlock */
+	ext_dns_mutex_unlock (&ctx->listener_mutex);
+
+	/* double locking to ensure waiting */
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Locking listener");
+	if (ctx->listener_wait_lock != NULL) {
+		/* get a local reference to the queue and work with it */
+		temp = ctx->listener_wait_lock;
+
+		/* get blocked until the waiting lock is released */
+		ext_dns_async_queue_pop   (temp);
+		
+		/* unref the queue */
+		ext_dns_async_queue_unref (temp);
+	}
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "(un)Locked listener");
+
+	return;
+}
+
+/** 
+ * @brief Unlock the thread blocked at the \ref ext_dns_listener_wait.
+ * 
+ * @param ctx The context where the operation will be performed.
+ **/
+void ext_dns_ctx_unlock (extDnsCtx * ctx)
+{
+	/* check reference received */
+	if (ctx == NULL || ext_dns_ctx_ref_count (ctx) < 1)
+		return;
+
+	/* unlock listener */
+	ext_dns_mutex_lock (&ctx->listener_unlock);
+	if (ctx->listener_wait_lock != NULL) {
+
+		/* push to signal listener unblocking */
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "(un)Locking listener..");
+
+		/* notify waiters */
+		if (ext_dns_async_queue_waiters (ctx->listener_wait_lock) > 0) {
+			ext_dns_async_queue_push (ctx->listener_wait_lock, INT_TO_PTR (axl_true));
+		} else {
+			/* unref */
+			ext_dns_async_queue_unref (ctx->listener_wait_lock);
+		} /* end if */
+
+		/* nullify */
+		ctx->listener_wait_lock = NULL;
+
+		ext_dns_mutex_unlock (&ctx->listener_unlock);
+		return;
+	} else {
+		/* flag this context to unlock ext_dns_listener_wait
+		 * caller because he still didn't reached */
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "ext_dns_listener_wait was not called, signalling to do fast unlock");
+		ext_dns_ctx_set_data (ctx, "vo:listener:skip:wait", INT_TO_PTR (axl_true));
+	}
+
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "(un)Locking listener: already unlocked..");
+	ext_dns_mutex_unlock (&ctx->listener_unlock);
 	return;
 }
 

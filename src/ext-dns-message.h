@@ -35,42 +35,11 @@
  *      Email address:
  *         info@aspl.es - http://www.aspl.es/ext-dns
  */
-#ifndef __EXT_DNS_CTX_H__
-#define __EXT_DNS_CTX_H__
+#ifndef __EXT_DNS_MESSAGE_H__
+#define __EXT_DNS_MESSAGE_H__
 
 #include <ext-dns.h>
 
-extDnsCtx * ext_dns_ctx_new (void);
+extDnsHeader * ext_dns_message_parse_header (extDnsCtx * ctx, const char * buf, int buf_size);
 
-void        ext_dns_ctx_ref                       (extDnsCtx  * ctx);
-
-void        ext_dns_ctx_ref2                      (extDnsCtx  * ctx, const char * who);
-
-void        ext_dns_ctx_unref                     (extDnsCtx ** ctx);
-
-void        ext_dns_ctx_unref2                    (extDnsCtx ** ctx, const char * who);
-
-int         ext_dns_ctx_ref_count                 (extDnsCtx  * ctx);
-
-void        ext_dns_ctx_free                      (extDnsCtx * ctx);
-
-void        ext_dns_ctx_free2                     (extDnsCtx * ctx, const char * who);
-
-void        ext_dns_ctx_set_data                  (extDnsCtx       * ctx, 
-						   const char      * key, 
-						   axlPointer        value);
-
-void        ext_dns_ctx_set_data_full             (extDnsCtx       * ctx, 
-						   const char      * key, 
-						   axlPointer        value,
-						   axlDestroyFunc    key_destroy,
-						   axlDestroyFunc    value_destroy);
-
-axlPointer  ext_dns_ctx_get_data                  (extDnsCtx       * ctx,
-						   const char      * key);
-
-void        ext_dns_ctx_wait                      (extDnsCtx * ctx);
-
-void        ext_dns_ctx_unlock                    (extDnsCtx * ctx);
-
-#endif /* __EXT_DNS_CTX_H__ */
+#endif /* __EXT_DNS_MESSAGE_H__ */

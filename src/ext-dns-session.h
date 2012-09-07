@@ -41,6 +41,17 @@
 
 #include <ext-dns.h>
 
+extDnsSession   * ext_dns_session_new_empty  (extDnsCtx        * ctx, 
+					      EXT_DNS_SOCKET     socket, 
+					      extDnsSessionType  type,
+					      extDnsPeerRole     role);
+
+extDnsSession   * ext_dns_session_new_empty_from_session (extDnsCtx          * ctx,
+							  EXT_DNS_SOCKET       socket,
+							  extDnsSession      * __session,
+							  extDnsSessionType    type,
+							  extDnsPeerRole       role);
+
 int               ext_dns_session_get_id     (extDnsSession * session);
 
 const char      * ext_dns_session_get_port   (extDnsSession * session);
@@ -69,12 +80,56 @@ void              ext_dns_session_push_error  (extDnsSession  * session,
 					       int              code,
 					       const char     * msg);
 
+axl_bool          ext_dns_session_check_socket_limit     (extDnsCtx        * ctx, 
+							  EXT_DNS_SOCKET      socket);
+
 axl_bool         ext_dns_session_set_nonblocking_socket (extDnsSession * session);
+
+extDnsSendHandler      vortex_session_set_send_handler    (extDnsSession * session,
+							   extDnsSendHandler  send_handler);
+
+extDnsReceiveHandler   vortex_session_set_receive_handler (extDnsSession * session,
+							   extDnsReceiveHandler receive_handler);
+
+EXT_DNS_SOCKET     ext_dns_listener_sock_listen      (extDnsCtx           * ctx,
+						      extDnsSessionType     type,
+						      const char          * host,
+						      const char          * port,
+						      axlError           ** error);
+
+extDnsSession     * ext_dns_listener_new (extDnsCtx           * ctx,
+					  const char          * host, 
+					  const char          * port, 
+					  extDnsSessionType     type,
+					  extDnsListenerReady   on_ready, 
+					  axlPointer            user_data);
+
+extDnsSession     * ext_dns_listener_new_full  (extDnsCtx           * ctx,
+						const char          * host,
+						const char          * port,
+						extDnsSessionType     type,
+						extDnsListenerReadyFull on_ready_full, 
+						axlPointer user_data);
+
+extDnsSession    * ext_dns_listener_new2    (extDnsCtx           * ctx,
+					     const char          * host,
+					     int                   port,
+					     extDnsSessionType     type,
+					     extDnsListenerReady   on_ready, 
+					     axlPointer            user_data);
 
 /** private functions */
 void                __ext_dns_session_shutdown_and_record_error (extDnsSession    * session,
 								 extDnsStatus       status,
 								 const char       * message,
 								 ...);
+
+int  ext_dns_session_default_send (extDnsSession * session,
+				   const char       * buffer,
+				   int                buffer_len);
+
+int  ext_dns_session_default_receive (extDnsSession * session,
+				      char             * buffer,
+				      int                buffer_len);
 
 #endif /* __EXT_DNS_SESSION_H__ */
