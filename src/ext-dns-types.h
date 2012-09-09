@@ -570,4 +570,141 @@ typedef struct _extDnsHeader {
 	int                additional_records_count;
 } extDnsHeader;
 
+/** 
+ * TYPE fields are used in resource records.  Note that these types
+ * are a subset of QTYPEs.
+ */
+typedef enum {
+	/** 
+	 * A host address.
+	 */
+	extDnsTypeA      = 1,
+	/** 
+	 * An authoritative name server
+	 */
+	extDnsTypeNS     = 2,
+	/** 
+	 * A mail destination (Obsolete - use MX)
+	 */
+	extDnsTypeMD     = 3,
+	/** 
+	 * Amail forwarder (Obsolete - use MX)
+	 */
+	extDnsTypeMF     = 4,
+	/** 
+	 * The canonical name for an alias
+	 */
+	extDnsTypeCNAME  = 5,
+	/** 
+	 * Marks the start of a zone of authority
+	 */
+	extDnsTypeSOA    = 6,
+	/** 
+	 * A mailbox domain name (EXPERIMENTAL)
+	 */
+	extDnsTypeMB     = 7,
+	/** 
+	 * A mail group member (EXPERIMENTAL)
+	 */
+	extDnsTypeMG     = 8,
+	/** 
+	 * A mail group member (EXPERIMENTAL)
+	 */
+	extDnsTypeMR     = 9,
+	/** 
+	 * A null RR (EXPERIMENTAL)
+	 */
+	extDnsTypeNULL   = 10,
+	/** 
+	 * A well known service description
+	 */
+	extDnsTypeWKS    = 11,
+	/** 
+	 * A domain name pointer.
+	 */
+	extDnsTypePTR    = 12,
+	/** 
+	 * Host information
+	 */
+	extDnsTypeHINFO  = 13,
+	/** 
+	 * Mailbox or mail list information
+	 */
+	extDnsTypeMINFO  = 14,
+	/** 
+	 * Mail exchange
+	 */
+	extDnsTypeMX     = 15,
+	/** 
+	 * Text strings
+	 */
+	extDnsTypeTXT    = 16,
+	/** 
+	 * A request for a transfer of an entire zone
+	 */
+	extDnsTypeAXFR   = 252,
+	/** 
+	 * A request for mailbox-related records (MB, MG or MR)
+	 */
+	extDnsTypeMAILB  = 253,
+	/** 
+	 * A request for mail agent RRs (Obsolete - see MX)
+	 */
+	extDnsTypeMAILA  = 254,
+	/** 
+	 * A request for all records
+	 */
+	extDnsTypeANY    = 255
+} extDnsType;
+
+/** 
+ * CLASS values. CLASS fields appear in resource records.  The
+ * following CLASS mnemonics and values are defined:
+ */ 
+typedef enum {
+	/** 
+	 * The Internet
+	 */
+	extDnsIN         = 1,
+	/** 
+	 * The CSNET class (Obsolete - used only for examples in some
+	 * obsolete RFCs)
+	 */
+	extDnsCS         = 2,
+	/** 
+	 * The CHAOS class
+	 */
+	extDnsCH         = 3,
+	/** 
+	 * Hesiod [Dyer 87]
+	 */
+	extDnsHS         = 4,
+	/** 
+	 * Any class
+	 */
+	extDnsClassANY   = 255
+} extDnsClass;
+
+typedef struct _extDnsQuestion {
+	char         * qname;
+	extDnsType     qtype;
+	extDnsClass    qclass;
+} extDnsQuestion;
+
+typedef struct _extDnsResourceRecord {
+	const char * name;
+	const char * type;
+	const char * class;
+	int          ttl;
+	const char * rdata;
+} extDnsResourceRecord;
+
+typedef struct _extDnsMessage {
+	extDnsHeader         * header;
+	extDnsQuestion       * questions;
+	extDnsResourceRecord * answers;
+	extDnsResourceRecord * authorities;
+	extDnsResourceRecord * more_resources;
+} extDnsMessage;
+
 #endif /* __EXT_DNS_TYPES_H__ */

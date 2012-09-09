@@ -40,6 +40,14 @@
 
 #include <ext-dns.h>
 
-extDnsHeader * ext_dns_message_parse_header (extDnsCtx * ctx, const char * buf, int buf_size);
+extDnsHeader  * ext_dns_message_parse_header (extDnsCtx * ctx, const char * buf, int buf_size);
+
+extDnsMessage * ext_dns_message_parse_message (extDnsCtx * ctx, extDnsHeader * header, const char * buf, int buf_size);
+
+void            ext_dns_message_unref (extDnsMessage * message);
+
+int             ext_dns_message_build_reply (extDnsCtx * ctx, extDnsMessage * message, char * buffer, int ttl, const char * data);
+					     
+					     
 
 #endif /* __EXT_DNS_MESSAGE_H__ */
