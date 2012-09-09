@@ -86,4 +86,243 @@ extDnsHeader * ext_dns_message_parse_header (extDnsCtx * ctx, const char * buf, 
 	return header;
 }
 
+char * ext_dns_message_get_label (extDnsCtx * ctx, const char * buffer)
+{
+	char * label;
+	int    bytes_to_read = (char)(buffer[0]) & 0x3f;
 
+	if (bytes_to_read == 0)
+		return NULL;
+	
+	label = axl_new (char, bytes_to_read + 1);
+
+	memcpy (label, buffer + 1, bytes_to_read);
+
+	return label;
+}
+
+char * ext_dns_message_get_resource_name (extDnsCtx * ctx, const char * buffer, int buf_size, int iterator)
+{
+	/* clear resource name */
+	char * resource_name = NULL;
+	char * label         = NULL;
+	char * aux           = NULL;
+	
+	while (iterator < buf_size && buffer[iterator]) {
+		/* get label */
+		label = ext_dns_message_get_label (ctx, buffer + iterator);
+		
+		if (label == NULL) 
+			break;
+		
+		/* get length */
+		iterator += strlen (label) + 1;
+		
+		if (resource_name == NULL) {
+			resource_name = label;
+			label = NULL;
+		} else {
+			/* rebuild resource */
+			aux = resource_name;
+			resource_name = axl_strdup_printf ("%s.%s", resource_name, label);
+			axl_free (aux);
+		}
+		
+		axl_free (label);
+	} /* end while */
+
+	return resource_name;
+}
+
+
+/** 
+ * @internal Allows to parse the DNS message received in buf
+ * (buf_size) and according to the header.
+ */
+extDnsMessage * ext_dns_message_parse_message (extDnsCtx * ctx, extDnsHeader * header, const char * buf, int buf_size)
+{
+	int             iterator = 12;
+	int             count;
+	extDnsMessage * message;
+
+	/* create empty message */
+	message = axl_new (extDnsMessage, 1);
+	if (message == NULL)
+		return NULL;
+
+	/* set header */
+	message->header = header;
+	
+	/* parse query question */
+	if (header->query_count > 0) {
+		/* allocate structure to hold query question */
+		message->questions = axl_new (extDnsQuestion, header->query_count);
+	}
+
+	/*** QUESTIONS ***/
+	count = 0;
+	while (count < header->query_count) {
+
+		/* store resource name */
+		message->questions[count].qname  = ext_dns_message_get_resource_name (ctx, buf, buf_size, iterator);
+
+		/* failed to get query name */
+		if (message->questions[count].qname == NULL)
+			break;
+
+		iterator += strlen (message->questions[count].qname) + 1;
+
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Resource name: '%s'", message->questions[count].qname);
+		
+		/* get qtype */
+		iterator++;
+		message->questions[count].qtype  = ext_dns_get_16bit (buf + iterator);
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "qtype received = %d", message->questions[count].qtype);
+		
+		/* get qclass */
+		iterator += 2;
+		message->questions[count].qclass = ext_dns_get_16bit (buf + iterator);
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "qclass received = %d", message->questions[count].qclass);
+
+		/* next section */
+		count++;
+	} /* end if */
+
+	/*** ANSWERS ***/
+	/* still not supported */
+
+	/*** AUTHORITY ***/
+	/* still not supported */
+
+	/*** ADDITIONAL ***/
+	/* still not supported */
+
+	return message;
+}
+
+/** 
+ * @internal Allows to build a reply using the provided header with
+ * the provided data. The result is left into buffer so the user can
+ * send it.
+ */
+int             ext_dns_message_build_reply (extDnsCtx * ctx, extDnsMessage * message, char * buffer, 
+					     int ttl, const char * data)
+{
+	int position;
+
+	/* clear buffer */
+	memset (buffer, 0, 512);
+
+	/* set ID */
+	ext_dns_set_16bit (message->header->id, buffer);
+
+	/* set QR */
+	ext_dns_set_bit (buffer + 2, 7);
+
+	/* set RD */
+	ext_dns_set_bit (buffer + 3, 7);
+
+	/* set ANS count */
+	ext_dns_set_16bit (1, buffer + 6);
+
+	/* now set reply content */
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "  Encoding resource name: %s", message->questions[0].qname);
+	position = ext_dns_encode_domain_name (ctx, message->questions[0].qname, buffer + 12);
+
+	int iterator = 0;
+	while (iterator < position) {
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "  Position encoded: '%c' (%d)", buffer[12 + iterator], buffer[12 + iterator]);
+		iterator++;
+	}
+	
+
+	/* sum position */
+	position += 12;
+
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "After writting NAME inside ANS section, position is: %d", position);
+
+	/* set TYPE */
+	ext_dns_set_16bit (message->questions[0].qtype, buffer + position);
+	ext_dns_show_byte (ctx, buffer[position], "TYPE[0]");
+	ext_dns_show_byte (ctx, buffer[position + 1], "TYPE[1]");
+
+	/* next two bytes */
+	position += 2;
+
+	/* set CLASS */
+	ext_dns_set_16bit (message->questions[0].qclass, buffer + position);
+	ext_dns_show_byte (ctx, buffer[position], "CLASS[0]");
+	ext_dns_show_byte (ctx, buffer[position + 1], "CLASS[1]");
+
+	/* next two bytes */
+	position += 2;
+
+	/* set TTL */
+	ext_dns_set_32bit (ttl, buffer + position);
+	ext_dns_show_byte (ctx, buffer[position], "TTL[0]");
+	ext_dns_show_byte (ctx, buffer[position + 1], "TTL[1]");
+	ext_dns_show_byte (ctx, buffer[position + 2], "TTL[2]");
+	ext_dns_show_byte (ctx, buffer[position + 3], "TTL[3]");
+
+
+	/* next four bytes */
+	position += 4;
+
+	/* set RDLENGTH (hard code IP) */
+	ext_dns_set_16bit (4, buffer + position);
+	ext_dns_show_byte (ctx, buffer[position], "RDLENGTH[0]");
+	ext_dns_show_byte (ctx, buffer[position + 1], "RDLENGTH[1]");
+
+	/* next four bytes */
+	position += 2;
+
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Writting A address at position: %d", position);
+
+	buffer[position]     = 192;
+	buffer[position + 1] = 168;
+	buffer[position + 2] = 1;
+	buffer[position + 3] = 44;
+
+	/* return bytes written in the buffer */
+	return position + 4;
+}
+
+
+/** 
+ * @brief Releases the provided DNS message.
+ *
+ * @param message The DNS message to release
+ */
+void ext_dns_message_unref (extDnsMessage * message)
+{
+	int count;
+
+	if (message == NULL)
+		return;
+
+	
+	/*** QUESTIONS ***/
+	count = 0;
+	while (count < message->header->query_count) {
+		/* release name */
+		axl_free (message->questions[count].qname);
+		
+		count++;
+	}
+	if (message->header->query_count > 0)
+		axl_free (message->questions);
+
+	/*** ANSWERS ***/
+	/* still not supported */
+
+	/*** AUTHORITY ***/
+	/* still not supported */
+
+	/*** ADDITIONAL ***/
+	/* still not supported */
+
+	/* release header */
+	axl_free (message->header);
+
+	return;
+}

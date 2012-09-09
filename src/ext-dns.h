@@ -461,6 +461,8 @@ int      ext_dns_timeval_substract     (struct timeval * a,
 
 int    ext_dns_extract_bit (char byte, int position);
 
+void   ext_dns_set_bit     (char * buffer, int position);
+
 void   ext_dns_show_byte (extDnsCtx * ctx, char byte, const char * label);
 
 char * ext_dns_int2bin (int a, char *buffer, int buf_size);
@@ -468,6 +470,12 @@ char * ext_dns_int2bin (int a, char *buffer, int buf_size);
 void   ext_dns_int2bin_print (extDnsCtx * ctx, int value);
 
 int    ext_dns_get_16bit (const char * buffer);
+
+void   ext_dns_set_16bit (int value, char * buffer);
+
+void   ext_dns_set_32bit (int value, char * buffer);
+
+int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * buffer);
 
 #if defined(__COMPILING_EXT_DNS__) && defined(__GNUC__)
 /* makes gcc happy, by prototyping functions which aren't exported

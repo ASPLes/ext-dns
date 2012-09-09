@@ -110,24 +110,51 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 	struct sockaddr_in si_other;
 	socklen_t sin_size;
 	int bytes_read;
-	extDnsHeader * header;
+
+	extDnsHeader  * header;
+	extDnsMessage * message;
+
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Received query over session id=%d", 
+		     ext_dns_session_get_id (session));
 
 	/* read content from socket */
-	sin_size       = sizeof (si_other);
-	bytes_read = recvfrom (session->session, buf, 1023, 0, (struct sockaddr *) &si_other, &sin_size);
+	sin_size        = sizeof (si_other);
+	bytes_read      = recvfrom (session->session, buf, 1023, MSG_DONTWAIT, (struct sockaddr *) &si_other, &sin_size);
 	buf[bytes_read] = 0;
 
-	header = ext_dns_message_parse_header (ctx, buf, bytes_read);
+	/* check here message size to limit incoming queries */
+	if (bytes_read > 512) {
+		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Received a DNS message that is bigger than allowed values (%d > 512)",
+			     bytes_read);
+		return;
+	} /* end if */
 
-	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Received query over session id=%d, content is (size: %d): %s", 
-		     ext_dns_session_get_id (session), bytes_read, buf);
+	/* get the header */
+	header = ext_dns_message_parse_header (ctx, buf, bytes_read);
 
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Received header id: %u, is query: %d, opcode: %d, AA: %d, TC: %d, RD: %d, RD: %d\n      rcode: %d, qcount: %d, ancount: %d, nscount: %d, arcount: %d", 
 		     header->id, header->is_query, header->opcode, header->is_authorative_answer, header->was_truncated, 
 		     header->recursion_desired, header->recursion_available, header->rcode, header->query_count, header->answer_count,
 		     header->resources_count, header->additional_records_count);
+
+	/* now parse rest of the message */
+	message = ext_dns_message_parse_message (ctx, header, buf, bytes_read);
+
+	/* queue message to be handled in other part */
 	
-	axl_free (header);
+
+	/* build reply and send reply */
+	bytes_read = ext_dns_message_build_reply (ctx, message, buf, 3600, "192.168.0.23");
+
+
+	if (sendto (session->session, buf, bytes_read, 0, (struct sockaddr *) &si_other, sin_size) <= 0) {
+		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Failed to send DNS reply, sendto system call failed",
+			     bytes_read);
+		return;
+	} /* end if */
+
+	/* release message here */
+	ext_dns_message_unref (message);
 
 	/* that's all I can do */
 	return;

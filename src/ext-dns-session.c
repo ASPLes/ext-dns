@@ -267,8 +267,7 @@ axl_bool            ext_dns_session_set_socket                (extDnsSession    
 		return axl_false;
 
 	/* disable nagle */
-	if (session->type == extDnsTcpSession)
-		ext_dns_session_set_sock_tcp_nodelay (_socket, axl_true);
+	ext_dns_session_set_sock_tcp_nodelay (_socket, axl_true);
 
 	/* set socket */
 	session->session = _socket;

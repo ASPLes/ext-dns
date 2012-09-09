@@ -48,8 +48,12 @@ ext_dns_errno_get_last_error
 ext_dns_errno_show_error
 ext_dns_errno_show_last_error
 ext_dns_exit_ctx
+ext_dns_extract_bit
+ext_dns_get_16bit
 ext_dns_init_check
 ext_dns_init_ctx
+ext_dns_int2bin
+ext_dns_int2bin_print
 ext_dns_io_init
 ext_dns_io_waiting_get_current
 ext_dns_io_waiting_invoke_add_to_fd_group
@@ -86,6 +90,7 @@ ext_dns_log_get_handler
 ext_dns_log_is_enabled
 ext_dns_log_set_handler
 ext_dns_log_set_prepare_log
+ext_dns_message_parse_header
 ext_dns_mutex_create
 ext_dns_mutex_destroy
 ext_dns_mutex_lock
@@ -128,6 +133,7 @@ ext_dns_session_set_send_handler
 ext_dns_session_set_sock_tcp_nodelay
 ext_dns_session_set_socket
 ext_dns_session_unref
+ext_dns_show_byte
 ext_dns_support_getenv
 ext_dns_support_getenv_int
 ext_dns_support_inet_ntoa

@@ -1078,6 +1078,19 @@ int ext_dns_extract_bit (char byte, int position) {
 	return ( ( byte & (1 << position) ) >> position);
 }
 
+/** 
+ * @internal Allows to set a particular bit on the first position of
+ * the buffer provided.
+ *
+ *    +------------------------+
+ *    | 7  6  5  4  3  2  1  0 | position
+ *    +------------------------+
+ */
+void ext_dns_set_bit (char * buffer, int position) {
+	buffer[0] |= (1 << position);
+	return;
+}
+
 void ext_dns_show_byte (extDnsCtx * ctx, char byte, const char * label) {
 	
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "  byte (%s) = %d %d %d %d  %d %d %d %d",
@@ -1122,7 +1135,7 @@ void ext_dns_int2bin_print (extDnsCtx * ctx, int value) {
 }
 
 /** 
- * @brief Allows to get the 16 bit integer located at the buffer
+ * @internal Allows to get the 16 bit integer located at the buffer
  * pointer.
  *
  * @param buffer The buffer pointer to extract the 16bit integer from.
@@ -1135,4 +1148,89 @@ int    ext_dns_get_16bit (const char * buffer)
 	int low_part  = buffer[1] & 0x000000ff;
 
 	return (high_part | low_part) & 0x000000ffff;
+}
+
+/** 
+ * @internal Allows to set the 16 bit integer value into the 2 first
+ * bytes of the provided buffer.
+ *
+ * @param value The value to be configured in the buffer.
+ *
+ * @param buffer The buffer where the content will be placed.
+ */
+void   ext_dns_set_16bit (int value, char * buffer)
+{
+	buffer[0] = (value & 0x0000ff00) >> 8;
+	buffer[1] = value & 0x000000ff;
+	
+	return;
+}
+
+/** 
+ * @internal Allows to set the 32 bit integer value into the 4 first
+ * bytes of the provided buffer.
+ *
+ * @param value The value to be configured in the buffer.
+ *
+ * @param buffer The buffer where the content will be placed.
+ */
+void   ext_dns_set_32bit (int value, char * buffer)
+{
+	buffer[0] = (value & 0x00ff000000) >> 24;
+	buffer[1] = (value & 0x0000ff0000) >> 16;
+	buffer[2] = (value & 0x000000ff00) >> 8;
+	buffer[3] =  value & 0x00000000ff;
+
+	return;
+}
+
+/** 
+ * @internal Allows to set the the provided value encoded using DNS
+ * rules on the buffer provided, returning the last position written.
+ */
+int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * buffer)
+{
+	int          counter = 0;
+	int          iterator = 0;
+	char       * last_position = buffer;
+
+	while (value[iterator]) {
+		/* copy value */
+		buffer[iterator + 1] = value[iterator];
+		
+		if (buffer[iterator + 1] == '.' || value[iterator + 1] == '\0') {
+			ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Setting counter value %d, at %d", counter - 1, last_position - buffer);
+
+			/* set last position count and reset current counter */
+			if (value[iterator + 1] == '\0')
+				counter++;
+			last_position[0] = counter;
+			
+			/* reset counter */
+			counter = 0;
+
+			/* record new last position */
+			last_position = buffer + iterator + 1;
+
+			/* next position */
+			iterator++;
+
+			continue;
+		}
+
+		/* copy value */
+		counter ++;
+
+		/* next position */
+		iterator++;
+	} /* end if */
+
+	/* write last \0 */
+	buffer[iterator + 1] = 0;
+
+	iterator ++;
+
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Total length encoded was: %d, iter=%d", strlen (buffer) + 1, iterator);
+
+	return strlen (buffer) + 1;
 }
