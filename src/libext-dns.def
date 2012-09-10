@@ -43,6 +43,7 @@ ext_dns_ctx_unlock
 ext_dns_ctx_unref
 ext_dns_ctx_unref2
 ext_dns_ctx_wait
+ext_dns_encode_domain_name
 ext_dns_errno_get_error
 ext_dns_errno_get_last_error
 ext_dns_errno_show_error
@@ -90,7 +91,12 @@ ext_dns_log_get_handler
 ext_dns_log_is_enabled
 ext_dns_log_set_handler
 ext_dns_log_set_prepare_log
+ext_dns_message_build_reply
+ext_dns_message_get_label
+ext_dns_message_get_resource_name
 ext_dns_message_parse_header
+ext_dns_message_parse_message
+ext_dns_message_unref
 ext_dns_mutex_create
 ext_dns_mutex_destroy
 ext_dns_mutex_lock
@@ -133,6 +139,9 @@ ext_dns_session_set_send_handler
 ext_dns_session_set_sock_tcp_nodelay
 ext_dns_session_set_socket
 ext_dns_session_unref
+ext_dns_set_16bit
+ext_dns_set_32bit
+ext_dns_set_bit
 ext_dns_show_byte
 ext_dns_support_getenv
 ext_dns_support_getenv_int

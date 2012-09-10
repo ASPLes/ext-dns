@@ -219,27 +219,49 @@ int             ext_dns_message_build_reply (extDnsCtx * ctx, extDnsMessage * me
 	/* set QR */
 	ext_dns_set_bit (buffer + 2, 7);
 
-	/* set RD */
+	/* set RD if requested by the user */
+	if (message->header->recursion_desired)
+		ext_dns_set_bit (buffer + 2, 0);
+
+	/* set RA if recursion is available */
 	ext_dns_set_bit (buffer + 3, 7);
 
-	/* set ANS count */
+	/* set QDCOUNT count */
+	ext_dns_set_16bit (1, buffer + 4);
+
+	/* set ANCOUNT count */
 	ext_dns_set_16bit (1, buffer + 6);
 
-	/* now set reply content */
-	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "  Encoding resource name: %s", message->questions[0].qname);
-	position = ext_dns_encode_domain_name (ctx, message->questions[0].qname, buffer + 12);
+	/* first position */
+	position = 12;
 
-	int iterator = 0;
-	while (iterator < position) {
-		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "  Position encoded: '%c' (%d)", buffer[12 + iterator], buffer[12 + iterator]);
-		iterator++;
-	}
+	/*** PLACE QUESTION ***/
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "PLACING QUESTION:  Encoding resource name: %s", message->questions[0].qname);
+	position += ext_dns_encode_domain_name (ctx, message->questions[0].qname, buffer + position);
+
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "   qname position after placing name: %d", position);
+
+	/* set TYPE */
+	ext_dns_set_16bit (message->questions[0].qtype, buffer + position);
+	ext_dns_show_byte (ctx, buffer[position], "TYPE[0]");
+	ext_dns_show_byte (ctx, buffer[position + 1], "TYPE[1]");
+
+	/* next two bytes */
+	position += 2;
+
+	/* set CLASS */
+	ext_dns_set_16bit (message->questions[0].qclass, buffer + position);
+	ext_dns_show_byte (ctx, buffer[position], "CLASS[0]");
+	ext_dns_show_byte (ctx, buffer[position + 1], "CLASS[1]");
+
+	/* next two bytes */
+	position += 2;
 	
+	/*** PLACE ANSWER ****/
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "PLACING ANSWER:  Encoding resource name: %s", message->questions[0].qname);
+	position += ext_dns_encode_domain_name (ctx, message->questions[0].qname, buffer + position);
 
-	/* sum position */
-	position += 12;
-
-	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "After writting NAME inside ANS section, position is: %d", position);
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "   qname position after placing name: %d", position);
 
 	/* set TYPE */
 	ext_dns_set_16bit (message->questions[0].qtype, buffer + position);
