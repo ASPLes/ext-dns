@@ -393,8 +393,6 @@ int             ext_dns_message_build_query (extDnsCtx * ctx, const char * qname
 	/* set id */
 	ext_dns_set_16bit (_header->id, buffer);
 
-	/* set QR */
-	ext_dns_set_bit (buffer + 2, 7);
 	/* set RD */
 	ext_dns_set_bit (buffer + 2, 0);
 

@@ -781,6 +781,7 @@ int               __ext_dns_session_send_udp_common   (extDnsCtx     * ctx,
 {
 	struct   sockaddr_in dest_addr; 
 	int      numbytes; 
+	axl_bool close_socket;
 #if defined(AXL_OS_WIN32)
 	int                  sin_size  = sizeof (dest_addr);
 #else    	
@@ -794,13 +795,19 @@ int               __ext_dns_session_send_udp_common   (extDnsCtx     * ctx,
 		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to get host by name for address=%s", address);
 		return -1;
 	}
+
+	/* set default state for closing socket */
+	close_socket = axl_false;
 	
-	/* Creamos el socket */
 	if (session == -1) {
+		/* create socket */
 		if ((session = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
 			ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to create socket, error was errno=%d", errno);
 			return -1;
 		}
+
+		/* set we have to close the socket after finishing */
+		close_socket = axl_true;
 	} /* end if */
 
 	/* remove DF flag */
@@ -816,7 +823,8 @@ int               __ext_dns_session_send_udp_common   (extDnsCtx     * ctx,
 		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to send message, error was=%d", errno);
 
 		/* close socket */
-		ext_dns_close_socket (session);
+		if (close_socket)
+			ext_dns_close_socket (session);
 
 		return -1;
 	}
@@ -824,6 +832,10 @@ int               __ext_dns_session_send_udp_common   (extDnsCtx     * ctx,
 	if (source_port || source_address) {
 		sin_size = sizeof (dest_addr);
 		if (getsockname (session, (struct sockaddr *) &dest_addr, &sin_size) < 0) {
+			/* close socket */
+			if (close_socket)
+				ext_dns_close_socket (session);
+
 			ext_dns_log (EXT_DNS_LEVEL_DEBUG, "unable to get local hostname and port");
 			return axl_false;
 		} /* end if */
@@ -836,7 +848,8 @@ int               __ext_dns_session_send_udp_common   (extDnsCtx     * ctx,
 		(*source_port)    = ntohs (dest_addr.sin_port);
 	
 	/* close socket */
-	ext_dns_close_socket (session);
+	if (close_socket)
+		ext_dns_close_socket (session);
 	
 	return numbytes;
 }
