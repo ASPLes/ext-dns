@@ -73,4 +73,8 @@ void        ext_dns_ctx_wait                      (extDnsCtx * ctx);
 
 void        ext_dns_ctx_unlock                    (extDnsCtx * ctx);
 
+void        ext_dns_ctx_set_on_message            (extDnsCtx * ctx,
+						   extDnsOnMessageReceived    on_dns_message, 
+						   axlPointer                 data);
+
 #endif /* __EXT_DNS_CTX_H__ */

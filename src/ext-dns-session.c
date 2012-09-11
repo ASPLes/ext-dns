@@ -43,6 +43,7 @@
 # include <netinet/tcp.h>
 #endif
 
+
 int  __ext_dns_listener_get_port (const char  * port)
 {
 	return strtol (port, NULL, 10);
@@ -542,6 +543,37 @@ axl_bool                    ext_dns_session_close                  (extDnsSessio
 	return axl_true;
 }
 
+/** 
+ * @brief Allows to configure the onMessage handler, the callback that
+ * is called every time a new message is received over the provided
+ * session.
+ *
+ * @param session The session that is configured to received messages
+ * on the provided handler.
+ *
+ * @param dns_message The handler where the message will be notified.
+ *
+ * @param data A pointer to user defined data that will be passed into
+ * the handler.
+ *
+ * Note: only one handler can be configured at the same time for a
+ * single session.
+ */
+void              ext_dns_session_set_on_message (extDnsSession             * session, 
+						  extDnsOnMessageReceived     on_dns_message, 
+						  axlPointer                  data)
+{
+	/* check pointer received */
+	if (session == NULL || on_dns_message == NULL)
+		return;
+
+	/* set on message */
+	session->on_message      = on_dns_message;
+	session->on_message_data = data;
+
+	return;
+}
+
 /**
  * @internal Reference counting update implementation.
  */
@@ -682,6 +714,201 @@ void               ext_dns_session_unref                  (extDnsSession * sessi
 
 	return;
 }
+
+/** 
+ * @internal wrapper to avoid possible problems caused by the
+ * gethostbyname implementation which is not required to be reentrant
+ * (thread safe).
+ *
+ * @param ctx The context where the operation will be performed.
+ * 
+ * @param hostname The host to translate.
+ * 
+ * @return A reference to the struct hostent or NULL if it fails to
+ * resolv the hostname.
+ */
+struct in_addr * ext_dns_session_gethostbyname (extDnsCtx  * ctx, 
+						const char * hostname)
+{
+	/* get current context */
+	struct in_addr * result;
+	struct hostent * _result;
+
+	/* check that context and hostname are valid */
+	if (ctx == NULL || hostname == NULL)
+		return NULL;
+	
+	/* lock and resolv */
+	ext_dns_mutex_lock (&ctx->hostname_mutex);
+
+	/* resolv using the hash */
+	result = axl_hash_get (ctx->hostname_hash, (axlPointer) hostname);
+	if (result == NULL) {
+		_result = gethostbyname (hostname);
+		if (_result != NULL) {
+			/* alloc and get the address */
+			result         = axl_new (struct in_addr, 1);
+			if (result == NULL) {
+				ext_dns_mutex_unlock (&ctx->hostname_mutex);
+				return NULL;
+			} /* end if */
+			result->s_addr = ((struct in_addr *) (_result->h_addr_list)[0])->s_addr;
+
+			/* now store the result */
+			axl_hash_insert_full (ctx->hostname_hash, 
+					      /* the hostname */
+					      axl_strdup (hostname), axl_free,
+					      /* the address */
+					      result, axl_free);
+		} /* end if */
+	} /* end if */
+
+	/* unlock and return the result */
+	ext_dns_mutex_unlock (&ctx->hostname_mutex);
+
+	return result;
+	
+}
+
+int               __ext_dns_session_send_udp_common   (extDnsCtx     * ctx, 
+						       int             session,
+						       const char    * content, 
+						       int             length, 
+						       const char    * address, 
+						       int             port,
+						       char         ** source_address,
+						       int           * source_port)
+{
+	struct   sockaddr_in dest_addr; 
+	int      numbytes; 
+#if defined(AXL_OS_WIN32)
+	int                  sin_size  = sizeof (dest_addr);
+#else    	
+	socklen_t            sin_size  = sizeof (dest_addr);
+#endif	
+	struct   in_addr * haddr;
+	int val = IP_PMTUDISC_DONT;
+	
+	/* convertimos el hostname a su direccion IP */
+	if ((haddr = ext_dns_session_gethostbyname (ctx, address)) == NULL) {
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to get host by name for address=%s", address);
+		return -1;
+	}
+	
+	/* Creamos el socket */
+	if (session == -1) {
+		if ((session = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+			ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to create socket, error was errno=%d", errno);
+			return -1;
+		}
+	} /* end if */
+
+	/* remove DF flag */
+	setsockopt (session, IPPROTO_IP, IP_MTU_DISCOVER, &val, sizeof(val));
+	
+	/* a donde mandar */
+	dest_addr.sin_family = AF_INET; /* usa host byte order */
+	dest_addr.sin_port = htons(port); /* usa network byte order */
+        memcpy(&dest_addr.sin_addr, haddr, sizeof(struct in_addr));
+	
+	/* enviamos el mensaje */
+	if ((numbytes = sendto (session, content, length, 0,(struct sockaddr *)&dest_addr, sizeof (struct sockaddr))) == -1) {
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to send message, error was=%d", errno);
+
+		/* close socket */
+		ext_dns_close_socket (session);
+
+		return -1;
+	}
+
+	if (source_port || source_address) {
+		sin_size = sizeof (dest_addr);
+		if (getsockname (session, (struct sockaddr *) &dest_addr, &sin_size) < 0) {
+			ext_dns_log (EXT_DNS_LEVEL_DEBUG, "unable to get local hostname and port");
+			return axl_false;
+		} /* end if */
+	} /* end if */
+
+	/* set the source addres and port used by this sending call so the caller can reply if he wants */
+	if (source_address)
+		(*source_address) = ext_dns_support_inet_ntoa (ctx, &dest_addr);
+	if (source_port)
+		(*source_port)    = ntohs (dest_addr.sin_port);
+	
+	/* close socket */
+	ext_dns_close_socket (session);
+	
+	return numbytes;
+}
+
+/** 
+ * @brief Send the provided message using UDP protocol to the
+ * destination.
+ *
+ * @param ctx The context where the operation will happen.
+ *
+ * @param content The content to be sent to the remote node.
+ *
+ * @param length How many bytes we have to take from the content.
+ *
+ * @param address The peer address to send the message to.
+ *
+ * @param port The peer port to send the message to.
+ *
+ * @param source_address Optional pointer that if defined, will hold
+ * the source address used to send the message. This is required if
+ * you want to wait for a reply.
+ *
+ * @param source_port Optional pointer that if defined, will hold the
+ * source port used to send the message. This is required if you want
+ * to wait for a reply.
+ *
+ * @return Return the number of bytes written or -1 if it fails.
+ */
+int               ext_dns_session_send_udp   (extDnsCtx     * ctx, 
+					      const char    * content, 
+					      int             length, 
+					      const char    * address, 
+					      int             port,
+					      char         ** source_address,
+					      int           * source_port)
+{
+	return __ext_dns_session_send_udp_common (ctx, -1, content, length, address, port, source_address, source_port);
+}
+
+/** 
+ * @brief Send the provided message using UDP protocol to the
+ * destination.
+ *
+ * @param ctx The context where the operation will happen.
+ *
+ * @param session The session listener from which the reply will be
+ * sent.
+ *
+ * @param content The content to be sent to the remote node.
+ *
+ * @param length How many bytes we have to take from the content.
+ *
+ * @param address The peer address to send the message to.
+ *
+ * @param port The peer port to send the message to.
+ *
+ * @return Return the number of bytes written or -1 if it fails.
+ */
+int               ext_dns_session_send_udp_reply (extDnsCtx      * ctx, 
+						  extDnsSession  * session,
+						  const char     * content, 
+						  int              length, 
+						  const char     * address, 
+						  int              port)
+{
+	/* check session reference */
+	if (session == NULL)
+		return -1;
+
+	return __ext_dns_session_send_udp_common (ctx, session->session, content, length, address, port, NULL, NULL);
+}
+
 
 /** 
  * @internal Function used by ext_dns to store new error message
@@ -1505,13 +1732,6 @@ extDnsSession * ext_dns_session_new_empty_from_session (extDnsCtx          * ctx
 	} else 
 		session->data       = axl_hash_new_full (axl_hash_string, axl_hash_equal_string, 10);
 
-	/* check session that is accepting sessions */
-	if (role != extDnsRoleMasterListener && type != extDnsUdpSession) {
-		/* set default send and receive handlers */
-		session->send               = ext_dns_session_default_send;
-		session->receive            = ext_dns_session_default_receive;
-	} 
-	
 	/* establish the session role and its initial next channel
 	 * number available. */
 	session->role  = role;
@@ -1535,91 +1755,5 @@ extDnsSession * ext_dns_session_new_empty_from_session (extDnsCtx          * ctx
 	return session;	
 }
 
-/** 
- * @brief Allows to configure the send handler used to actually
- * perform sending operations over the underlying session.
- *
- * 
- * @param session The session where the send handler will be set.
- * @param send_handler The send handler to be set.
- * 
- * @return Returns the previous send handler defined or NULL if fails.
- */
-extDnsSendHandler      ext_dns_session_set_send_handler    (extDnsSession     * session,
-							   extDnsSendHandler   send_handler)
-{
-	extDnsSendHandler previous_handler;
 
-	/* check parameters received */
-	if (session == NULL || send_handler == NULL)
-		return NULL;
 
-	/* save previous handler defined */
-	previous_handler = session->send;
-
-	/* set the new send handler to be used. */
-	session->send = send_handler;
-
-	/* returns previous handler */
-	return previous_handler;
- 
-	
-}
-
-/** 
- * @brief Allows to configure receive handler use to actually receive
- * data from remote peer. 
- * 
- * @param session The session where the receive handler will be set.
- * @param receive_handler The receive handler to be set.
- * 
- * @return Returns current receive handler set or NULL if it fails.
- */
-extDnsReceiveHandler   ext_dns_session_set_receive_handler (extDnsSession     * session,
-							      extDnsReceiveHandler   receive_handler)
-{
-	extDnsReceiveHandler previous_handler;
-
-	/* check parameters received */
-	if (session == NULL || receive_handler == NULL)
-		return NULL;
-
-	/* save previous handler defined */
-	previous_handler    = session->receive;
-
-	/* set the new send handler to be used. */
-	session->receive = receive_handler;
-
-	/* returns previous handler */
-	return previous_handler;
-}
-
-/** 
- * @internal
- * @brief Default handler used to send data.
- * 
- * See \ref ext_dns_session_set_send_handler.
- */
-int  ext_dns_session_default_send (extDnsSession * session,
-				   const char       * buffer,
-				   int                buffer_len)
-{
-	/* send the message */
-	return send (session->session, buffer, buffer_len, 0);
-}
-
-/** 
- * @internal
- * @brief Default handler to be used while receiving data
- *
- * See \ref ext_dns_session_set_receive_handler.
- */
-int  ext_dns_session_default_receive (extDnsSession * session,
-				      char             * buffer,
-				      int                buffer_len)
-{
-	/* receive content */
-	if (session->type == extDnsTcpSession)
-		return recv (session->session, buffer, buffer_len, 0);
-	return recv (session->session, buffer, buffer_len, 0);
-}

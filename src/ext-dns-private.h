@@ -133,6 +133,14 @@ struct _extDnsCtx {
 	axl_bool             session_enable_sanity_check;
 
 	extDnsMutex          inet_ntoa_mutex;
+
+	/* hostname resolution hash and mutex */
+	extDnsMutex          hostname_mutex;
+	axlHash            * hostname_hash;
+
+	/*** handler for message received ***/
+	extDnsOnMessageReceived  on_message;
+	axlPointer               on_message_data;
 };
 
 struct _extDnsSession {
@@ -192,15 +200,9 @@ struct _extDnsSession {
 	/*** session role indication ***/
 	extDnsPeerRole    role;
 
-	/** 
-	 * @brief Writer function used by the extDns Library to actually send data.
-	 */
-	extDnsSendHandler    send;
-
-	/** 
-	 * @brief Writer function used by the extDns Library to actually received data
-	 */
-	extDnsReceiveHandler receive;
+	/*** handler for message received ***/
+	extDnsOnMessageReceived  on_message;
+	axlPointer               on_message_data;
 };
 
 /** 

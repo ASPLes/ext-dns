@@ -191,6 +191,27 @@ AC_ARG_ENABLE(ext-dns-log, [  --enable-ext-dns-log       Enable building Ext_Dns
 	      enable_ext_dns_log=yes)
 AM_CONDITIONAL(ENABLE_EXT_DNS_LOG, test "x$enable_ext_dns_log" = "xyes")
 
+# The following command also comes to produce the axl_config.h file
+# required by the tool. If you update this, remember to update the
+# af-arch main configure.ac
+AC_TRY_LINK([#define _GNU_SOURCE
+#include <stdio.h>], 
+[
+  char * result;
+  return vasprintf (&result, "This is a test: %d", NULL);
+], [have_vasprintf=yes],[have_vasprintf=no])
+echo "Checking vasprintf support: $have_vasprintf"
+
+dnl The following lines are for the embeded support of exarg inside axl-knife.
+dnl support for vasprintf
+case $have_vasprintf in
+yes)
+	EXARG_FLAGS="-DHAVE_VASPRINTF $EXARG_FLAGS"
+	echo "vasprintf support found"
+     ;;
+esac
+AC_SUBST(EXARG_FLAGS)
+
 dnl general libries subsitution
 dnl AC_SUBST(LIBRARIES_CFLAGS)
 dnl AC_SUBST(LIBRARIES_LIBS)
@@ -216,6 +237,7 @@ AC_SUBST(ADDITIONAL_LIBS)
 AC_OUTPUT([
 Makefile
 src/Makefile
+query/Makefile
 test/Makefile
 ])
 

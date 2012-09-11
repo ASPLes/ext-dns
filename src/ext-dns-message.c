@@ -348,3 +348,163 @@ void ext_dns_message_unref (extDnsMessage * message)
 
 	return;
 }
+
+
+/** 
+ * @brief Allows to build the provided query on the buffer reference.
+ *
+ * @param ctx The context where the query is happening
+ *
+ * @param qname The query owner name being asked
+ *
+ * @param qtype The query type 
+ *
+ * @param qclass The query class
+ *
+ * @param buffer A pointer to an already allocated buffer with at
+ * least 512 bytes.
+ *
+ * @param header A reference to the extDnsHeader that represents the
+ * query sent.
+ *
+ * @return The function returns the number of bytes written into the
+ * buffer
+ */
+int             ext_dns_message_build_query (extDnsCtx * ctx, const char * qname, extDnsType qtype, extDnsClass qclass, char * buffer, extDnsHeader ** header)
+{
+	int            position;
+	extDnsHeader * _header;
+
+	/* Simple "srand()" seed: just use "time()" */
+	unsigned int iseed = (unsigned int) time(NULL);
+	srand (iseed);
+
+	/* build header */
+	_header = axl_new (extDnsHeader, 1);
+	if (header == NULL)
+		return -1;
+
+	/* clear buffer received */
+	memset (buffer, 0, 512);
+
+	/* get id */
+	_header->id = rand () % 65536;
+
+	/* set id */
+	ext_dns_set_16bit (_header->id, buffer);
+
+	/* set QR */
+	ext_dns_set_bit (buffer + 2, 7);
+	/* set RD */
+	ext_dns_set_bit (buffer + 2, 0);
+
+	/* set question count */
+	ext_dns_set_16bit (1, buffer + 4);
+
+	/* set initial position */
+	position = 12;
+
+	/* now write question */
+	position += ext_dns_encode_domain_name (ctx, qname, buffer + position);
+
+	/* place qtype */
+	ext_dns_set_16bit (qtype, buffer + position);
+	position += 2;
+
+	/* place qclass */
+	ext_dns_set_16bit (qclass, buffer + position);
+	position += 2;
+
+	/* set header to the caller if defined */
+	if (header)
+		*header = _header;
+
+	return position;
+}
+
+
+/** 
+ * @brief Allows to get the extDnsType code from the qtype string.
+ *
+ * @param qtype The question type that is being asked to be translated
+ *
+ * @return extDnsType or -1 if it fails.
+ */
+extDnsType      ext_dns_message_get_qtype (const char * qtype)
+{
+	/* get input value */
+	if (qtype == NULL || strlen (qtype) == 0)
+		return -1;
+
+	if (axl_cmp (qtype, "A") || axl_cmp (qtype, "a"))
+		return extDnsTypeA;
+	if (axl_cmp (qtype, "NS") || axl_cmp (qtype, "ns"))
+		return extDnsTypeNS;
+	if (axl_cmp (qtype, "MD") || axl_cmp (qtype, "md"))
+		return extDnsTypeMD;
+	if (axl_cmp (qtype, "MF") || axl_cmp (qtype, "mf"))
+		return extDnsTypeMF;
+	if (axl_cmp (qtype, "CNAME") || axl_cmp (qtype, "cname"))
+		return extDnsTypeCNAME;
+	if (axl_cmp (qtype, "SOA") || axl_cmp (qtype, "soa"))
+		return extDnsTypeSOA;
+	if (axl_cmp (qtype, "MB") || axl_cmp (qtype, "mb"))
+		return extDnsTypeMB;
+	if (axl_cmp (qtype, "MG") || axl_cmp (qtype, "mg"))
+		return extDnsTypeMG;
+	if (axl_cmp (qtype, "MR") || axl_cmp (qtype, "mr"))
+		return extDnsTypeMR;
+	if (axl_cmp (qtype, "NULL") || axl_cmp (qtype, "null"))
+		return extDnsTypeNULL;
+	if (axl_cmp (qtype, "WKS") || axl_cmp (qtype, "wks"))
+		return extDnsTypeWKS;
+	if (axl_cmp (qtype, "PTR") || axl_cmp (qtype, "ptr"))
+		return extDnsTypePTR;
+	if (axl_cmp (qtype, "HINFO") || axl_cmp (qtype, "hinfo"))
+		return extDnsTypeHINFO;
+	if (axl_cmp (qtype, "MINFO") || axl_cmp (qtype, "minfo"))
+		return extDnsTypeMINFO;
+	if (axl_cmp (qtype, "MX") || axl_cmp (qtype, "mx"))
+		return extDnsTypeMX;
+	if (axl_cmp (qtype, "TXT") || axl_cmp (qtype, "txt"))
+		return extDnsTypeTXT;
+	if (axl_cmp (qtype, "AXFR") || axl_cmp (qtype, "axfr"))
+		return extDnsTypeAXFR;
+	if (axl_cmp (qtype, "MAILB") || axl_cmp (qtype, "mailb"))
+		return extDnsTypeMAILB;
+	if (axl_cmp (qtype, "MAILA") || axl_cmp (qtype, "maila"))
+		return extDnsTypeMAILA;
+	if (axl_cmp (qtype, "*"))
+		return extDnsTypeANY;
+
+	/* unrecognized character */
+	return -1;
+}
+
+/** 
+ * @brief Allows to get the extDnsClass code from the qclass string.
+ *
+ * @param qclass The question class that is being asked to be translated
+ *
+ * @return extDnsClass or -1 if it fails.
+ */
+extDnsClass     ext_dns_message_get_qclass (const char * qclass)
+{
+	/* get input value */
+	if (qclass == NULL || strlen (qclass) == 0)
+		return -1;
+
+	if (axl_cmp (qclass, "IN") || axl_cmp (qclass, "in"))
+		return extDnsIN;
+	if (axl_cmp (qclass, "CS") || axl_cmp (qclass, "cs"))
+		return extDnsCS;
+	if (axl_cmp (qclass, "CH") || axl_cmp (qclass, "ch"))
+		return extDnsCH;
+	if (axl_cmp (qclass, "HS") || axl_cmp (qclass, "hs"))
+		return extDnsHS;
+	if (axl_cmp (qclass, "*"))
+		return extDnsClassANY;
+
+	/* unrecognized class */
+	return -1;
+}

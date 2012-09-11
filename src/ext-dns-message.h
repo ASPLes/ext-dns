@@ -46,8 +46,14 @@ extDnsMessage * ext_dns_message_parse_message (extDnsCtx * ctx, extDnsHeader * h
 
 void            ext_dns_message_unref (extDnsMessage * message);
 
+int             ext_dns_message_build_query (extDnsCtx * ctx, const char * qname, extDnsType qtype, extDnsClass qclass, 
+					     char * buffer, extDnsHeader ** header);
+
 int             ext_dns_message_build_reply (extDnsCtx * ctx, extDnsMessage * message, char * buffer, int ttl, const char * data);
-					     
+				
+extDnsType      ext_dns_message_get_qtype (const char * qtype);
+
+extDnsClass     ext_dns_message_get_qclass (const char * qclass);
 					     
 
 #endif /* __EXT_DNS_MESSAGE_H__ */
