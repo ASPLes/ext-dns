@@ -1,5 +1,26 @@
 #include <ext-dns.h>
 
+void on_received  (extDnsCtx     * ctx,
+		   extDnsSession * session,
+		   const char    * source_address,
+		   int             source_port,
+		   extDnsMessage * message,
+		   axlPointer      data)
+{
+	int bytes_read;
+	char buf[1024];
+
+	printf ("INFO: received message from %s:%d..\n", source_address, source_port);
+	
+	/* build reply and send reply */
+	bytes_read = ext_dns_message_build_reply (ctx, message, buf, 3600, "192.168.0.23");
+
+	/* reply to the UDP resolver */
+	ext_dns_session_send_udp_reply (ctx, session, buf, bytes_read, source_address, source_port);
+
+	return;
+}
+
 int main (int argc, char ** argv) {
 	extDnsCtx     * ctx;
 	extDnsSession * listener;
@@ -23,6 +44,9 @@ int main (int argc, char ** argv) {
 		printf ("ERROR: failed to start serving requests..\n");
 		exit (-1);
 	} /* end if */
+
+	/* configure on received handler */
+	ext_dns_session_set_on_message (listener, on_received, NULL);
 
 	/* wait and process requests */
 	ext_dns_ctx_wait (ctx);

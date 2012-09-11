@@ -69,6 +69,50 @@ typedef struct _extDnsReaderData {
 	extDnsAsyncQueue   * notify;
 } extDnsReaderData;
 
+typedef struct _extDnsOnMessageReceivedData {
+	const    char * source_address;
+	int             source_port;
+	extDnsMessage * message;
+	extDnsSession * session;
+	extDnsCtx     * ctx;
+} extDnsOnMessageReceivedData;
+
+axlPointer __ext_dns_reader_on_message_received (extDnsOnMessageReceivedData * data)
+{
+	const    char * source_address = data->source_address;
+	int             source_port    = data->source_port;
+	extDnsMessage * message        = data->message;
+	extDnsSession * session        = data->session;
+	extDnsCtx     * ctx            = data->ctx;	
+	
+	/* handler */
+	extDnsOnMessageReceived on_received;
+	axlPointer              _data;
+
+	/* release data pointer received */
+	axl_free (data);
+
+	/* call handler defined on session */
+	on_received = session->on_message;
+	_data       = session->on_message_data;
+
+	if (on_received == NULL) {
+		on_received = ctx->on_message;
+		_data       = ctx->on_message_data;
+	}
+
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Received DNS message on session id %d", session->id);
+
+	/* call to notify handler */
+	if (on_received) {
+		on_received (ctx, session, source_address, source_port, message, _data);
+	} /* end if */
+
+	/* call to release message */
+	ext_dns_message_unref (message);
+	return NULL;
+}
+
 /** 
  * @internal
  * 
@@ -107,19 +151,22 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 {
 
 	char buf[1024];
-	struct sockaddr_in si_other;
+	struct sockaddr_in remote_addr;
 	socklen_t sin_size;
 	int bytes_read;
 
 	extDnsHeader  * header;
 	extDnsMessage * message;
 
+	/* pointer to data received */
+	extDnsOnMessageReceivedData * data;
+
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Received query over session id=%d", 
 		     ext_dns_session_get_id (session));
 
 	/* read content from socket */
-	sin_size        = sizeof (si_other);
-	bytes_read      = recvfrom (session->session, buf, 1023, MSG_DONTWAIT, (struct sockaddr *) &si_other, &sin_size);
+	sin_size        = sizeof (remote_addr);
+	bytes_read      = recvfrom (session->session, buf, 1023, MSG_DONTWAIT, (struct sockaddr *) &remote_addr, &sin_size);
 	buf[bytes_read] = 0;
 
 	/* check here message size to limit incoming queries */
@@ -141,23 +188,45 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 	message = ext_dns_message_parse_message (ctx, header, buf, bytes_read);
 
 	/* queue message to be handled in other part */
-	
+	if (! session->on_message && ! ctx->on_message) {
+		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Received a DNS message but no on message handler was found configured, dropping DNS message");
+
+		/* release the message */
+		ext_dns_message_unref (message);
+		return;
+	}
+
+	/* build on data */
+	data = axl_new (extDnsOnMessageReceivedData, 1);
+	if (data == NULL) {
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to allocate memory, unable to process message received");
+		return;
+	} /* end if */
+
+	/* set values */
+	data->message        = message;
+	data->ctx            = ctx;
+	data->session        = session;
+	data->source_port    = ntohs (remote_addr.sin_port);
+	data->source_address = ext_dns_support_inet_ntoa (ctx, &remote_addr);
+
+	/* call to invoke dns on message */
+	ext_dns_thread_pool_new_task (ctx, (extDnsThreadFunc) __ext_dns_reader_on_message_received, data);
+
+	return;
+
+	/* prototype code */
 
 	/* build reply and send reply */
 	bytes_read = ext_dns_message_build_reply (ctx, message, buf, 3600, "192.168.0.23");
 
-
-	if (sendto (session->session, buf, bytes_read, 0, (struct sockaddr *) &si_other, sin_size) <= 0) {
+	/* send message */
+	if (sendto (session->session, buf, bytes_read, 0, (struct sockaddr *) &remote_addr, sin_size) <= 0) {
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Failed to send DNS reply, sendto system call failed",
 			     bytes_read);
 		return;
 	} /* end if */
 
-	/* release message here */
-	ext_dns_message_unref (message);
-
-	/* that's all I can do */
-	return;
 }
 
 /** 

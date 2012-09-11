@@ -403,6 +403,29 @@ typedef int      (*extDnsReceiveHandler)         (extDnsSession    * session,
 						  char             * buffer,
 						  int                buffer_len);
 
+/** 
+ * @brief Defines the set of handler functions that are called to
+ * notify a DNS message received on the provided session.
+ *
+ * @param session The DNS session where the message was received.
+ *
+ * @param source_address The source address where the message comes from.
+ *
+ * @param source_port The source port where the message comes from.
+ *
+ * @param message The DNS message received.
+ *
+ * @param data A user defined pointer that was configured along with
+ * the handler.
+ * 
+ */
+typedef void     (*extDnsOnMessageReceived) (extDnsCtx     * ctx,
+					     extDnsSession * session,
+					     const char    * source_address,
+					     int             source_port,
+					     extDnsMessage * message,
+					     axlPointer      data);
+
 
 
 #endif /* __EXT_DNS_HANDLERS_H__ */

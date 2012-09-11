@@ -70,6 +70,10 @@ extDnsCtx * ext_dns_ctx_new (void) {
 	ctx->session_id = 1;
 	ext_dns_mutex_create (&ctx->session_id_mutex);
 
+	/* init hostname hash */
+	ext_dns_mutex_create (&ctx->hostname_mutex);
+	ctx->hostname_hash = axl_hash_new (axl_hash_string, axl_hash_equal_string);
+
 	/* return context created */
 	return ctx;
 }
@@ -245,6 +249,10 @@ void        ext_dns_ctx_free2 (extDnsCtx * ctx, const char * who)
 	/* release and clean mutex */
 	ext_dns_mutex_unlock (&ctx->ref_mutex);
 	ext_dns_mutex_destroy (&ctx->ref_mutex);
+
+	/* release hostname hash */
+	axl_hash_free (ctx->hostname_hash);
+	ext_dns_mutex_destroy (&ctx->hostname_mutex);
 
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "about.to.free extDnsCtx %p", ctx);
 
@@ -449,6 +457,40 @@ void ext_dns_ctx_unlock (extDnsCtx * ctx)
 
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "(un)Locking listener: already unlocked..");
 	ext_dns_mutex_unlock (&ctx->listener_unlock);
+	return;
+}
+
+/** 
+ * @brief Allows to configure the onMessage handler, the callback that
+ * is called every time a new message is received over the provided
+ * ctx.
+ *
+ * Note the handler here configured will be overriden by the handler
+ * configured at session level by \ref ext_dns_session_set_on_message.
+ *
+ * @param ctx The context that is configured to received messages on
+ * the provided handler.
+ *
+ * @param dns_message The handler where the message will be notified.
+ *
+ * @param data A pointer to user defined data that will be passed into
+ * the handler.
+ *
+ * Note: only one handler can be configured at the same time for a
+ * single session.
+ */
+void              ext_dns_ctx_set_on_message (extDnsCtx                * ctx, 
+					      extDnsOnMessageReceived    on_dns_message, 
+					      axlPointer                 data)
+{
+	/* check pointer received */
+	if (ctx == NULL || on_dns_message == NULL)
+		return;
+
+	/* set on message */
+	ctx->on_message      = on_dns_message;
+	ctx->on_message_data = data;
+
 	return;
 }
 

@@ -68,11 +68,30 @@ axl_bool          ext_dns_session_is_ok      (extDnsSession * session, axl_bool 
 
 axl_bool          ext_dns_session_close      (extDnsSession * session);
 
+void              ext_dns_session_set_on_message (extDnsSession            * session, 
+						  extDnsOnMessageReceived    on_dns_message, 
+						  axlPointer                 data);
+
 axl_bool          ext_dns_session_ref        (extDnsSession * session, 
 					      const char    * who);
 
 void              ext_dns_session_unref      (extDnsSession * session, 
 					      char const    * who);
+
+int               ext_dns_session_send_udp   (extDnsCtx      * ctx, 
+					      const char     * content, 
+					      int              length, 
+					      const char     * address, 
+					      int              port,
+					      char          ** source_address,
+					      int            * source_port);
+
+int               ext_dns_session_send_udp_reply (extDnsCtx      * ctx, 
+						  extDnsSession  * session,
+						  const char     * content, 
+						  int              length, 
+						  const char     * address, 
+						  int              port);
 
 void              ext_dns_session_free       (extDnsSession * session);
 
@@ -85,11 +104,6 @@ axl_bool          ext_dns_session_check_socket_limit     (extDnsCtx        * ctx
 
 axl_bool         ext_dns_session_set_nonblocking_socket (extDnsSession * session);
 
-extDnsSendHandler      vortex_session_set_send_handler    (extDnsSession * session,
-							   extDnsSendHandler  send_handler);
-
-extDnsReceiveHandler   vortex_session_set_receive_handler (extDnsSession * session,
-							   extDnsReceiveHandler receive_handler);
 
 EXT_DNS_SOCKET     ext_dns_listener_sock_listen      (extDnsCtx           * ctx,
 						      extDnsSessionType     type,
@@ -118,18 +132,13 @@ extDnsSession    * ext_dns_listener_new2    (extDnsCtx           * ctx,
 					     extDnsListenerReady   on_ready, 
 					     axlPointer            user_data);
 
+struct in_addr * ext_dns_session_gethostbyname (extDnsCtx  * ctx, 
+						const char * hostname);
+
 /** private functions */
 void                __ext_dns_session_shutdown_and_record_error (extDnsSession    * session,
 								 extDnsStatus       status,
 								 const char       * message,
 								 ...);
-
-int  ext_dns_session_default_send (extDnsSession * session,
-				   const char       * buffer,
-				   int                buffer_len);
-
-int  ext_dns_session_default_receive (extDnsSession * session,
-				      char             * buffer,
-				      int                buffer_len);
 
 #endif /* __EXT_DNS_SESSION_H__ */
