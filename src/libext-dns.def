@@ -39,6 +39,7 @@ ext_dns_ctx_ref2
 ext_dns_ctx_ref_count
 ext_dns_ctx_set_data
 ext_dns_ctx_set_data_full
+ext_dns_ctx_set_on_message
 ext_dns_ctx_unlock
 ext_dns_ctx_unref
 ext_dns_ctx_unref2
@@ -136,6 +137,7 @@ ext_dns_session_push_error
 ext_dns_session_ref
 ext_dns_session_ref_internal
 ext_dns_session_send_udp
+ext_dns_session_send_udp_reply
 ext_dns_session_set_nonblocking_socket
 ext_dns_session_set_on_message
 ext_dns_session_set_sock_tcp_nodelay
