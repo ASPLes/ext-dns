@@ -148,18 +148,18 @@ axl_bool test_02 (void) {
 		return axl_false;
 	}
 
-	if (message->answers[0].type == 1) { 
+	if (message->answers[0].type != 1) { 
 		printf ("ERROR: expected to find type 1 (A) but found %d\n", message->answers[0].type);
 		return axl_false;
 	}
 
-	if (message->answers[0].class == 1) {
+	if (message->answers[0].class != 1) {
 		printf ("ERROR: expected to find class 1 (IN) but found %d\n", message->answers[0].class);
 		return axl_false;
 	} /* end if */
 
 	/* check values inside */
-	printf ("values: %s %d %d\n", message->answers[0].name, message->answers[0].type, message->answers[0].class);
+	/* printf ("values: %s %d %d\n", message->answers[0].name, message->answers[0].type, message->answers[0].class);*/
 	if (ext_dns_get_8bit (message->answers[0].rdata) != 89 ||
 	    ext_dns_get_8bit (message->answers[0].rdata + 1) != 140 ||
 	    ext_dns_get_8bit (message->answers[0].rdata + 2) != 237  ||
