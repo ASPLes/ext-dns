@@ -459,7 +459,7 @@ int      ext_dns_timeval_substract     (struct timeval * a,
 					struct timeval * b,
 					struct timeval * result);
 
-int    ext_dns_extract_bit (char byte, int position);
+int    ext_dns_get_bit (char byte, int position);
 
 void   ext_dns_set_bit     (char * buffer, int position);
 
@@ -469,11 +469,15 @@ char * ext_dns_int2bin (int a, char *buffer, int buf_size);
 
 void   ext_dns_int2bin_print (extDnsCtx * ctx, int value);
 
+int    ext_dns_get_8bit  (const char * buffer);
+
 int    ext_dns_get_16bit (const char * buffer);
 
 void   ext_dns_set_16bit (int value, char * buffer);
 
 void   ext_dns_set_32bit (int value, char * buffer);
+
+int    ext_dns_get_32bit (const char * buffer);
 
 int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * buffer);
 

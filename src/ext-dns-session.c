@@ -908,12 +908,12 @@ int               ext_dns_session_send_udp   (extDnsCtx     * ctx,
  *
  * @return Return the number of bytes written or -1 if it fails.
  */
-int               ext_dns_session_send_udp_reply (extDnsCtx      * ctx, 
-						  extDnsSession  * session,
-						  const char     * content, 
-						  int              length, 
-						  const char     * address, 
-						  int              port)
+int               ext_dns_session_send_udp_s (extDnsCtx      * ctx, 
+					      extDnsSession  * session,
+					      const char     * content, 
+					      int              length, 
+					      const char     * address, 
+					      int              port)
 {
 	/* check session reference */
 	if (session == NULL)

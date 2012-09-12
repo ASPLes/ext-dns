@@ -86,12 +86,12 @@ int               ext_dns_session_send_udp   (extDnsCtx      * ctx,
 					      char          ** source_address,
 					      int            * source_port);
 
-int               ext_dns_session_send_udp_reply (extDnsCtx      * ctx, 
-						  extDnsSession  * session,
-						  const char     * content, 
-						  int              length, 
-						  const char     * address, 
-						  int              port);
+int               ext_dns_session_send_udp_s (extDnsCtx      * ctx, 
+					      extDnsSession  * session,
+					      const char     * content, 
+					      int              length, 
+					      const char     * address, 
+					      int              port);
 
 void              ext_dns_session_free       (extDnsSession * session);
 

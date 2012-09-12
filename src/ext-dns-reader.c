@@ -70,7 +70,7 @@ typedef struct _extDnsReaderData {
 } extDnsReaderData;
 
 typedef struct _extDnsOnMessageReceivedData {
-	const    char * source_address;
+	char          * source_address;
 	int             source_port;
 	extDnsMessage * message;
 	extDnsSession * session;
@@ -79,7 +79,7 @@ typedef struct _extDnsOnMessageReceivedData {
 
 axlPointer __ext_dns_reader_on_message_received (extDnsOnMessageReceivedData * data)
 {
-	const    char * source_address = data->source_address;
+	char          * source_address = data->source_address;
 	int             source_port    = data->source_port;
 	extDnsMessage * message        = data->message;
 	extDnsSession * session        = data->session;
@@ -103,9 +103,29 @@ axlPointer __ext_dns_reader_on_message_received (extDnsOnMessageReceivedData * d
 
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Received DNS message on session id %d", session->id);
 
+	/* check expected header */
+	if (session->expected_header) {
+		/* do some additional checkings */
+		if (session->expected_header->id != message->header->id) {
+			ext_dns_log (EXT_DNS_LEVEL_WARNING, "Expected to receive id %d, but found %d, discarding reply",
+				     session->expected_header->id, message->header->id);
+			on_received = NULL;
+		}
+	}
+
 	/* call to notify handler */
 	if (on_received) {
 		on_received (ctx, session, source_address, source_port, message, _data);
+	} /* end if */
+
+	/* release source address */
+	axl_free (source_address);
+
+	/* check to close session */
+	if (session->expected_header) {
+		/* release and clear reference */
+		axl_free (session->expected_header);
+		session->expected_header = NULL;
 	} /* end if */
 
 	/* call to release message */
@@ -179,10 +199,13 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 	/* get the header */
 	header = ext_dns_message_parse_header (ctx, buf, bytes_read);
 
-	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Received header id: %u, is query: %d, opcode: %d, AA: %d, TC: %d, RD: %d, RD: %d\n      rcode: %d, qcount: %d, ancount: %d, nscount: %d, arcount: %d", 
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Received header id: %u, is query: %d, opcode: %d, AA: %d, TC: %d, RD: %d, RA: %d", 
 		     header->id, header->is_query, header->opcode, header->is_authorative_answer, header->was_truncated, 
-		     header->recursion_desired, header->recursion_available, header->rcode, header->query_count, header->answer_count,
-		     header->resources_count, header->additional_records_count);
+		     header->recursion_desired, header->recursion_available);
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "             rcode: %d, qcount: %d, ancount: %d, nscount: %d, arcount: %d", 
+		     header->rcode, header->query_count, header->answer_count,
+		     header->authority_count, header->additional_count);
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "             message size (inc. head): %d", bytes_read);
 
 	/* now parse rest of the message */
 	message = ext_dns_message_parse_message (ctx, header, buf, bytes_read);
