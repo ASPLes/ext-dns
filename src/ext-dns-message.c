@@ -36,7 +36,7 @@
  *         info@aspl.es - http://www.aspl.es/ext-dns
  */
 #include <ext-dns.h>
-
+#include <ext-dns-private.h>
 
 extDnsHeader * ext_dns_message_parse_header (extDnsCtx * ctx, const char * buf, int buf_size)
 {
@@ -52,36 +52,36 @@ extDnsHeader * ext_dns_message_parse_header (extDnsCtx * ctx, const char * buf, 
 		return NULL;
 
 	/* process values */
-	ext_dns_show_byte (ctx, buf[0], "buf[0]");
-	ext_dns_show_byte (ctx, buf[1], "buf[1]");
+	/* ext_dns_show_byte (ctx, buf[0], "buf[0]");
+	   ext_dns_show_byte (ctx, buf[1], "buf[1]"); */
 
 	/* get 16 bit integer */
 	header->id       = ext_dns_get_16bit (buf);
 
-	ext_dns_int2bin_print (ctx, header->id);
+	/* ext_dns_int2bin_print (ctx, header->id); */
 
-	header->is_query              = ext_dns_extract_bit (buf[2], 7);
+	header->is_query              = ext_dns_get_bit (buf[2], 7) == 0;
 
 	/* get opcode */
-	header->opcode                = (buf[2] >> 3 ) & 240;
-	ext_dns_show_byte (ctx, buf[2], "buf[2]");
-	ext_dns_show_byte (ctx, header->opcode, "header->opcode");
+	header->opcode                = (buf[2] >> 3 ) & 0x0000f;
+	/* ext_dns_show_byte (ctx, buf[2], "buf[2]");
+	   ext_dns_show_byte (ctx, header->opcode, "header->opcode"); */
 
 	/* get other flags */
-	header->is_authorative_answer = ext_dns_extract_bit (buf[2], 2);
-	header->was_truncated         = ext_dns_extract_bit (buf[2], 1);
-	header->recursion_desired     = ext_dns_extract_bit (buf[2], 0);
+	header->is_authorative_answer = ext_dns_get_bit (buf[2], 2);
+	header->was_truncated         = ext_dns_get_bit (buf[2], 1);
+	header->recursion_desired     = ext_dns_get_bit (buf[2], 0);
 
-	header->recursion_available   = ext_dns_extract_bit (buf[3], 7);
+	header->recursion_available   = ext_dns_get_bit (buf[3], 7);
 
 	/* get response code */
-	header->rcode                 = buf[3] & 240;
+	header->rcode                 = buf[3] & 0x0000f;
 
 	/* get counters */
 	header->query_count               = ext_dns_get_16bit (buf + 4);
 	header->answer_count              = ext_dns_get_16bit (buf + 6);
-	header->resources_count           = ext_dns_get_16bit (buf + 8);
-	header->additional_records_count  = ext_dns_get_16bit (buf + 10);
+	header->authority_count           = ext_dns_get_16bit (buf + 8);
+	header->additional_count          = ext_dns_get_16bit (buf + 10);
 
 	return header;
 }
@@ -101,23 +101,60 @@ char * ext_dns_message_get_label (extDnsCtx * ctx, const char * buffer)
 	return label;
 }
 
-char * ext_dns_message_get_resource_name (extDnsCtx * ctx, const char * buffer, int buf_size, int iterator)
+char * ext_dns_message_get_resource_name (extDnsCtx * ctx, const char * buffer, int buf_size, int * _iterator, axl_bool * is_label)
 {
 	/* clear resource name */
 	char * resource_name = NULL;
 	char * label         = NULL;
 	char * aux           = NULL;
-	
+	int    offset        = 0;
+	int    iterator      = (* _iterator);
+
+	if (is_label)
+		(*is_label) = axl_false;
+
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Starting to get resource name at iterator=%d, buf_size=%d, buffer[iterator]='%d'",
+		     iterator, buf_size, buffer[iterator]);
+
 	while (iterator < buf_size && buffer[iterator]) {
-		/* get label */
-		label = ext_dns_message_get_label (ctx, buffer + iterator);
+		/* check if this is a we found a label pointer (message
+		 * compression 4.1.4 Message compression from RFC1035). */
+		if (ext_dns_get_bit (buffer[iterator], 7) && ext_dns_get_bit (buffer[iterator], 6)) {
+			
+			if (is_label == NULL) {
+				ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Received a request to process a label compression but found another label at the pointer");
+				return NULL;
+			} /* end if */
+			
+			/* found offset label, process it jumping into that position */
+			offset = (int)(buffer[iterator] & 0x3f) << 8 | (int)buffer[iterator + 1];
+			ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Found label compression offset=%d", offset);
+			
+			if (offset < 12 || offset > buf_size) {
+				ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Received a request to process a label compression that is outside the message");
+				return NULL;
+			}
+			
+			/* notify label found */
+			if (is_label)
+				(*is_label) = axl_true;
+			
+			/* ok, now call the function again to process the label at the position pointed */
+			label = ext_dns_message_get_resource_name (ctx, buffer, buf_size, &offset, NULL);
+
+			iterator ++;
+
+		} else {
+			/* get label */
+			label = ext_dns_message_get_label (ctx, buffer + iterator);
+
+			/* get length */
+			iterator += strlen (label) + 1;
+		}
 		
 		if (label == NULL) 
 			break;
-		
-		/* get length */
-		iterator += strlen (label) + 1;
-		
+
 		if (resource_name == NULL) {
 			resource_name = label;
 			label = NULL;
@@ -129,11 +166,83 @@ char * ext_dns_message_get_resource_name (extDnsCtx * ctx, const char * buffer, 
 		}
 		
 		axl_free (label);
+
+		/* found one replacement, finish processing here */
+		if (is_label && (*is_label))
+			break;
+
 	} /* end while */
+
+	/* update caller iterator */
+	(* _iterator) = iterator + 1;
 
 	return resource_name;
 }
 
+axl_bool ext_dns_message_parse_resource_record (extDnsCtx * ctx, extDnsResourceRecord * rr, int * _iterator, const char * buf, int buf_size)
+{
+	int      iterator = (*_iterator);
+	axl_bool is_label;
+
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Starting to parse resource record at iterator=%d, resource record: %p", iterator, rr);
+	if (rr == NULL) {
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Received a NULL resource record reference, unable to parse content");
+		return axl_false;
+	}
+
+	/* store resource name */
+	rr->name  = ext_dns_message_get_resource_name (ctx, buf, buf_size, &iterator, &is_label);
+
+	/* failed to get query name */
+	if (rr->name == NULL) {
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Expected to find owner name in resource record, but found NULL VALUE");
+		return axl_false;
+	} /* end if */
+
+	/* if (! is_label)
+		iterator += strlen (rr->name) + 2;
+	else
+	iterator += 2; */
+
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Resource name: '%s' (iterator=%d)", rr->name, iterator);
+		
+	/* get qtype */
+	rr->type  = ext_dns_get_16bit (buf + iterator);
+	iterator += 2;
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "qtype received = %d", rr->type);
+		
+	/* get qclass */
+	rr->class = ext_dns_get_16bit (buf + iterator);
+	iterator += 2;
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "qclass received = %d", rr->class);
+
+	/* get TTL */
+	rr->ttl = ext_dns_get_32bit (buf + iterator);
+	iterator +=4;
+
+	/* get RDLENGTH */
+	rr->rdlength = ext_dns_get_16bit (buf + iterator);
+	iterator += 2;
+
+	/* copy rddata and then process */
+	rr->rdata = axl_new (char, rr->rdlength + 1);
+	memcpy (rr->rdata, buf + iterator, rr->rdlength);
+
+	/* next position */
+	iterator += rr->rdlength;
+
+	/* set iterator to the last position read */
+	(*_iterator) = iterator;
+
+	return axl_true; /* return parse ok */
+}
+
+
+axlPointer ext_dns_message_release_and_return (extDnsMessage * message)
+{
+	ext_dns_message_unref (message);
+	return NULL;
+}
 
 /** 
  * @internal Allows to parse the DNS message received in buf
@@ -144,11 +253,16 @@ extDnsMessage * ext_dns_message_parse_message (extDnsCtx * ctx, extDnsHeader * h
 	int             iterator = 12;
 	int             count;
 	extDnsMessage * message;
+	axl_bool        is_label;
 
 	/* create empty message */
 	message = axl_new (extDnsMessage, 1);
 	if (message == NULL)
 		return NULL;
+
+	/* initialize mutex */
+	ext_dns_mutex_create (&message->mutex);
+	message->ref_count = 1;
 
 	/* set header */
 	message->header = header;
@@ -164,38 +278,85 @@ extDnsMessage * ext_dns_message_parse_message (extDnsCtx * ctx, extDnsHeader * h
 	while (count < header->query_count) {
 
 		/* store resource name */
-		message->questions[count].qname  = ext_dns_message_get_resource_name (ctx, buf, buf_size, iterator);
+		message->questions[count].qname  = ext_dns_message_get_resource_name (ctx, buf, buf_size, &iterator, &is_label);
 
 		/* failed to get query name */
 		if (message->questions[count].qname == NULL)
 			break;
 
-		iterator += strlen (message->questions[count].qname) + 1;
+		/* if (! is_label)
+			iterator += strlen (message->questions[count].qname) + 2;
+		else
+		iterator += 2;*/
 
-		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Resource name: '%s'", message->questions[count].qname);
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Resource name: '%s' (iterator=%d)", message->questions[count].qname, iterator); 
 		
 		/* get qtype */
-		iterator++;
 		message->questions[count].qtype  = ext_dns_get_16bit (buf + iterator);
-		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "qtype received = %d", message->questions[count].qtype);
+		iterator += 2;
+		/* ext_dns_log (EXT_DNS_LEVEL_DEBUG, "qtype received = %d", message->questions[count].qtype); */
 		
 		/* get qclass */
-		iterator += 2;
 		message->questions[count].qclass = ext_dns_get_16bit (buf + iterator);
-		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "qclass received = %d", message->questions[count].qclass);
+		iterator += 2;
+		/* ext_dns_log (EXT_DNS_LEVEL_DEBUG, "qclass received = %d", message->questions[count].qclass); */
+
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Question item received: %s %s %s",
+			     message->questions[count].qname, ext_dns_message_get_qtype_from_str (message->questions[count].qtype), 
+			     ext_dns_message_get_qclass_from_str (message->questions[count].qclass));
 
 		/* next section */
 		count++;
 	} /* end if */
 
 	/*** ANSWERS ***/
-	/* still not supported */
+	/* parse query question */
+	if (header->answer_count > 0) {
+		/* allocate structure to hold query question */
+		message->answers = axl_new (extDnsResourceRecord, header->answer_count);
+	}
+	count = 0;
+	while (count < header->answer_count) {
+
+		/* parse resource record */
+		if (! ext_dns_message_parse_resource_record (ctx, &message->answers[count], &iterator, buf, buf_size))
+			return ext_dns_message_release_and_return (message);
+
+		/* next section */
+		count++;
+	} /* end if */
 
 	/*** AUTHORITY ***/
-	/* still not supported */
+	if (header->authority_count > 0) {
+		/* allocate structure to hold query question */
+		message->authorities = axl_new (extDnsResourceRecord, header->authority_count);
+	}
+	count = 0;
+	while (count < header->authority_count) {
+
+		/* parse resource record */
+		if (! ext_dns_message_parse_resource_record (ctx, &message->authorities[count], &iterator, buf, buf_size))
+			return ext_dns_message_release_and_return (message);
+
+		/* next section */
+		count++;
+	} /* end if */
 
 	/*** ADDITIONAL ***/
-	/* still not supported */
+	if (header->additional_count > 0) {
+		/* allocate structure to hold query question */
+		message->additionals = axl_new (extDnsResourceRecord, header->additional_count);
+	}
+	count = 0;
+	while (count < header->additional_count) {
+
+		/* parse resource record */
+		if (! ext_dns_message_parse_resource_record (ctx, &message->additionals[count], &iterator, buf, buf_size))
+			return ext_dns_message_release_and_return (message);
+
+		/* next section */
+		count++;
+	} /* end if */
 
 	return message;
 }
@@ -243,16 +404,16 @@ int             ext_dns_message_build_reply (extDnsCtx * ctx, extDnsMessage * me
 
 	/* set TYPE */
 	ext_dns_set_16bit (message->questions[0].qtype, buffer + position);
-	ext_dns_show_byte (ctx, buffer[position], "TYPE[0]");
-	ext_dns_show_byte (ctx, buffer[position + 1], "TYPE[1]");
+	/* ext_dns_show_byte (ctx, buffer[position], "TYPE[0]");
+	   ext_dns_show_byte (ctx, buffer[position + 1], "TYPE[1]"); */
 
 	/* next two bytes */
 	position += 2;
 
 	/* set CLASS */
 	ext_dns_set_16bit (message->questions[0].qclass, buffer + position);
-	ext_dns_show_byte (ctx, buffer[position], "CLASS[0]");
-	ext_dns_show_byte (ctx, buffer[position + 1], "CLASS[1]");
+	/* ext_dns_show_byte (ctx, buffer[position], "CLASS[0]");
+	   ext_dns_show_byte (ctx, buffer[position + 1], "CLASS[1]"); */
 
 	/* next two bytes */
 	position += 2;
@@ -265,26 +426,26 @@ int             ext_dns_message_build_reply (extDnsCtx * ctx, extDnsMessage * me
 
 	/* set TYPE */
 	ext_dns_set_16bit (message->questions[0].qtype, buffer + position);
-	ext_dns_show_byte (ctx, buffer[position], "TYPE[0]");
-	ext_dns_show_byte (ctx, buffer[position + 1], "TYPE[1]");
+	/* ext_dns_show_byte (ctx, buffer[position], "TYPE[0]");
+	   ext_dns_show_byte (ctx, buffer[position + 1], "TYPE[1]"); */
 
 	/* next two bytes */
 	position += 2;
 
 	/* set CLASS */
 	ext_dns_set_16bit (message->questions[0].qclass, buffer + position);
-	ext_dns_show_byte (ctx, buffer[position], "CLASS[0]");
-	ext_dns_show_byte (ctx, buffer[position + 1], "CLASS[1]");
+	/* ext_dns_show_byte (ctx, buffer[position], "CLASS[0]");
+	   ext_dns_show_byte (ctx, buffer[position + 1], "CLASS[1]"); */
 
 	/* next two bytes */
 	position += 2;
 
 	/* set TTL */
 	ext_dns_set_32bit (ttl, buffer + position);
-	ext_dns_show_byte (ctx, buffer[position], "TTL[0]");
+	/* ext_dns_show_byte (ctx, buffer[position], "TTL[0]");
 	ext_dns_show_byte (ctx, buffer[position + 1], "TTL[1]");
 	ext_dns_show_byte (ctx, buffer[position + 2], "TTL[2]");
-	ext_dns_show_byte (ctx, buffer[position + 3], "TTL[3]");
+	ext_dns_show_byte (ctx, buffer[position + 3], "TTL[3]");*/
 
 
 	/* next four bytes */
@@ -292,8 +453,8 @@ int             ext_dns_message_build_reply (extDnsCtx * ctx, extDnsMessage * me
 
 	/* set RDLENGTH (hard code IP) */
 	ext_dns_set_16bit (4, buffer + position);
-	ext_dns_show_byte (ctx, buffer[position], "RDLENGTH[0]");
-	ext_dns_show_byte (ctx, buffer[position + 1], "RDLENGTH[1]");
+	/* ext_dns_show_byte (ctx, buffer[position], "RDLENGTH[0]");
+	   ext_dns_show_byte (ctx, buffer[position + 1], "RDLENGTH[1]"); */
 
 	/* next four bytes */
 	position += 2;
@@ -309,9 +470,119 @@ int             ext_dns_message_build_reply (extDnsCtx * ctx, extDnsMessage * me
 	return position + 4;
 }
 
+/** 
+ * @brief Allows to run a query to the provided server, getting the
+ * reply on the provided handler.
+ *
+ * @param ctx The context where the query will take place.
+ *
+ * @param type The type (A, a, MX, mx,...) that is being queried.
+ *
+ * @param class The class type to query (IN, in, ..).
+ *
+ * @param name The query name for which the value is requested.
+ *
+ * @param server The server address to send the query to.
+ *
+ * @param server_port The server port where to send the query to.
+ *
+ * @param on_message The handler that will be called with the reply
+ * once received.
+ *
+ * @param data A user defined pointer that is passed to the on_message
+ * handler when called.
+ * 
+ * @return axl_true in the case the query was issued, otherwise
+ * axl_false in the case some parameter received is wrong or the
+ * function wasn't able to send the query. NOTE you have to check this
+ * return value because the on_message handler is only called when the
+ * query was sent. In the case the function return axl_false, the
+ * query won't be sent and your on_message handler won't be called.
+ */
+axl_bool            ext_dns_message_query (extDnsCtx * ctx, const char * type, const char * class, const char * name, 
+					   const char * server, int server_port,
+					   extDnsOnMessageReceived on_message, axlPointer data)
+{
+	extDnsType           _type;
+	extDnsClass          _class;
+	char                 buffer[512];
+	extDnsSession      * listener;
+	int                  bytes_written;
+	extDnsHeader       * header;
+
+	/* check qtype and qclass received */
+	_type  = ext_dns_message_get_qtype (type);
+	_class = ext_dns_message_get_qclass (class);
+	if (_type == -1)
+		return axl_false;
+	if (_class == -1) 
+		return axl_false;
+
+	/* build the query */
+	bytes_written = ext_dns_message_build_query (ctx, name, _type, _class, buffer, &header);
+	if (bytes_written <= 0) {
+		ext_dns_log (EXT_DNS_LEVEL_WARNING, "ERROR: failed to build query message, buffer reported was %d size\n", bytes_written);
+		return axl_false;
+	} /* end if */
+
+	/* create listener */
+	listener = ext_dns_listener_new2 (ctx, "0.0.0.0", 0, extDnsUdpSession, NULL, NULL);
+	if (! ext_dns_session_is_ok (listener, axl_false)) {
+		ext_dns_log (EXT_DNS_LEVEL_WARNING, "ERROR: failed to start listener to receive the reply");
+		return axl_false; 
+	}
+
+	/* configure on received message */
+	ext_dns_session_set_on_message (listener, on_message, data);
+
+	/* configure close listener on reply */
+	listener->close_on_message = axl_true;
+
+	/* set header to be used to check reply received */
+	listener->expected_header = header;
+
+	/* send message */
+	if (ext_dns_session_send_udp_s (ctx, listener, buffer, bytes_written, server, 53) != bytes_written) {
+		ext_dns_log (EXT_DNS_LEVEL_WARNING, "ERROR: failed to message..");
+		return axl_false;
+	} /* end if */
+
+
+	/* message sent */
+	return axl_true;
+}
 
 /** 
- * @brief Releases the provided DNS message.
+ * @brief Increases the reference to the provided message.
+ *
+ * @param message The DNS message to release
+ *
+ * @return axl_true if a reference was acquired to the message object,
+ * otherwise axl_false is returned.
+ */
+axl_bool            ext_dns_message_ref (extDnsMessage * message)
+{
+	axl_bool result;
+
+	/* check income result */
+	if (message == NULL)
+		return axl_false;
+
+	/* acquire mutex */
+	ext_dns_mutex_lock (&message->mutex);
+
+	message->ref_count++;
+	result = (message->ref_count > 1);
+
+	/* release mutex */
+	ext_dns_mutex_unlock (&message->mutex);
+
+	return result;
+}
+
+
+/** 
+ * @brief Releases a reference to the provided DNS message.
  *
  * @param message The DNS message to release
  */
@@ -322,6 +593,20 @@ void ext_dns_message_unref (extDnsMessage * message)
 	if (message == NULL)
 		return;
 
+	/* acquire mutex */
+	ext_dns_mutex_lock (&message->mutex);
+
+	/* reduce reference */
+	message->ref_count--;
+
+	if (message->ref_count != 0) {
+		/* release mutex */
+		ext_dns_mutex_unlock (&message->mutex);
+		return;
+	} /* end if */
+
+	/* release mutex */
+	ext_dns_mutex_unlock (&message->mutex);
 	
 	/*** QUESTIONS ***/
 	count = 0;
@@ -335,16 +620,55 @@ void ext_dns_message_unref (extDnsMessage * message)
 		axl_free (message->questions);
 
 	/*** ANSWERS ***/
-	/* still not supported */
+	count = 0;
+	if (message->answers) {
+		while (count < message->header->answer_count) {
+			/* release name */
+			axl_free (message->answers[count].name);
+			axl_free (message->answers[count].rdata);
+			
+			count++;
+		}
+	}
+	if (message->header->query_count > 0)
+		axl_free (message->answers);
 
 	/*** AUTHORITY ***/
-	/* still not supported */
+	count = 0;
+	if (message->authorities) {
+		while (count < message->header->authority_count) {
+			/* release name */
+			axl_free (message->authorities[count].name);
+			axl_free (message->authorities[count].rdata);
+			
+			count++;
+		}
+	} /* end if */
+	if (message->header->authority_count > 0)
+		axl_free (message->authorities);
 
 	/*** ADDITIONAL ***/
-	/* still not supported */
+	count = 0;
+	if (message->additionals) {
+		while (count < message->header->additional_count) {
+			/* release name */
+			axl_free (message->additionals[count].name);
+			axl_free (message->additionals[count].rdata);
+		
+			count++;
+		}
+	} /* end if */
+	if (message->header->additional_count > 0)
+		axl_free (message->additionals);
+
+	/* release mutex */
+	ext_dns_mutex_destroy (&message->mutex);
 
 	/* release header */
 	axl_free (message->header);
+
+	/* release the message holder itself */
+	axl_free (message);
 
 	return;
 }
@@ -480,6 +804,58 @@ extDnsType      ext_dns_message_get_qtype (const char * qtype)
 }
 
 /** 
+ * @brief Allows to get a printable type representation from extDnsType code.
+ *
+ * @param qtype The question type that is being asked to be translated
+ *
+ * @return A string representing the type or NULL if it fails.
+ */
+const char *      ext_dns_message_get_qtype_from_str (extDnsType type)
+{
+	if (type == extDnsTypeA)
+		return "A";
+	if (type == extDnsTypeNS)
+		return "NS";
+	if (type == extDnsTypeMD)
+		return "MD";
+	if (type == extDnsTypeMF)
+		return "MF";
+	if (type == extDnsTypeCNAME)
+		return "CNAME";
+	if (type == extDnsTypeSOA)
+		return "SOA";
+	if (type == extDnsTypeMB)
+		return "MB";
+	if (type == extDnsTypeMG)
+		return "MG";
+	if (type == extDnsTypeMR)
+		return "MR";
+	if (type == extDnsTypeNULL)
+		return "NULL";
+	if (type == extDnsTypeWKS)
+		return "WKS";
+	if (type == extDnsTypePTR)
+		return "PTR";
+	if (type == extDnsTypeHINFO)
+		return "HINFO";
+	if (type == extDnsTypeMX)
+		return "MX";
+	if (type == extDnsTypeTXT)
+		return "TXT";
+	if (type == extDnsTypeAXFR)
+		return "AXFR";
+	if (type == extDnsTypeMAILB)
+		return "MAILB";
+	if (type == extDnsTypeMAILA)
+		return "MAILA";
+	if (type == extDnsTypeANY)
+		return "ANY";
+
+	/* unrecognized type */
+	return NULL;
+}
+
+/** 
  * @brief Allows to get the extDnsClass code from the qclass string.
  *
  * @param qclass The question class that is being asked to be translated
@@ -505,4 +881,62 @@ extDnsClass     ext_dns_message_get_qclass (const char * qclass)
 
 	/* unrecognized class */
 	return -1;
+}
+
+/** 
+ * @brief Allows to get the a user printable string from extDnsClass code.
+ *
+ * @param class The question class that is being asked to be translated
+ *
+ * @return The string representing the class or NULL if it fails (unrecognized code)
+ */
+const char *     ext_dns_message_get_qclass_from_str (extDnsClass class)
+{
+	if (class == extDnsIN)
+		return "IN";
+	if (class == extDnsCS)
+		return "CS";
+	if (class == extDnsCH)
+		return "CH";
+	if (class == extDnsHS)
+		return "HS";
+	if (class == extDnsClassANY)
+		return "*";
+
+	/* unrecognized class */
+	return NULL;
+}
+
+/** 
+ * @internal Allows to get a printable representation from the rdata
+ * section that holds the provided resource record.
+ *
+ * @param rr The resource record to get printable rdata from.
+ *
+ * @return A reference to the printable rdata found or NULL if it
+ * fails.
+ */
+char *          ext_dns_message_get_printable_rdata (extDnsCtx * ctx, extDnsResourceRecord * rr)
+{
+	char * resource_name;
+	char * result;
+
+	if (rr == NULL)
+		return NULL;
+	
+	if (rr->type == extDnsTypeA) {
+		return axl_strdup_printf ("%d.%d.%d.%d", 
+					  ext_dns_get_8bit (rr->rdata), 
+					  ext_dns_get_8bit (rr->rdata + 1), 
+					  ext_dns_get_8bit (rr->rdata + 2), 
+					  ext_dns_get_8bit (rr->rdata + 3));
+	} else if (rr->type == extDnsTypeMX) {
+		/* build label */
+		resource_name = ext_dns_message_get_resource_name (ctx, rr->rdata + 2, rr->rdlength - 2, 0, NULL);
+		result        =  axl_strdup_printf ("%d %s", ext_dns_get_16bit (rr->rdata), resource_name);
+		axl_free (resource_name);
+		return result;
+	} /* end if */
+	
+	return NULL;
 }

@@ -4,7 +4,7 @@ endif
 
 EXTRA_DIST =
 
-noinst_PROGRAMS = ext-dns-regression-listener
+noinst_PROGRAMS = ext-dns-regression-listener ext-dns-regression-client
 
 INCLUDES = -I$(top_srcdir)/src  $(AXL_CFLAGS)  $(PTHREAD_CFLAGS) \
 	$(compiler_options) -D__axl_disable_broken_bool_def__   \
@@ -14,4 +14,7 @@ LIBS            = $(AXL_LIBS) $(PTHREAD_LIBS) $(ADDITIONAL_LIBS)
 
 ext_dns_regression_listener_SOURCES        = ext-dns-regression-listener.c
 ext_dns_regression_listener_LDADD          = $(LIBS) $(top_builddir)/src/libext-dns.la 
+
+ext_dns_regression_client_SOURCES        = ext-dns-regression-client.c
+ext_dns_regression_client_LDADD          = $(LIBS) $(top_builddir)/src/libext-dns.la 
 

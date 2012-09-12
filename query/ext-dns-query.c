@@ -52,6 +52,9 @@ To run a simple A query use:\n\
 If you have question, bugs to report, patches, you can reach us\n\
 at <ext-dns@lists.aspl.es>."
 
+/* disable verbose */
+axl_bool verbose = axl_false;
+
 void install_arguments (int argc, char ** argv) {
 
 	/* install headers for help */
@@ -61,8 +64,14 @@ void install_arguments (int argc, char ** argv) {
 	exarg_post_usage_header (POST_HEADER);
 
 	/* init exarg library */
-	exarg_install_arg ("version", "v", EXARG_NONE, 
+	exarg_install_arg ("version", "e", EXARG_NONE, 
 			   "Shows ext-dns-query version.");
+	exarg_install_arg ("verbose", "v", EXARG_NONE, 
+			   "Shows enable tool verbose output.");
+	exarg_install_arg ("debug", "d", EXARG_NONE, 
+			   "Enable ext-dns debug output.");
+	exarg_install_arg ("type", "t", EXARG_STRING, 
+			   "By default, query sent to the DNS server uses A and class IN. With this flag you can change the query to other resource record type: mx, cname, hinfo, etc.");
 
 	/* call to parse arguments */
 	exarg_parse (argc, argv);
@@ -71,6 +80,10 @@ void install_arguments (int argc, char ** argv) {
 	if (exarg_is_defined ("version")) {
 		printf ("%s\n", VERSION);
 		exit (0);
+	}
+
+	if (exarg_is_defined ("verbose")) {
+		verbose = axl_true;
 	}
 
 	return;
@@ -83,7 +96,63 @@ void ext_dns_query_on_message (extDnsCtx     * ctx,
 			       extDnsMessage * message,
 			       axlPointer      data)
 {
-	printf ("INFO: received message from %s:%d..\n", source_address, source_port);
+	extDnsAsyncQueue * queue = data;
+	
+	if (verbose)
+		printf ("INFO: received message from %s:%d (queue: %p)..\n", source_address, source_port, queue);
+
+	/* increase reference counting to avoid having the message
+	 * deleted after this handler finishes. */
+	ext_dns_message_ref (message);
+
+	/* push queue */
+	ext_dns_async_queue_push (queue, message);
+
+	return;
+}
+
+void ext_dns_query_show_message_as_host (extDnsCtx * ctx, extDnsMessage * message, const char * server, int server_port)
+{
+	int    count = 0;
+	char * printable_rdata;
+	/* extDnsResourceRecord * record; */
+
+	printf ("Using domain server:\n");
+	printf ("Name: %s\n", server);
+	printf ("Address: %s#%d\n", server, server_port);
+	printf ("Aliases: \n");
+	printf ("\n");
+
+	if (message->header->answer_count == 0) {
+		printf ("%s has no %s record\n", 
+			message->questions[0].qname, ext_dns_message_get_qtype_from_str (message->questions[0].qtype));
+		return;
+	}
+
+	while (count < message->header->answer_count) {
+		/* get printable data */
+		printable_rdata = ext_dns_message_get_printable_rdata (ctx, &message->answers[count]);
+		
+		/* get next count */
+		if (message->answers[count].type == extDnsTypeA)
+			printf ("%s has address %s\n", message->answers[count].name, printable_rdata);
+		else if (message->answers[count].type == extDnsTypeMX)
+			printf ("%s mail is handled by %s\n", message->answers[count].name, printable_rdata);
+		else
+			printf ("%s  %s  %s  ttl:%d   rdlength:%d\n", 
+				message->answers[count].name, 
+				ext_dns_message_get_qtype_from_str (message->answers[count].type), 
+				ext_dns_message_get_qclass_from_str (message->answers[count].class), 
+				message->answers[count].ttl,
+				message->answers[count].rdlength);
+
+
+		/* release printable rdata */
+		axl_free (printable_rdata);
+
+		/* next answer */
+		count++;
+	}
 
 	return;
 }
@@ -106,6 +175,10 @@ void ext_dns_query_do_request (extDnsCtx * ctx) {
 	char          * source_address;
 	int             source_port;
 
+	/* queue to wait for reply */
+	extDnsAsyncQueue * queue;
+	extDnsMessage    * message;
+
 	/* get first param */
 	arg = exarg_get_params ();
 
@@ -122,9 +195,14 @@ void ext_dns_query_do_request (extDnsCtx * ctx) {
 		exit (-1);
 	}
 
-	printf ("Running query: %s type:%s class:%s %s %s\n", 
-		qname, qtype, qclass, server ? "to" : "", 
-		server ? server : "");
+	if (verbose)
+		printf ("Running query: %s type:%s class:%s %s %s\n", 
+			qname, qtype, qclass, server ? "to" : "", 
+			server ? server : "");
+
+	/* check for type query */
+	if (exarg_is_defined ("type"))
+		qtype = exarg_get_string ("type");
 
 	/* check qtype and qclass received */
 	_qtype  = ext_dns_message_get_qtype (qtype);
@@ -145,10 +223,12 @@ void ext_dns_query_do_request (extDnsCtx * ctx) {
 		exit (-1);
 	} /* end if */
 
-	printf ("INFO: Build request with size: %d\n", bytes_written);
+	if (verbose)
+		printf ("INFO: Build request with size: %d\n", bytes_written);
 
 	/* set on message query */
-	ext_dns_ctx_set_on_message (ctx, ext_dns_query_on_message, NULL);
+	queue = ext_dns_async_queue_new ();
+	ext_dns_ctx_set_on_message (ctx, ext_dns_query_on_message, queue);
 
 	/* send message */
 	if (ext_dns_session_send_udp (ctx, buffer, bytes_written, server, 53, &source_address, &source_port) != bytes_written) {
@@ -156,16 +236,42 @@ void ext_dns_query_do_request (extDnsCtx * ctx) {
 		exit (-1);
 	} /* end if */
 
-	printf ("INFO: Request sent ID %d, source_address=%s, source port=%d..\n", header->id, source_address, source_port);
+	if (verbose)
+		printf ("INFO: Request sent ID %d, source_address=%s, source port=%d..\n", header->id, source_address, source_port);
 
 	/* wait for reply and process it */
 	ext_dns_listener_new2 (ctx, source_address, source_port, extDnsUdpSession, NULL, NULL);
 
-	/* wait and process requests */
-	ext_dns_ctx_wait (ctx);
-
 	/* release source address */
 	axl_free (source_address);
+	
+	/* wait for reply */
+	message = ext_dns_async_queue_timedpop (queue, 5000000);
+	if (message == NULL) {
+		printf ("ERROR: timeout reached while waiting for reply..\n");
+		exit (-1);
+	}
+
+	/* check message header */
+	if (message->header->id != header->id) {
+		printf ("ERROR: received wrong ID identifier on reply..\n");
+		exit (-1);
+	}
+
+	if (verbose)
+		printf ("INFO: reply received..\n");
+
+	/* release queue */
+	ext_dns_async_queue_unref (queue);
+
+	/*** message ***/
+	ext_dns_query_show_message_as_host (ctx, message, server, 53);
+
+	/* release header */
+	axl_free (header);
+
+	/* release message */
+	ext_dns_message_unref (message);
 
 
 	return;
@@ -185,6 +291,13 @@ int main (int argc, char ** argv)
 		exit (-1);
 	}
 
+	/* check for debug output */
+	if (exarg_is_defined ("debug")) {
+		ext_dns_log_enable (ctx, axl_true);
+		ext_dns_log2_enable (ctx, axl_true);
+		ext_dns_color_log_enable (ctx, axl_true);
+	}
+
 	/* init context */
 	if (! ext_dns_init_ctx (ctx)) {
 		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
@@ -198,6 +311,9 @@ int main (int argc, char ** argv)
 
 	/* terminate process */
 	ext_dns_exit_ctx (ctx, axl_true);
+
+	/* finish exarg */
+	exarg_end ();
 
 	return 0;
 }

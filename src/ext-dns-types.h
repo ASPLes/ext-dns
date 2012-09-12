@@ -566,8 +566,11 @@ typedef struct _extDnsHeader {
 	extDnsResponseType rcode;
 	int                query_count;
 	int                answer_count;
-	int                resources_count;
-	int                additional_records_count;
+	int                authority_count;
+	int                additional_count;
+
+	/* private records */
+
 } extDnsHeader;
 
 /** 
@@ -692,11 +695,15 @@ typedef struct _extDnsQuestion {
 } extDnsQuestion;
 
 typedef struct _extDnsResourceRecord {
-	const char * name;
-	const char * type;
-	const char * class;
-	int          ttl;
-	const char * rdata;
+	/* get record */
+	char         * name;
+	extDnsType     type;
+	extDnsClass    class;
+	int            ttl;
+	
+	/* raw data received */
+	int            rdlength;
+	char         * rdata;
 } extDnsResourceRecord;
 
 typedef struct _extDnsMessage {
@@ -704,7 +711,12 @@ typedef struct _extDnsMessage {
 	extDnsQuestion       * questions;
 	extDnsResourceRecord * answers;
 	extDnsResourceRecord * authorities;
-	extDnsResourceRecord * more_resources;
+	extDnsResourceRecord * additionals;
+
+	/* private definitions, do not touch them, may change in
+	 * future releases */
+	extDnsMutex            mutex;
+	int                    ref_count;
 } extDnsMessage;
 
 #endif /* __EXT_DNS_TYPES_H__ */

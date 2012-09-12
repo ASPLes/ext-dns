@@ -1074,7 +1074,7 @@ void _ext_dns_log2 (extDnsCtx        * ctx,
  *    | 7  6  5  4  3  2  1  0 | position
  *    +------------------------+
  */
-int ext_dns_extract_bit (char byte, int position) {
+int ext_dns_get_bit (char byte, int position) {
 	return ( ( byte & (1 << position) ) >> position);
 }
 
@@ -1095,14 +1095,14 @@ void ext_dns_show_byte (extDnsCtx * ctx, char byte, const char * label) {
 	
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "  byte (%s) = %d %d %d %d  %d %d %d %d",
 		     label,
-		     ext_dns_extract_bit (byte, 7),
-		     ext_dns_extract_bit (byte, 6),
-		     ext_dns_extract_bit (byte, 5),
-		     ext_dns_extract_bit (byte, 4),
-		     ext_dns_extract_bit (byte, 3),
-		     ext_dns_extract_bit (byte, 2),
-		     ext_dns_extract_bit (byte, 1),
-		     ext_dns_extract_bit (byte, 0));
+		     ext_dns_get_bit (byte, 7),
+		     ext_dns_get_bit (byte, 6),
+		     ext_dns_get_bit (byte, 5),
+		     ext_dns_get_bit (byte, 4),
+		     ext_dns_get_bit (byte, 3),
+		     ext_dns_get_bit (byte, 2),
+		     ext_dns_get_bit (byte, 1),
+		     ext_dns_get_bit (byte, 0));
 	return;
 }
 
@@ -1151,6 +1151,19 @@ int    ext_dns_get_16bit (const char * buffer)
 }
 
 /** 
+ * @internal Allows to get the 8bit integer located at the buffer
+ * pointer.
+ *
+ * @param buffer The buffer pointer to extract the 8bit integer from.
+ *
+ * @erturn The 8 bit integer value found at the buffer pointer.
+ */
+int    ext_dns_get_8bit  (const char * buffer)
+{
+	return buffer[0] & 0x00000000ff;
+}
+
+/** 
  * @internal Allows to set the 16 bit integer value into the 2 first
  * bytes of the provided buffer.
  *
@@ -1182,6 +1195,18 @@ void   ext_dns_set_32bit (int value, char * buffer)
 	buffer[3] =  value & 0x00000000ff;
 
 	return;
+}
+
+/** 
+ * @brief Allows to get a 32bits integer value from the buffer.
+ *
+ * @param buffer The buffer where the integer will be retreived from.
+ *
+ * @return The integer value reported by the buffer.
+ */
+int    ext_dns_get_32bit (const char * buffer)
+{
+	return (int)(buffer[0] << 24) | (int)(buffer[1] << 16) | (int)(buffer[2] << 8) | (int)(buffer[0]);
 }
 
 /** 

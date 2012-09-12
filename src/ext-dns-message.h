@@ -44,16 +44,27 @@ extDnsHeader  * ext_dns_message_parse_header (extDnsCtx * ctx, const char * buf,
 
 extDnsMessage * ext_dns_message_parse_message (extDnsCtx * ctx, extDnsHeader * header, const char * buf, int buf_size);
 
+axl_bool        ext_dns_message_ref (extDnsMessage * message);
+
 void            ext_dns_message_unref (extDnsMessage * message);
 
 int             ext_dns_message_build_query (extDnsCtx * ctx, const char * qname, extDnsType qtype, extDnsClass qclass, 
 					     char * buffer, extDnsHeader ** header);
 
 int             ext_dns_message_build_reply (extDnsCtx * ctx, extDnsMessage * message, char * buffer, int ttl, const char * data);
+
+axl_bool            ext_dns_message_query (extDnsCtx * ctx, const char * type, const char * class, const char * name, 
+					   const char * server, int server_port,
+					   extDnsOnMessageReceived on_message, axlPointer data);
 				
 extDnsType      ext_dns_message_get_qtype (const char * qtype);
 
+const char *    ext_dns_message_get_qtype_from_str (extDnsType type);
+
 extDnsClass     ext_dns_message_get_qclass (const char * qclass);
-					     
+
+const char *    ext_dns_message_get_qclass_from_str (extDnsClass class);
+
+char *          ext_dns_message_get_printable_rdata (extDnsCtx * ctx, extDnsResourceRecord * rr);
 
 #endif /* __EXT_DNS_MESSAGE_H__ */

@@ -201,8 +201,11 @@ struct _extDnsSession {
 	extDnsPeerRole    role;
 
 	/*** handler for message received ***/
-	extDnsOnMessageReceived  on_message;
-	axlPointer               on_message_data;
+	extDnsOnMessageReceived    on_message;
+	axlPointer                 on_message_data;
+	axl_bool                   close_on_message;
+
+	extDnsHeader             * expected_header;
 };
 
 /** 
