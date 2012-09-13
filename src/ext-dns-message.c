@@ -101,17 +101,16 @@ char * ext_dns_message_get_label (extDnsCtx * ctx, const char * buffer)
 	return label;
 }
 
-char * ext_dns_message_get_resource_name (extDnsCtx * ctx, const char * buffer, int buf_size, int * _iterator, axl_bool * is_label)
+char * ext_dns_message_get_resource_name (extDnsCtx * ctx, const char * buffer, int buf_size, int * _iterator, axl_bool * _is_label)
 {
 	/* clear resource name */
-	char * resource_name = NULL;
-	char * label         = NULL;
-	char * aux           = NULL;
-	int    offset        = 0;
-	int    iterator      = (* _iterator);
-
-	if (is_label)
-		(*is_label) = axl_false;
+	char     * resource_name = NULL;
+	char     * label         = NULL;
+	char     * aux           = NULL;
+	int        offset        = 0;
+	int        iterator      = (* _iterator);
+	axl_bool   is_label      = axl_false;
+	
 
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Starting to get resource name at iterator=%d, buf_size=%d, buffer[iterator]='%d'",
 		     iterator, buf_size, buffer[iterator]);
@@ -121,26 +120,34 @@ char * ext_dns_message_get_resource_name (extDnsCtx * ctx, const char * buffer, 
 		 * compression 4.1.4 Message compression from RFC1035). */
 		if (ext_dns_get_bit (buffer[iterator], 7) && ext_dns_get_bit (buffer[iterator], 6)) {
 			
-			if (is_label == NULL) {
+			/* if (is_label == NULL) {
 				ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Received a request to process a label compression but found another label at the pointer");
+				axl_free (resource_name);
 				return NULL;
-			} /* end if */
+			}*/ /* end if */
 			
 			/* found offset label, process it jumping into that position */
 			offset = (int)(buffer[iterator] & 0x3f) << 8 | (int)buffer[iterator + 1];
-			ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Found label compression offset=%d", offset);
+			ext_dns_log (EXT_DNS_LEVEL_DEBUG, "  Found label compression offset=%d, iterator=%d (until now, name is: %s)", offset, iterator, resource_name ? resource_name : "");
 			
 			if (offset < 12 || offset > buf_size) {
 				ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Received a request to process a label compression that is outside the message");
+				axl_free (resource_name);
+
+				/* set is label found */
+				if (_is_label)
+					(* _is_label) = is_label;
+
 				return NULL;
 			}
 			
 			/* notify label found */
-			if (is_label)
-				(*is_label) = axl_true;
+			is_label = axl_true;
 			
 			/* ok, now call the function again to process the label at the position pointed */
 			label = ext_dns_message_get_resource_name (ctx, buffer, buf_size, &offset, NULL);
+
+			ext_dns_log (EXT_DNS_LEVEL_DEBUG, "  Label found at the label compression call: %s", label ? label : "");
 
 			iterator ++;
 
@@ -155,6 +162,9 @@ char * ext_dns_message_get_resource_name (extDnsCtx * ctx, const char * buffer, 
 		if (label == NULL) 
 			break;
 
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "  Label='%s', Resource='%s', Is label: %d", 
+			     label ? label : "", resource_name ? resource_name : "", is_label ? is_label : 0);
+
 		if (resource_name == NULL) {
 			resource_name = label;
 			label = NULL;
@@ -168,13 +178,17 @@ char * ext_dns_message_get_resource_name (extDnsCtx * ctx, const char * buffer, 
 		axl_free (label);
 
 		/* found one replacement, finish processing here */
-		if (is_label && (*is_label))
+		if (is_label)
 			break;
 
 	} /* end while */
 
 	/* update caller iterator */
 	(* _iterator) = iterator + 1;
+
+	/* set is label found */
+	if (_is_label)
+		(* _is_label) = is_label;
 
 	return resource_name;
 }
@@ -183,6 +197,7 @@ axl_bool ext_dns_message_parse_resource_record (extDnsCtx * ctx, extDnsResourceR
 {
 	int      iterator = (*_iterator);
 	axl_bool is_label;
+	int      value;
 
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Starting to parse resource record at iterator=%d, resource record: %p", iterator, rr);
 	if (rr == NULL) {
@@ -227,6 +242,38 @@ axl_bool ext_dns_message_parse_resource_record (extDnsCtx * ctx, extDnsResourceR
 	/* copy rddata and then process */
 	rr->rdata = axl_new (char, rr->rdlength + 1);
 	memcpy (rr->rdata, buf + iterator, rr->rdlength);
+
+	/* record current rdata starting position */
+	value = iterator;
+
+	/* get values in the rdata session */
+	if (rr->type == extDnsTypeA) {
+		/* store the IP in readable form */
+		rr->name_content = axl_strdup_printf ("%d.%d.%d.%d", 
+						      ext_dns_get_8bit (rr->rdata), 
+						      ext_dns_get_8bit (rr->rdata + 1), 
+						      ext_dns_get_8bit (rr->rdata + 2), 
+						      ext_dns_get_8bit (rr->rdata + 3));
+	} else if (rr->type == extDnsTypeMX) {
+		/* get mx preference */
+		rr->preference = ext_dns_get_16bit (rr->rdata);
+
+		/* skip next 16 bits */
+		value += 2;
+		
+		/* get mail exchanger */
+		rr->name_content = ext_dns_message_get_resource_name (ctx, buf, buf_size, &value, &is_label);
+	} else if (rr->type == extDnsTypeCNAME) {
+		/* get mail exchanger */
+		rr->name_content = ext_dns_message_get_resource_name (ctx, buf, buf_size, &value, &is_label);
+	} else if (rr->type == extDnsTypeNS) {
+		/* get mail exchanger */
+		rr->name_content = ext_dns_message_get_resource_name (ctx, buf, buf_size, &value, &is_label);
+	} else if (rr->type == extDnsTypeTXT) {
+		/* get TXT content */
+		rr->name_content = axl_new (char, rr->rdlength + 1);
+		memcpy (rr->name_content, rr->rdata + 1, rr->rdlength -1);
+	}
 
 	/* next position */
 	iterator += rr->rdlength;
@@ -312,11 +359,13 @@ extDnsMessage * ext_dns_message_parse_message (extDnsCtx * ctx, extDnsHeader * h
 	/*** ANSWERS ***/
 	/* parse query question */
 	if (header->answer_count > 0) {
+		
 		/* allocate structure to hold query question */
 		message->answers = axl_new (extDnsResourceRecord, header->answer_count);
 	}
 	count = 0;
 	while (count < header->answer_count) {
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "ANSWERS: parsing answers=%d count=%d iterator=%d", header->answer_count, count + 1, iterator);
 
 		/* parse resource record */
 		if (! ext_dns_message_parse_resource_record (ctx, &message->answers[count], &iterator, buf, buf_size))
@@ -626,6 +675,7 @@ void ext_dns_message_unref (extDnsMessage * message)
 			/* release name */
 			axl_free (message->answers[count].name);
 			axl_free (message->answers[count].rdata);
+			axl_free (message->answers[count].name_content);
 			
 			count++;
 		}
@@ -640,6 +690,7 @@ void ext_dns_message_unref (extDnsMessage * message)
 			/* release name */
 			axl_free (message->authorities[count].name);
 			axl_free (message->authorities[count].rdata);
+			axl_free (message->authorities[count].name_content);
 			
 			count++;
 		}
@@ -654,6 +705,7 @@ void ext_dns_message_unref (extDnsMessage * message)
 			/* release name */
 			axl_free (message->additionals[count].name);
 			axl_free (message->additionals[count].rdata);
+			axl_free (message->additionals[count].name_content);
 		
 			count++;
 		}
@@ -869,13 +921,13 @@ extDnsClass     ext_dns_message_get_qclass (const char * qclass)
 		return -1;
 
 	if (axl_cmp (qclass, "IN") || axl_cmp (qclass, "in"))
-		return extDnsIN;
+		return extDnsClassIN;
 	if (axl_cmp (qclass, "CS") || axl_cmp (qclass, "cs"))
-		return extDnsCS;
+		return extDnsClassCS;
 	if (axl_cmp (qclass, "CH") || axl_cmp (qclass, "ch"))
-		return extDnsCH;
+		return extDnsClassCH;
 	if (axl_cmp (qclass, "HS") || axl_cmp (qclass, "hs"))
-		return extDnsHS;
+		return extDnsClassHS;
 	if (axl_cmp (qclass, "*"))
 		return extDnsClassANY;
 
@@ -892,13 +944,13 @@ extDnsClass     ext_dns_message_get_qclass (const char * qclass)
  */
 const char *     ext_dns_message_get_qclass_from_str (extDnsClass class)
 {
-	if (class == extDnsIN)
+	if (class == extDnsClassIN)
 		return "IN";
-	if (class == extDnsCS)
+	if (class == extDnsClassCS)
 		return "CS";
-	if (class == extDnsCH)
+	if (class == extDnsClassCH)
 		return "CH";
-	if (class == extDnsHS)
+	if (class == extDnsClassHS)
 		return "HS";
 	if (class == extDnsClassANY)
 		return "*";

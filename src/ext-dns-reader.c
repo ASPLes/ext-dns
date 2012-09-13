@@ -105,6 +105,11 @@ axlPointer __ext_dns_reader_on_message_received (extDnsOnMessageReceivedData * d
 
 	/* check expected header */
 	if (session->expected_header) {
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Pointers received: %p", session);
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Pointers received: %p", session->expected_header);
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Pointers received: %p", message);
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Pointers received: %p", message->header);
+		
 		/* do some additional checkings */
 		if (session->expected_header->id != message->header->id) {
 			ext_dns_log (EXT_DNS_LEVEL_WARNING, "Expected to receive id %d, but found %d, discarding reply",
@@ -170,10 +175,13 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 				      extDnsSession * session)
 {
 
-	char buf[1024];
+	char            buf[1024];
 	struct sockaddr_in remote_addr;
-	socklen_t sin_size;
-	int bytes_read;
+	socklen_t       sin_size;
+	int             bytes_read;
+
+	char          * source_address;
+	int             source_port;
 
 	extDnsHeader  * header;
 	extDnsMessage * message;
@@ -210,6 +218,16 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 	/* now parse rest of the message */
 	message = ext_dns_message_parse_message (ctx, header, buf, bytes_read);
 
+	/* get source and port address */
+	source_address = ext_dns_support_inet_ntoa (ctx, &remote_addr);
+	source_port    = ntohs (remote_addr.sin_port);
+
+	if (message == NULL) {
+		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Parse error for incoming message from %s:%d, skipping userlevel notification", source_address, source_port);
+		axl_free (source_address);
+		return;
+	}
+
 	/* queue message to be handled in other part */
 	if (! session->on_message && ! ctx->on_message) {
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Received a DNS message but no on message handler was found configured, dropping DNS message");
@@ -230,8 +248,8 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 	data->message        = message;
 	data->ctx            = ctx;
 	data->session        = session;
-	data->source_port    = ntohs (remote_addr.sin_port);
-	data->source_address = ext_dns_support_inet_ntoa (ctx, &remote_addr);
+	data->source_port    = source_port;
+	data->source_address = source_address;
 
 	/* call to invoke dns on message */
 	ext_dns_thread_pool_new_task (ctx, (extDnsThreadFunc) __ext_dns_reader_on_message_received, data);
