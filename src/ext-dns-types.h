@@ -668,20 +668,20 @@ typedef enum {
 	/** 
 	 * The Internet
 	 */
-	extDnsIN         = 1,
+	extDnsClassIN         = 1,
 	/** 
 	 * The CSNET class (Obsolete - used only for examples in some
 	 * obsolete RFCs)
 	 */
-	extDnsCS         = 2,
+	extDnsClassCS         = 2,
 	/** 
 	 * The CHAOS class
 	 */
-	extDnsCH         = 3,
+	extDnsClassCH         = 3,
 	/** 
 	 * Hesiod [Dyer 87]
 	 */
-	extDnsHS         = 4,
+	extDnsClassHS         = 4,
 	/** 
 	 * Any class
 	 */
@@ -694,12 +694,24 @@ typedef struct _extDnsQuestion {
 	extDnsClass    qclass;
 } extDnsQuestion;
 
+/** 
+ * @brief Public structure that defines a single resource record.
+ */
 typedef struct _extDnsResourceRecord {
-	/* get record */
+	/**
+	 * generic common resource record data 
+	 */
 	char         * name;
 	extDnsType     type;
 	extDnsClass    class;
 	int            ttl;
+
+	/* MX exchange, NS nsdname, A the IP, CNAME the hostname
+	 * alias */
+	char         * name_content;
+
+	/* MX specific values */
+	int            preference;
 	
 	/* raw data received */
 	int            rdlength;

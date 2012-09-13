@@ -38,7 +38,7 @@
 
 #include <ext-dns.h>
 
-const char * dns_server = "8.8.8.8";
+const char * dns_server = "localhost";
 int          dns_server_port = 53;
 
 void queue_reply (extDnsCtx     * ctx,
@@ -60,6 +60,64 @@ void queue_reply (extDnsCtx     * ctx,
 	ext_dns_async_queue_push (queue, message);
 	
 	return;
+}
+
+axl_bool check_answer (extDnsResourceRecord * rr, const char * name, extDnsType type, extDnsClass class, const char * name_content)
+{
+	if (! axl_cmp (rr->name, name)) {
+		printf ("ERROR: expected to find %s but found: %s\n", name, rr->name);
+		return axl_false;
+	}
+	if (name_content && ! axl_cmp (rr->name_content, name_content)) {
+		printf ("ERROR: expected to find %s inside name content registry but found: %s\n", name_content, rr->name_content);
+		return axl_false;
+	}
+	if (rr->type != type) {
+		printf ("ERROR: expected to find record type %d but found: %d\n", type, rr->type);
+		return axl_false;
+	}
+	if (rr->class != class) {
+		printf ("ERROR: expected to find record class %d but found: %d\n", class, rr->class);
+		return axl_false;
+	}
+
+	/* return record ok */
+	return axl_true;
+}
+
+axl_bool check_header (extDnsMessage * message, axl_bool is_query, int ans_count, int query_count, int authority_count, int additional_count)
+{
+	/* check message values */
+	if (is_query != message->header->is_query) {
+		printf ("ERROR: expected to find a query %d but found %d in the message\n", 
+			is_query, message->header->is_query);
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->answer_count != ans_count) {
+		printf ("ERROR: expected to find a %d answer but found: %d\n", ans_count, message->header->answer_count);
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->query_count != query_count) {
+		printf ("ERROR: expected to find a %d query but found: %d\n", query_count, message->header->query_count);
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->additional_count != additional_count) {
+		printf ("ERROR: expected to find a %d query but found: %d\n", additional_count, message->header->additional_count);
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->authority_count != authority_count) {
+		printf ("ERROR: expected to find a %d query but found: %d\n", authority_count, message->header->authority_count);
+		return axl_false;
+	}
+	return axl_true; /* all records ok */
 }
 
 axl_bool test_01 (void) {
@@ -148,12 +206,12 @@ axl_bool test_02 (void) {
 		return axl_false;
 	}
 
-	if (message->answers[0].type != 1) { 
+	if (message->answers[0].type != extDnsTypeA) { 
 		printf ("ERROR: expected to find type 1 (A) but found %d\n", message->answers[0].type);
 		return axl_false;
 	}
 
-	if (message->answers[0].class != 1) {
+	if (message->answers[0].class != extDnsClassIN) {
 		printf ("ERROR: expected to find class 1 (IN) but found %d\n", message->answers[0].class);
 		return axl_false;
 	} /* end if */
@@ -171,6 +229,476 @@ axl_bool test_02 (void) {
 	/* release message */
 	ext_dns_message_unref (message);
 
+	ext_dns_async_queue_unref (queue);
+
+	/* terminate process */
+	ext_dns_exit_ctx (ctx, axl_true);
+
+	return axl_true; /* return ok */
+}
+
+axl_bool test_03 (void) {
+	extDnsCtx        * ctx;
+	extDnsMessage    * message;
+	extDnsAsyncQueue * queue;
+	axl_bool           is_mail_aspl_es;
+
+	/* create context object */
+	ctx = ext_dns_ctx_new ();
+	if (ctx == NULL) {
+		printf ("ERROR: failed to allocate ctx object..\n");
+		return axl_false;
+	}
+
+	/* init context */
+	if (! ext_dns_init_ctx (ctx)) {
+		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
+		return axl_false;
+	}
+
+	/* run query and check results */
+	queue = ext_dns_async_queue_new ();
+	ext_dns_message_query (ctx, "mx", "in", "aspl.es", dns_server, dns_server_port, queue_reply, queue);
+
+	/* get reply (timeout in 3seconds) */
+	message = ext_dns_async_queue_timedpop (queue, 3000000);
+	if (message == NULL) {
+		printf ("ERROR: expected to find message reply but found NULL reference..\n");
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->is_query) {
+		printf ("ERROR: expected not to find a query (QR == 0) type message\n");
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->answer_count != 2) {
+		printf ("ERROR: expected to find a 2 answer but found: %d\n", message->header->answer_count);
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->query_count != 1) {
+		printf ("ERROR: expected to find a 1 query but found: %d\n", message->header->query_count);
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->additional_count != 0) {
+		printf ("ERROR: expected to find a 1 query but found: %d\n", message->header->additional_count);
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->authority_count != 0) {
+		printf ("ERROR: expected to find a 1 query but found: %d\n", message->header->authority_count);
+		return axl_false;
+	}
+
+	/* check values inside */
+	if (message->answers[0].type != extDnsTypeMX) {
+		printf ("ERROR: expected to find MX type record, but found: %d\n", message->answers[0].type);
+		return axl_false;
+	}
+	if (message->answers[0].class != extDnsClassIN) {
+		printf ("ERROR: expected to find IN class, but found: %d\n", message->answers[0].class);
+		return axl_false;
+	}
+
+	/* check which record we are handling */
+	is_mail_aspl_es = axl_cmp (message->answers[0].name_content, "mail.aspl.es");
+	printf ("Test 03: Found mail.aspl.es in the first record: %d\n", is_mail_aspl_es);
+
+	if (message->answers[0].preference != (is_mail_aspl_es ? 10 : 20)) {
+		printf ("ERROR (2): expected to find MX %s preference, but found: %d\n", 
+			is_mail_aspl_es ? "10" : "20",
+			message->answers[0].preference);
+		return axl_false;
+	}
+
+	if (! axl_cmp (message->answers[0].name_content, is_mail_aspl_es ? "mail.aspl.es" : "mail2.aspl.es")) {
+		printf ("ERROR: expected to find %s but found: %s\n", 
+			is_mail_aspl_es ? "mail.aspl.es" : "mail2.aspl.es",
+			message->answers[0].name_content);
+		return axl_false;
+	}
+
+	/* check values inside */
+	if (message->answers[1].type != extDnsTypeMX) {
+		printf ("ERROR: expected to find MX type record, but found: %d\n", message->answers[1].type);
+		return axl_false;
+	}
+	if (message->answers[1].class != extDnsClassIN) {
+		printf ("ERROR: expected to find IN class, but found: %d\n", message->answers[1].class);
+		return axl_false;
+	}
+
+	if (message->answers[1].preference != (is_mail_aspl_es ? 20 : 10)) {
+		printf ("ERROR: expected to find MX %s preference, but found: %d\n", 
+			is_mail_aspl_es ? "20" : "10",
+			message->answers[1].preference);
+		return axl_false;
+	}
+
+	if (! axl_cmp (message->answers[1].name_content, is_mail_aspl_es ? "mail2.aspl.es" : "mail.aspl.es")) {
+		printf ("ERROR: expected to find mail2.aspl.es but found: %s\n", message->answers[1].name_content);
+		return axl_false;
+	}
+
+	/* release message */
+	ext_dns_message_unref (message);
+
+	ext_dns_async_queue_unref (queue);
+
+	/* terminate process */
+	ext_dns_exit_ctx (ctx, axl_true);
+
+	return axl_true; /* return ok */
+}
+
+axl_bool test_04 (void) {
+	extDnsCtx        * ctx;
+	extDnsMessage    * message;
+	extDnsAsyncQueue * queue;
+
+	/* create context object */
+	ctx = ext_dns_ctx_new ();
+	if (ctx == NULL) {
+		printf ("ERROR: failed to allocate ctx object..\n");
+		return axl_false;
+	}
+
+	/* init context */
+	if (! ext_dns_init_ctx (ctx)) {
+		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
+		return axl_false;
+	}
+
+	/* run query and check results */
+	queue = ext_dns_async_queue_new ();
+	ext_dns_message_query (ctx, "cname", "in", "bugzilla.aspl.es", dns_server, dns_server_port, queue_reply, queue);
+
+	/* get reply (timeout in 3seconds) */
+	message = ext_dns_async_queue_timedpop (queue, 3000000);
+	if (message == NULL) {
+		printf ("ERROR: expected to find message reply but found NULL reference..\n");
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->is_query) {
+		printf ("ERROR: expected not to find a query (QR == 0) type message\n");
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->answer_count != 1) {
+		printf ("ERROR: expected to find a 2 answer but found: %d\n", message->header->answer_count);
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->query_count != 1) {
+		printf ("ERROR: expected to find a 1 query but found: %d\n", message->header->query_count);
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->additional_count != 0) {
+		printf ("ERROR: expected to find a 1 query but found: %d\n", message->header->additional_count);
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->authority_count != 0) {
+		printf ("ERROR: expected to find a 1 query but found: %d\n", message->header->authority_count);
+		return axl_false;
+	}
+
+	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content); */
+	if (! axl_cmp (message->answers[0].name, "bugzilla.aspl.es")) {
+		printf ("ERROR: expected to find bugzilla.aspl.es but found: %s\n", message->answers[0].name);
+		return axl_false;
+	}
+	if (message->answers[0].type != extDnsTypeCNAME) {
+		printf ("ERROR: expected to find record type %d but found: %d\n", extDnsTypeCNAME, message->answers[0].type);
+		return axl_false;
+	}
+	if (message->answers[0].class != extDnsClassIN) {
+		printf ("ERROR: expected to find class %d but found: %d\n", extDnsClassIN, message->answers[0].class);
+		return axl_false;
+	}
+
+	if (! axl_cmp (message->answers[0].name_content, "dolphin.aspl.es")) {
+		printf ("ERROR: expected to find dolphin.aspl.es as CNAME result for bugzilla.aspl.es but found: %s\n", message->answers[0].name_content);
+		return axl_false;
+	}
+
+	/* release message */
+	ext_dns_message_unref (message);
+
+	ext_dns_async_queue_unref (queue);
+
+	/* terminate process */
+	ext_dns_exit_ctx (ctx, axl_true);
+
+	return axl_true; /* return ok */
+}
+
+axl_bool test_05 (void) {
+	extDnsCtx        * ctx;
+	extDnsMessage    * message;
+	extDnsAsyncQueue * queue;
+
+	/* create context object */
+	ctx = ext_dns_ctx_new ();
+	if (ctx == NULL) {
+		printf ("ERROR: failed to allocate ctx object..\n");
+		return axl_false;
+	}
+
+	/* init context */
+	if (! ext_dns_init_ctx (ctx)) {
+		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
+		return axl_false;
+	}
+
+	/* run query and check results */
+	queue = ext_dns_async_queue_new ();
+	ext_dns_message_query (ctx, "a", "in", "bugzilla.aspl.es", dns_server, dns_server_port, queue_reply, queue);
+
+	/* get reply (timeout in 3seconds) */
+	message = ext_dns_async_queue_timedpop (queue, 3000000);
+	if (message == NULL) {
+		printf ("ERROR: expected to find message reply but found NULL reference..\n");
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->is_query) {
+		printf ("ERROR: expected not to find a query (QR == 0) type message\n");
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->answer_count != 2) {
+		printf ("ERROR: expected to find a 2 answer but found: %d\n", message->header->answer_count);
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->query_count != 1) {
+		printf ("ERROR: expected to find a 1 query but found: %d\n", message->header->query_count);
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->additional_count != 0) {
+		printf ("ERROR: expected to find a 1 query but found: %d\n", message->header->additional_count);
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->authority_count != 0) {
+		printf ("ERROR: expected to find a 1 query but found: %d\n", message->header->authority_count);
+		return axl_false;
+	}
+
+	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content); 
+	   printf ("values: %s %d %d %s\n", message->answers[1].name, message->answers[1].type, message->answers[1].class, message->answers[1].name_content); */
+	if (! axl_cmp (message->answers[0].name, "bugzilla.aspl.es")) {
+		printf ("ERROR: expected to find bugzilla.aspl.es but found: %s\n", message->answers[0].name);
+		return axl_false;
+	}
+	if (message->answers[0].type != extDnsTypeCNAME) {
+		printf ("ERROR: expected to find record type %d but found: %d\n", extDnsTypeCNAME, message->answers[0].type);
+		return axl_false;
+	}
+	if (message->answers[0].class != extDnsClassIN) {
+		printf ("ERROR: expected to find class %d but found: %d\n", extDnsClassIN, message->answers[0].class);
+		return axl_false;
+	}
+
+	if (! axl_cmp (message->answers[0].name_content, "dolphin.aspl.es")) {
+		printf ("ERROR: expected to find dolphin.aspl.es as CNAME result for bugzilla.aspl.es but found: %s\n", message->answers[0].name_content);
+		return axl_false;
+	} 
+
+	if (! axl_cmp (message->answers[1].name, "dolphin.aspl.es")) {
+		printf ("ERROR: expected to find bugzilla.aspl.es but found: %s\n", message->answers[1].name);
+		return axl_false;
+	}
+	if (message->answers[1].type != extDnsTypeA) {
+		printf ("ERROR: expected to find record type %d but found: %d\n", extDnsTypeCNAME, message->answers[1].type);
+		return axl_false;
+	}
+	if (message->answers[1].class != extDnsClassIN) {
+		printf ("ERROR: expected to find class %d but found: %d\n", extDnsClassIN, message->answers[1].class);
+		return axl_false;
+	}
+
+	if (! axl_cmp (message->answers[1].name_content, "212.170.101.196")) {
+		printf ("ERROR: expected to find dolphin.aspl.es as CNAME result for bugzilla.aspl.es but found: %s\n", message->answers[1].name_content);
+		return axl_false;
+	} 
+
+	/* release message */
+	ext_dns_message_unref (message);
+
+	ext_dns_async_queue_unref (queue);
+
+	/* terminate process */
+	ext_dns_exit_ctx (ctx, axl_true);
+
+	return axl_true; /* return ok */
+}
+
+axl_bool test_06 (void) {
+
+	extDnsCtx        * ctx;
+	extDnsMessage    * message;
+	extDnsAsyncQueue * queue;
+	int                iterator;
+	axl_bool           found1 = axl_false, found2 = axl_false, found3 = axl_false;
+
+	/* create context object */
+	ctx = ext_dns_ctx_new ();
+	if (ctx == NULL) {
+		printf ("ERROR: failed to allocate ctx object..\n");
+		return axl_false;
+	}
+
+	/* init context */
+	if (! ext_dns_init_ctx (ctx)) {
+		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
+		return axl_false;
+	}
+
+	/* run query and check results */
+	queue = ext_dns_async_queue_new ();
+	ext_dns_message_query (ctx, "ns", "in", "aspl.es", dns_server, dns_server_port, queue_reply, queue);
+
+	/* get reply (timeout in 3seconds) */
+	message = ext_dns_async_queue_timedpop (queue, 3000000);
+	if (message == NULL) {
+		printf ("ERROR: expected to find message reply but found NULL reference..\n");
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->is_query) {
+		printf ("ERROR: expected not to find a query (QR == 0) type message\n");
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->answer_count != 3) {
+		printf ("ERROR: expected to find a 3 answer but found: %d\n", message->header->answer_count);
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->query_count != 1) {
+		printf ("ERROR: expected to find a 1 query but found: %d\n", message->header->query_count);
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->additional_count != 0) {
+		printf ("ERROR: expected to find a 1 query but found: %d\n", message->header->additional_count);
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->authority_count != 0) {
+		printf ("ERROR: expected to find a 1 query but found: %d\n", message->header->authority_count);
+		return axl_false;
+	}
+
+	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content); 
+	printf ("values: %s %d %d %s\n", message->answers[1].name, message->answers[1].type, message->answers[1].class, message->answers[1].name_content); 
+	printf ("values: %s %d %d %s\n", message->answers[2].name, message->answers[2].type, message->answers[2].class, message->answers[2].name_content);  */
+	
+	iterator = 0;
+	while (iterator < 3) {
+		if (axl_cmp (message->answers[iterator].name_content, "ns1.cuentadns.com"))
+			if (! found1 && check_answer (&message->answers[iterator], "aspl.es", extDnsTypeNS, extDnsClassIN, "ns1.cuentadns.com")) 
+				found1 = axl_true;
+		if (axl_cmp (message->answers[iterator].name_content, "ns2.cuentadns.com"))
+			if (! found2 && check_answer (&message->answers[iterator], "aspl.es", extDnsTypeNS, extDnsClassIN, "ns2.cuentadns.com"))
+				found2 = axl_true;
+		if (axl_cmp (message->answers[iterator].name_content, "ns3.cuentadns.com"))
+			if (! found3 && check_answer (&message->answers[iterator], "aspl.es", extDnsTypeNS, extDnsClassIN, "ns3.cuentadns.com"))
+				found3 = axl_true;
+		iterator++;
+	}
+
+	if (!found1 || !found2 || !found3) {
+		printf ("ERROR: expected to find some DNS NS registry that weren't found..\n");
+		return axl_false;
+	} /* end if */
+
+	/* release message */
+	ext_dns_message_unref (message);
+
+	ext_dns_async_queue_unref (queue);
+
+	/* terminate process */
+	ext_dns_exit_ctx (ctx, axl_true);
+
+	return axl_true; /* return ok */
+}
+
+axl_bool test_07 (void) {
+
+	extDnsCtx        * ctx;
+	extDnsMessage    * message;
+	extDnsAsyncQueue * queue;
+
+	/* create context object */
+	ctx = ext_dns_ctx_new ();
+	if (ctx == NULL) {
+		printf ("ERROR: failed to allocate ctx object..\n");
+		return axl_false;
+	}
+
+	/* init context */
+	if (! ext_dns_init_ctx (ctx)) {
+		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
+		return axl_false;
+	}
+
+	/* run query and check results */
+	queue = ext_dns_async_queue_new ();
+	ext_dns_message_query (ctx, "txt", "in", "aspl.es", dns_server, dns_server_port, queue_reply, queue);
+
+	/* get reply (timeout in 3seconds) */
+	message = ext_dns_async_queue_timedpop (queue, 3000000);
+	if (message == NULL) {
+		printf ("ERROR: expected to find message reply but found NULL reference..\n");
+		return axl_false;
+	}
+
+	/* check header */
+	if (! check_header (message, 
+			    /* is query */ axl_false, 
+			    /* ans count */ 1, 
+			    /* query count */ 1,
+			    /* authority count */ 0,
+			    /* additional count */ 0))
+		return axl_false;
+
+	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content);  */
+	if (! check_answer (&message->answers[0], "aspl.es", extDnsTypeTXT, extDnsClassIN, "v=spf1 a mx mx:mx1.registrarmail.net ip4:212.170.101.196 mx:mail.aspl.es mx:mail2.aspl.es -all"))
+		return axl_false;
+
+	/* release message */
+	ext_dns_message_unref (message);
+
+	ext_dns_async_queue_unref (queue);
+
 	/* terminate process */
 	ext_dns_exit_ctx (ctx, axl_true);
 
@@ -180,6 +708,35 @@ axl_bool test_02 (void) {
 typedef axl_bool  (*extDnsRegressionTest) (void);
 
 axl_bool disable_time_checks = axl_true;
+
+axl_bool check_and_run_test (const char * test_list, const char * test_name) 
+{
+	char ** tests;
+	int     iterator;
+
+	if (strstr (test_list, ",")) {
+		/* passed test list */
+		tests    = axl_split (test_list, 1, ",");
+		if (tests == NULL)
+			return axl_false;
+		iterator = 0;
+		while (tests[iterator]) {
+			/* check if the user provided the test and if it matches with test_name */
+			if (axl_cmp (tests[iterator], test_name)) {
+				axl_freev (tests);
+				return axl_true;
+			}
+
+			/* next position */
+			iterator++;
+		}
+		axl_freev (tests);
+		return axl_false;
+	} 
+
+	/* single test passed */
+	return axl_cmp (test_list, test_name);
+}
 
 void run_test (extDnsRegressionTest test, const char * test_name, const char * message, 
  	       long  limit_seconds, long  limit_microseconds) {
@@ -219,11 +776,88 @@ void run_test (extDnsRegressionTest test, const char * test_name, const char * m
 }
 
 int main (int argc, char ** argv) {
+	const char * run_test_name = NULL;
+	int iterator;
+	
+	printf ("** extDns Library: A DNS framework\n");
+	printf ("** Copyright (C) 2012 Advanced Software Production Line, S.L.\n**\n");
+	printf ("** extDns Regression tests: version=%s\n**\n",
+		VERSION);
+	printf ("** To gather information about memory consumed (and leaks) use:\n**\n");
+	printf ("**     >> libtool --mode=execute valgrind --leak-check=yes --error-limit=no ./exn-dns-regression-client\n**\n");
+	printf ("** Additional settings:\n");
+	printf ("**\n");
+	printf ("**     >> ./ext-dns-regression-client --[run-test=NAME] [dns-server [dns-port]] \n");
+	printf ("**        by default dns-server=localhost dns-port=53\n");
+	printf ("**\n");
+	printf ("**       Providing --run-test=NAME will run only the provided regression test.\n");
+	printf ("**       Test available: test_01, test_02, test_03, test_04, test_05\n");
+	printf ("**\n");
+
+	/* check for disable-time-checks */
+	if (argc > 1 && axl_memcmp (argv[1], "--run-test=", 11)) {
+		run_test_name  = argv[1] + 11;
+		iterator       = 1;
+		argc--;
+
+		printf ("INFO: running test=%s\n", run_test_name);
+		while (iterator <= argc) {
+			argv[iterator] = argv[iterator+1];
+			iterator++;
+		} /* end while */
+	} /* end if */
+
+	/* check server destination */
+	if (argc > 1) 
+		dns_server = argv[1];
+
+	if (run_test_name) {
+		printf ("INFO: Checking to run test: %s..\n", run_test_name);
+		
+		if (check_and_run_test (run_test_name, "test_01"))
+			run_test (test_01, "Test 01", "basic extDNS initialization", -1, -1);
+
+		if (check_and_run_test (run_test_name, "test_02"))
+			run_test (test_02, "Test 02", "basic A query", -1, -1);
+
+		if (check_and_run_test (run_test_name, "test_03"))
+			run_test (test_03, "Test 03", "basic MX query", -1, -1);
+
+		if (check_and_run_test (run_test_name, "test_04"))
+			run_test (test_04, "Test 04", "basic CNAME query", -1, -1);
+
+		if (check_and_run_test (run_test_name, "test_05"))
+			run_test (test_05, "Test 05", "basic CNAME as A query", -1, -1);
+
+		if (check_and_run_test (run_test_name, "test_06"))
+			run_test (test_06, "Test 06", "basic NS query", -1, -1);
+
+		if (check_and_run_test (run_test_name, "test_07"))
+			run_test (test_07, "Test 07", "basic TXT query", -1, -1);
+
+		goto finish;
+	}
 
 	/* tests */
 	run_test (test_01, "Test 01", "basic extDNS initialization", -1, -1);
 
 	run_test (test_02, "Test 02", "basic A query", -1, -1);
+
+	run_test (test_03, "Test 03", "basic MX query", -1, -1);
+
+	run_test (test_04, "Test 04", "basic CNAME query", -1, -1);
+
+	run_test (test_05, "Test 05", "basic CNAME as A query", -1, -1);
+
+	run_test (test_06, "Test 06", "basic NS query", -1, -1);
+
+	run_test (test_07, "Test 07", "basic TXT query", -1, -1);
+
+finish:
+
+	printf ("**\n");
+	printf ("** INFO: All test ok!\n");
+	printf ("**\n");
 	
 	return 0;
 }
