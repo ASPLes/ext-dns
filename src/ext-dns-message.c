@@ -274,7 +274,7 @@ axl_bool ext_dns_message_parse_resource_record (extDnsCtx * ctx, extDnsResourceR
 		rr->name_content = axl_new (char, rr->rdlength + 1);
 		memcpy (rr->name_content, rr->rdata + 1, rr->rdlength -1);
 	} else if (rr->type == extDnsTypePTR) {
-		/* get TXT content */
+		/* get PTR content */
 		rr->name_content = ext_dns_message_get_resource_name (ctx, buf, buf_size, &value, &is_label);
 	} else if (rr->type == extDnsTypeSOA) {
 
@@ -314,6 +314,23 @@ axl_bool ext_dns_message_parse_resource_record (extDnsCtx * ctx, extDnsResourceR
 	return axl_true; /* return parse ok */
 }
 
+/** 
+ * @brief Allows to check if the provided \ref extDnsMessage is query (QR == 0).
+ * @param message The extDnsMessage to check to be a query.
+ *
+ * @return axl_true if the message is a query, otherwise axl_false is
+ * returned. Keep in mind that the function will return axl_false in
+ * the case of NULL reference received.
+ */
+axl_bool        ext_dns_message_is_query (extDnsMessage * message)
+{
+	if (message == NULL || message->header == NULL)
+		return axl_false;
+
+	/* return if it is a query */
+	return message->header->is_query;
+}
+
 
 axlPointer ext_dns_message_release_and_return (extDnsMessage * message)
 {
@@ -336,6 +353,9 @@ extDnsMessage * ext_dns_message_parse_message (extDnsCtx * ctx, extDnsHeader * h
 	message = axl_new (extDnsMessage, 1);
 	if (message == NULL)
 		return NULL;
+
+	/* buffer size */
+	message->message_size = buf_size;
 
 	/* initialize mutex */
 	ext_dns_mutex_create (&message->mutex);
@@ -379,8 +399,8 @@ extDnsMessage * ext_dns_message_parse_message (extDnsCtx * ctx, extDnsHeader * h
 		/* ext_dns_log (EXT_DNS_LEVEL_DEBUG, "qclass received = %d", message->questions[count].qclass); */
 
 		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Question item received: %s %s %s",
-			     message->questions[count].qname, ext_dns_message_get_qtype_from_str (message->questions[count].qtype), 
-			     ext_dns_message_get_qclass_from_str (message->questions[count].qclass));
+			     message->questions[count].qname, ext_dns_message_get_qtype_to_str (ctx, message->questions[count].qtype), 
+			     ext_dns_message_get_qclass_to_str (ctx, message->questions[count].qclass));
 
 		/* next section */
 		count++;
@@ -440,15 +460,168 @@ extDnsMessage * ext_dns_message_parse_message (extDnsCtx * ctx, extDnsHeader * h
 	return message;
 }
 
+
 /** 
- * @internal Allows to build a reply using the provided header with
- * the provided data. The result is left into buffer so the user can
- * send it.
+ * @internal Function to dump DNS resource record into a buffer ready
+ * to be sent to the network.
  */
-int             ext_dns_message_build_reply (extDnsCtx * ctx, extDnsMessage * message, char * buffer, 
-					     int ttl, const char * data)
+int __ext_dns_message_write_resource_record (extDnsCtx * ctx, extDnsResourceRecord * rr, char * buffer, int buffer_size, int position)
+{
+
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "PLACING Resource record:  Encoding resource name: %s", rr->name);
+	position += ext_dns_encode_domain_name (ctx, rr->name, buffer + position);
+	
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "   name position after placing name: %d", position);
+	
+	/* set TYPE */
+	ext_dns_set_16bit (rr->type, buffer + position);
+	/* ext_dns_show_byte (ctx, buffer[position], "TYPE[0]");
+	   ext_dns_show_byte (ctx, buffer[position + 1], "TYPE[1]"); */
+	
+	/* next two bytes */
+	position += 2;
+	
+	/* set CLASS */
+	ext_dns_set_16bit (rr->class, buffer + position);
+	/* ext_dns_show_byte (ctx, buffer[position], "CLASS[0]");
+	   ext_dns_show_byte (ctx, buffer[position + 1], "CLASS[1]"); */
+		
+	/* next two bytes */
+	position += 2;
+	
+	/* set TTL */
+	ext_dns_set_32bit (rr->ttl, buffer + position);
+	
+	/* next four bytes */
+	position += 4;
+
+	/* set RDLENGTH and RDATA according to the type */
+	if (rr->type == extDnsTypeA) {
+		/* set RDLENGTH */
+		ext_dns_set_16bit (rr->rdlength, buffer + position);
+		/* next four bytes */
+		position += 2;
+
+		/* set RDATA */
+		memcpy (buffer + position, rr->rdata, rr->rdlength);
+
+		/* next record */
+		position += rr->rdlength;
+	} else if (rr->type == extDnsTypeMX) {
+		/* set RDLENGTH */
+		/* resource record + initial count + ending \0 + 2 mx preference */
+		ext_dns_set_16bit (strlen (rr->name_content) + 4, buffer + position);
+		/* next four bytes */
+		position += 2;
+
+		/* set MX preference */
+		ext_dns_set_16bit (rr->preference, buffer + position);
+		position += 2;
+
+		/* encode MX server */
+		position += ext_dns_encode_domain_name (ctx, rr->name_content, buffer + position);
+
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "   written rdlength: %d", strlen (rr->name_content) + 4);
+
+	} else if (rr->type == extDnsTypeCNAME || rr->type == extDnsTypePTR || rr->type == extDnsTypeNS) {
+
+		/* set RDLENGTH */
+		/* resource record + initial count + ending \0 */
+		ext_dns_set_16bit (strlen (rr->name_content) + 2, buffer + position);
+		/* next four bytes */
+		position += 2;
+
+		/* encode CNAME, PTR or NS value */
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "  enconding type %s: %s", ext_dns_message_get_qtype_to_str (ctx, rr->type), rr->name_content);
+		position += ext_dns_encode_domain_name (ctx, rr->name_content, buffer + position);
+
+	} else if (rr->type == extDnsTypeTXT) {
+		/* set RDLENGTH */
+		ext_dns_set_16bit (rr->rdlength, buffer + position);
+		/* next four bytes */
+		position += 2;
+
+		/* set RDATA as received */
+		memcpy (buffer + position, rr->rdata, rr->rdlength);
+
+		/* next record */
+		position += rr->rdlength;
+	} else if (rr->type == extDnsTypeSOA) {
+		/* set RDLENGTH */
+		ext_dns_set_16bit (strlen (rr->mname) + strlen (rr->contact_address) + 16, buffer + position);
+		/* next four bytes */
+		position += 2;
+
+		/* encode mname value */
+		position += ext_dns_encode_domain_name (ctx, rr->mname, buffer + position);
+
+		/* encode contact address value */
+		position += ext_dns_encode_domain_name (ctx, rr->contact_address, buffer + position);
+
+		/* set serial preference */
+		ext_dns_set_32bit (rr->serial, buffer + position);
+		position += 4;
+
+		/* set refresh preference */
+		ext_dns_set_32bit (rr->refresh, buffer + position);
+		position += 4;
+
+		/* set retry preference */
+		ext_dns_set_32bit (rr->retry, buffer + position);
+		position += 4;
+
+		/* set expire preference */
+		ext_dns_set_32bit (rr->expire, buffer + position);
+		position += 4;
+
+		/* set minimum preference */
+		ext_dns_set_32bit (rr->minimum, buffer + position);
+		position += 4;
+	} else {
+		/**** UNKNOWN RECORD ****/
+		/* unknown record type, write it as received */
+		ext_dns_set_16bit (rr->rdlength, buffer + position);
+		position += 2;
+
+		/* set RDATA as received */
+		memcpy (buffer + position, rr->rdata, rr->rdlength);
+
+		/* next record */
+		position += rr->rdlength;
+	}
+
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "   after writting rdata section: %d", position);
+
+	return position;
+} 
+
+
+/** 
+ * @brief Allows to translate a DNS message represented by an
+ * extDnsMessage into its corresponding DNS message following the
+ * protocol ready to be sent.
+ *
+ * @param ctx The context where the message to buffer will take place.
+ *
+ * @param buffer The buffer where the content will be placed.
+ *
+ * @param buffer_size The buffer size. It must be 512 bytes size long.
+ *
+ * @return The function returns the number of bytes written into the
+ * buffer or -1 if it fails.
+ */
+int             ext_dns_message_to_buffer (extDnsCtx * ctx, extDnsMessage * message, char * buffer,  int buffer_size)
 {
 	int position;
+	int count;
+
+	/* check buffer size received */
+	if (buffer_size < 512)
+		return -1;
+
+	/* check values received */
+	if (message == NULL || buffer == NULL || ctx == NULL || message->header == NULL)
+		return -1;
 
 	/* clear buffer */
 	memset (buffer, 0, 512);
@@ -457,7 +630,39 @@ int             ext_dns_message_build_reply (extDnsCtx * ctx, extDnsMessage * me
 	ext_dns_set_16bit (message->header->id, buffer);
 
 	/* set QR */
-	ext_dns_set_bit (buffer + 2, 7);
+	if (! message->header->is_query)
+		ext_dns_set_bit (buffer + 2, 7);
+
+	/* set opcode */
+	if (message->header->opcode) {
+		switch (message->header->opcode) {
+		case 1:
+			/* set inverse query received */
+			ext_dns_set_bit (buffer + 2, 3);
+			break;
+		case 2:
+			/* set server status request received */
+			ext_dns_set_bit (buffer + 2, 4);
+			break;
+		default:
+			/* reserved for future usage */
+			break;
+		} /* end if */
+	} /* end if */
+
+	/* set AA if defined */
+	if (message->header->is_authorative_answer)
+		ext_dns_set_bit (buffer + 2, 2);
+
+	/* set TC if defined */
+	/* STILL NOT SUPPORTED */
+
+	/* set RD if defined */
+	if (message->header->recursion_desired)
+		ext_dns_set_bit (buffer + 2, 0);
+	/* set RA if defined */
+	if (message->header->recursion_available)
+		ext_dns_set_bit (buffer + 3, 7);
 
 	/* set RD if requested by the user */
 	if (message->header->recursion_desired)
@@ -466,87 +671,208 @@ int             ext_dns_message_build_reply (extDnsCtx * ctx, extDnsMessage * me
 	/* set RA if recursion is available */
 	ext_dns_set_bit (buffer + 3, 7);
 
+	/* set RCODE */
+	if (message->header->rcode) {
+		switch (message->header->rcode) {
+		case extDnsResponseFormarError:
+			/* Format error - the name server was unable to interpret the query */
+			/* 01 */
+			ext_dns_set_bit (buffer + 3, 0);
+			break;
+		case extDnsResponseServerFailure:
+			/* Server failure - The name server was unable
+			 * to process this query due to a problem with
+			 * the name server. */
+			/* 10 */
+			ext_dns_set_bit (buffer + 3, 1);
+			break;
+		case extDnsResponseNameError:
+			/* Name Error - Meaningful only for responses
+			 * from an authoritative name server, this
+			 * code signifies that the domain name
+			 * erferenced in the query does not exist */
+			/* 11 */
+			ext_dns_set_bit (buffer + 3, 1);
+			ext_dns_set_bit (buffer + 3, 0);
+			break;
+		case extDnsResponseNoImplementedError:
+			/* Not implemented - the name server does not
+			 * support the requested kind of query. */
+			/* 100 */
+			ext_dns_set_bit (buffer + 3, 2);
+			break;
+		case extDnsResponseRefused:
+			/* Refused - The name server refuses to
+			 * perform the specified operation for policy
+			 * reasons. For example, a name server may not
+			 * wish to provide the information to the
+			 * particular requester, or a name server may
+			 * not wish to perform a particular operation
+			 * (e.g, zone transfer) for particular data. */
+			/* 101 */
+			ext_dns_set_bit (buffer + 3, 2);
+			ext_dns_set_bit (buffer + 3, 0);
+			break;
+		default:
+			break;
+		}
+	}
+
 	/* set QDCOUNT count */
-	ext_dns_set_16bit (1, buffer + 4);
+	ext_dns_set_16bit (message->header->query_count, buffer + 4);
 
 	/* set ANCOUNT count */
-	ext_dns_set_16bit (1, buffer + 6);
+	ext_dns_set_16bit (message->header->answer_count, buffer + 6);
+
+	/* set NSCOUNT count */
+	ext_dns_set_16bit (message->header->authority_count, buffer + 8);
+
+	/* set ARCOUNT count */
+	ext_dns_set_16bit (message->header->additional_count, buffer + 10);
 
 	/* first position */
 	position = 12;
 
-	/*** PLACE QUESTION ***/
-	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "PLACING QUESTION:  Encoding resource name: %s", message->questions[0].qname);
-	position += ext_dns_encode_domain_name (ctx, message->questions[0].qname, buffer + position);
+	/*** PLACE QUESTIONS ***/
+	count = 0;
+	while (count < message->header->query_count) {
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "PLACING QUESTION:  Encoding resource name: %s", message->questions[count].qname);
+		position += ext_dns_encode_domain_name (ctx, message->questions[count].qname, buffer + position);
+		
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "   qname position after placing name: %d", position);
+		
+		/* set TYPE */
+		ext_dns_set_16bit (message->questions[count].qtype, buffer + position);
+		/* ext_dns_show_byte (ctx, buffer[position], "TYPE[0]");
+		   ext_dns_show_byte (ctx, buffer[position + 1], "TYPE[1]"); */
+		
+		/* next two bytes */
+		position += 2;
 
-	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "   qname position after placing name: %d", position);
+		/* set CLASS */
+		ext_dns_set_16bit (message->questions[count].qclass, buffer + position);
+		/* ext_dns_show_byte (ctx, buffer[position], "CLASS[0]");
+		   ext_dns_show_byte (ctx, buffer[position + 1], "CLASS[1]"); */
+		
+		/* next two bytes */
+		position += 2;
 
-	/* set TYPE */
-	ext_dns_set_16bit (message->questions[0].qtype, buffer + position);
-	/* ext_dns_show_byte (ctx, buffer[position], "TYPE[0]");
-	   ext_dns_show_byte (ctx, buffer[position + 1], "TYPE[1]"); */
-
-	/* next two bytes */
-	position += 2;
-
-	/* set CLASS */
-	ext_dns_set_16bit (message->questions[0].qclass, buffer + position);
-	/* ext_dns_show_byte (ctx, buffer[position], "CLASS[0]");
-	   ext_dns_show_byte (ctx, buffer[position + 1], "CLASS[1]"); */
-
-	/* next two bytes */
-	position += 2;
+		/* next count */ 
+		count++;
+	}
 	
 	/*** PLACE ANSWER ****/
-	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "PLACING ANSWER:  Encoding resource name: %s", message->questions[0].qname);
-	position += ext_dns_encode_domain_name (ctx, message->questions[0].qname, buffer + position);
+	count = 0;
+	while (count < message->header->answer_count) {
 
-	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "   qname position after placing name: %d", position);
+		/* dump resource record */
+		position = __ext_dns_message_write_resource_record (ctx, &message->answers[count], buffer, buffer_size, position);
 
-	/* set TYPE */
-	ext_dns_set_16bit (message->questions[0].qtype, buffer + position);
-	/* ext_dns_show_byte (ctx, buffer[position], "TYPE[0]");
-	   ext_dns_show_byte (ctx, buffer[position + 1], "TYPE[1]"); */
+		/* next count */ 
+		count++;
+	}
 
-	/* next two bytes */
-	position += 2;
+	/*** PLACE AUTHORITIES ****/
+	count = 0;
+	while (count < message->header->authority_count) {
 
-	/* set CLASS */
-	ext_dns_set_16bit (message->questions[0].qclass, buffer + position);
-	/* ext_dns_show_byte (ctx, buffer[position], "CLASS[0]");
-	   ext_dns_show_byte (ctx, buffer[position + 1], "CLASS[1]"); */
+		/* dump resource record */
+		position = __ext_dns_message_write_resource_record (ctx, &message->authorities[count], buffer, buffer_size, position);
 
-	/* next two bytes */
-	position += 2;
+		/* next count */ 
+		count++;
+	}
 
-	/* set TTL */
-	ext_dns_set_32bit (ttl, buffer + position);
-	/* ext_dns_show_byte (ctx, buffer[position], "TTL[0]");
-	ext_dns_show_byte (ctx, buffer[position + 1], "TTL[1]");
-	ext_dns_show_byte (ctx, buffer[position + 2], "TTL[2]");
-	ext_dns_show_byte (ctx, buffer[position + 3], "TTL[3]");*/
+	/*** PLACE ADDITIONALS ****/
+	count = 0;
+	while (count < message->header->additional_count) {
 
+		/* dump resource record */
+		position = __ext_dns_message_write_resource_record (ctx, &message->additionals[count], buffer, buffer_size, position);
 
-	/* next four bytes */
-	position += 4;
-
-	/* set RDLENGTH (hard code IP) */
-	ext_dns_set_16bit (4, buffer + position);
-	/* ext_dns_show_byte (ctx, buffer[position], "RDLENGTH[0]");
-	   ext_dns_show_byte (ctx, buffer[position + 1], "RDLENGTH[1]"); */
-
-	/* next four bytes */
-	position += 2;
-
-	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Writting A address at position: %d", position);
-
-	buffer[position]     = 192;
-	buffer[position + 1] = 168;
-	buffer[position + 2] = 1;
-	buffer[position + 3] = 44;
+		/* next count */ 
+		count++;
+	}
 
 	/* return bytes written in the buffer */
-	return position + 4;
+	return position;
+}
+
+/** 
+ * @brief Allows to run a query to the provided server, getting the
+ * reply on the provided handler.
+ *
+ * @param ctx The context where the query will take place.
+ *
+ * @param type The type (A, a, MX, mx,...) that is being queried.
+ *
+ * @param class The class type to query (IN, in, ..).
+ *
+ * @param name The query name for which the value is requested.
+ *
+ * @param server The server address to send the query to.
+ *
+ * @param server_port The server port where to send the query to.
+ *
+ * @param on_message The handler that will be called with the reply
+ * once received.
+ *
+ * @param data A user defined pointer that is passed to the on_message
+ * handler when called.
+ * 
+ * @return axl_true in the case the query was issued, otherwise
+ * axl_false in the case some parameter received is wrong or the
+ * function wasn't able to send the query. NOTE you have to check this
+ * return value because the on_message handler is only called when the
+ * query was sent. In the case the function return axl_false, the
+ * query won't be sent and your on_message handler won't be called.
+ */
+axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type, extDnsClass _class, const char * name, 
+					       const char * server, int server_port,
+					       extDnsOnMessageReceived on_message, axlPointer data)
+{
+	char                 buffer[512];
+	extDnsSession      * listener;
+	int                  bytes_written;
+	extDnsHeader       * header;
+
+	if (_type == -1) 
+		return axl_false;
+	if (_class == -1) 
+		return axl_false;
+
+	/* build the query */
+	bytes_written = ext_dns_message_build_query (ctx, name, _type, _class, buffer, &header);
+	if (bytes_written <= 0) {
+		ext_dns_log (EXT_DNS_LEVEL_WARNING, "ERROR: failed to build query message, buffer reported was %d size\n", bytes_written);
+		return axl_false;
+	} /* end if */
+
+	/* create listener */
+	listener = ext_dns_listener_new2 (ctx, "0.0.0.0", 0, extDnsUdpSession, NULL, NULL);
+	if (! ext_dns_session_is_ok (listener, axl_false)) {
+		ext_dns_log (EXT_DNS_LEVEL_WARNING, "ERROR: failed to start listener to receive the reply");
+		return axl_false; 
+	}
+
+	/* configure on received message */
+	ext_dns_session_set_on_message (listener, on_message, data);
+
+	/* configure close listener on reply */
+	listener->close_on_message = axl_true;
+
+	/* set header to be used to check reply received */
+	listener->expected_header = header;
+
+	/* send message */
+	if (ext_dns_session_send_udp_s (ctx, listener, buffer, bytes_written, server, 53) != bytes_written) {
+		ext_dns_log (EXT_DNS_LEVEL_WARNING, "ERROR: failed to message..");
+		return axl_false;
+	} /* end if */
+
+
+	/* message sent */
+	return axl_true;
 }
 
 /** 
@@ -584,51 +910,73 @@ axl_bool            ext_dns_message_query (extDnsCtx * ctx, const char * type, c
 {
 	extDnsType           _type;
 	extDnsClass          _class;
-	char                 buffer[512];
-	extDnsSession      * listener;
-	int                  bytes_written;
-	extDnsHeader       * header;
 
 	/* check qtype and qclass received */
-	_type  = ext_dns_message_get_qtype (type);
-	_class = ext_dns_message_get_qclass (class);
-	if (_type == -1)
-		return axl_false;
-	if (_class == -1) 
-		return axl_false;
+	_type  = ext_dns_message_get_qtype (ctx, type);
+	_class = ext_dns_message_get_qclass (ctx, class);
 
-	/* build the query */
-	bytes_written = ext_dns_message_build_query (ctx, name, _type, _class, buffer, &header);
-	if (bytes_written <= 0) {
-		ext_dns_log (EXT_DNS_LEVEL_WARNING, "ERROR: failed to build query message, buffer reported was %d size\n", bytes_written);
-		return axl_false;
-	} /* end if */
+	/* call query int */
+	return ext_dns_message_query_int (ctx, _type, _class, name, server, server_port, on_message, data);
+}
 
-	/* create listener */
-	listener = ext_dns_listener_new2 (ctx, "0.0.0.0", 0, extDnsUdpSession, NULL, NULL);
-	if (! ext_dns_session_is_ok (listener, axl_false)) {
-		ext_dns_log (EXT_DNS_LEVEL_WARNING, "ERROR: failed to start listener to receive the reply");
-		return axl_false; 
+/** 
+ * @brief Allows to run a query to the provided server, using the
+ * provided message as the query to be done, getting the reply on the
+ * provided handler.
+ *
+ * The function works as \ref ext_dns_message_query, but getting the
+ * query values from the \ref extDnsMessage object. That message
+ * doesn't have to be a query, but it has to have the query section
+ * defined so the function call look into type, name and class values.
+ *
+ * @param ctx The context where the query will take place.
+ *
+ * @param message The message where the values for type, name and
+ * class will be taken from the query section.
+ *
+ * @param server The server address to send the query to.
+ *
+ * @param server_port The server port where to send the query to.
+ *
+ * @param on_message The handler that will be called with the reply
+ * once received.
+ *
+ * @param data A user defined pointer that is passed to the on_message
+ * handler when called.
+ * 
+ * @return axl_true in the case the query was issued, otherwise
+ * axl_false in the case some parameter received is wrong or the
+ * function wasn't able to send the query. NOTE you have to check this
+ * return value because the on_message handler is only called when the
+ * query was sent. In the case the function return axl_false, the
+ * query won't be sent and your on_message handler won't be called.
+ */
+axl_bool        ext_dns_message_query_from_msg (extDnsCtx * ctx, extDnsMessage * message,
+						const char * server, int server_port,
+						extDnsOnMessageReceived on_message, axlPointer data)
+{
+	/* check message reference */
+	if (message == NULL || message->header == NULL)  {
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Received null message or a message without header, failed to send from message");
+		return axl_false;
 	}
 
-	/* configure on received message */
-	ext_dns_session_set_on_message (listener, on_message, data);
-
-	/* configure close listener on reply */
-	listener->close_on_message = axl_true;
-
-	/* set header to be used to check reply received */
-	listener->expected_header = header;
-
-	/* send message */
-	if (ext_dns_session_send_udp_s (ctx, listener, buffer, bytes_written, server, 53) != bytes_written) {
-		ext_dns_log (EXT_DNS_LEVEL_WARNING, "ERROR: failed to message..");
+	/* no query question found */
+	if (message->header->query_count <= 0) {
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Found query count %d <= 0, failed to send from message", message->header->query_count);
 		return axl_false;
-	} /* end if */
+	}
 
-
-	/* message sent */
-	return axl_true;
+	/* call base common function */
+	return ext_dns_message_query_int (ctx, 
+					  /* send query values */
+					  message->questions[0].qtype, 
+					  message->questions[0].qclass,
+					  message->questions[0].qname,
+					  /* server and port to query */
+					  server, server_port,
+					  /* reply handlers */
+					  on_message, data);
 }
 
 /** 
@@ -840,7 +1188,7 @@ int             ext_dns_message_build_query (extDnsCtx * ctx, const char * qname
  *
  * @return extDnsType or -1 if it fails.
  */
-extDnsType      ext_dns_message_get_qtype (const char * qtype)
+extDnsType      ext_dns_message_get_qtype (extDnsCtx * ctx, const char * qtype)
 {
 	/* get input value */
 	if (qtype == NULL || strlen (qtype) == 0)
@@ -878,6 +1226,8 @@ extDnsType      ext_dns_message_get_qtype (const char * qtype)
 		return extDnsTypeMX;
 	if (axl_cmp (qtype, "TXT") || axl_cmp (qtype, "txt"))
 		return extDnsTypeTXT;
+	if (axl_cmp (qtype, "AAAA") || axl_cmp (qtype, "aaaa"))
+		return extDnsTypeAAAA;
 	if (axl_cmp (qtype, "AXFR") || axl_cmp (qtype, "axfr"))
 		return extDnsTypeAXFR;
 	if (axl_cmp (qtype, "MAILB") || axl_cmp (qtype, "mailb"))
@@ -888,6 +1238,7 @@ extDnsType      ext_dns_message_get_qtype (const char * qtype)
 		return extDnsTypeANY;
 
 	/* unrecognized character */
+	ext_dns_log (EXT_DNS_LEVEL_WARNING, "Unsupported qtype received: %s", qtype ? qtype : "");
 	return -1;
 }
 
@@ -898,7 +1249,7 @@ extDnsType      ext_dns_message_get_qtype (const char * qtype)
  *
  * @return A string representing the type or NULL if it fails.
  */
-const char *      ext_dns_message_get_qtype_from_str (extDnsType type)
+const char *      ext_dns_message_get_qtype_to_str (extDnsCtx * ctx, extDnsType type)
 {
 	if (type == extDnsTypeA)
 		return "A";
@@ -930,6 +1281,8 @@ const char *      ext_dns_message_get_qtype_from_str (extDnsType type)
 		return "MX";
 	if (type == extDnsTypeTXT)
 		return "TXT";
+	if (type == extDnsTypeAAAA)
+		return "AAAA";
 	if (type == extDnsTypeAXFR)
 		return "AXFR";
 	if (type == extDnsTypeMAILB)
@@ -940,6 +1293,7 @@ const char *      ext_dns_message_get_qtype_from_str (extDnsType type)
 		return "ANY";
 
 	/* unrecognized type */
+	ext_dns_log (EXT_DNS_LEVEL_WARNING, "Unsupported qtype received: %d", type);
 	return NULL;
 }
 
@@ -950,7 +1304,7 @@ const char *      ext_dns_message_get_qtype_from_str (extDnsType type)
  *
  * @return extDnsClass or -1 if it fails.
  */
-extDnsClass     ext_dns_message_get_qclass (const char * qclass)
+extDnsClass     ext_dns_message_get_qclass (extDnsCtx * ctx, const char * qclass)
 {
 	/* get input value */
 	if (qclass == NULL || strlen (qclass) == 0)
@@ -968,6 +1322,7 @@ extDnsClass     ext_dns_message_get_qclass (const char * qclass)
 		return extDnsClassANY;
 
 	/* unrecognized class */
+	ext_dns_log (EXT_DNS_LEVEL_WARNING, "Unsupported qclass received: %s", qclass ? qclass : "");
 	return -1;
 }
 
@@ -978,7 +1333,7 @@ extDnsClass     ext_dns_message_get_qclass (const char * qclass)
  *
  * @return The string representing the class or NULL if it fails (unrecognized code)
  */
-const char *     ext_dns_message_get_qclass_from_str (extDnsClass class)
+const char *     ext_dns_message_get_qclass_to_str (extDnsCtx * ctx, extDnsClass class)
 {
 	if (class == extDnsClassIN)
 		return "IN";
@@ -992,39 +1347,7 @@ const char *     ext_dns_message_get_qclass_from_str (extDnsClass class)
 		return "*";
 
 	/* unrecognized class */
+	ext_dns_log (EXT_DNS_LEVEL_WARNING, "Unsupported class received: %d", class);
 	return NULL;
 }
 
-/** 
- * @internal Allows to get a printable representation from the rdata
- * section that holds the provided resource record.
- *
- * @param rr The resource record to get printable rdata from.
- *
- * @return A reference to the printable rdata found or NULL if it
- * fails.
- */
-char *          ext_dns_message_get_printable_rdata (extDnsCtx * ctx, extDnsResourceRecord * rr)
-{
-	char * resource_name;
-	char * result;
-
-	if (rr == NULL)
-		return NULL;
-	
-	if (rr->type == extDnsTypeA) {
-		return axl_strdup_printf ("%d.%d.%d.%d", 
-					  ext_dns_get_8bit (rr->rdata), 
-					  ext_dns_get_8bit (rr->rdata + 1), 
-					  ext_dns_get_8bit (rr->rdata + 2), 
-					  ext_dns_get_8bit (rr->rdata + 3));
-	} else if (rr->type == extDnsTypeMX) {
-		/* build label */
-		resource_name = ext_dns_message_get_resource_name (ctx, rr->rdata + 2, rr->rdlength - 2, 0, NULL);
-		result        =  axl_strdup_printf ("%d %s", ext_dns_get_16bit (rr->rdata), resource_name);
-		axl_free (resource_name);
-		return result;
-	} /* end if */
-	
-	return NULL;
-}

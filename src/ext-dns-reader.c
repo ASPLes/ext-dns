@@ -105,10 +105,6 @@ axlPointer __ext_dns_reader_on_message_received (extDnsOnMessageReceivedData * d
 
 	/* check expected header */
 	if (session->expected_header) {
-		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Pointers received: %p", session);
-		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Pointers received: %p", session->expected_header);
-		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Pointers received: %p", message);
-		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Pointers received: %p", message->header);
 		
 		/* do some additional checkings */
 		if (session->expected_header->id != message->header->id) {
@@ -255,19 +251,6 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 	ext_dns_thread_pool_new_task (ctx, (extDnsThreadFunc) __ext_dns_reader_on_message_received, data);
 
 	return;
-
-	/* prototype code */
-
-	/* build reply and send reply */
-	bytes_read = ext_dns_message_build_reply (ctx, message, buf, 3600, "192.168.0.23");
-
-	/* send message */
-	if (sendto (session->session, buf, bytes_read, 0, (struct sockaddr *) &remote_addr, sin_size) <= 0) {
-		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Failed to send DNS reply, sendto system call failed",
-			     bytes_read);
-		return;
-	} /* end if */
-
 }
 
 /** 

@@ -1229,7 +1229,7 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
 		buffer[iterator + 1] = value[iterator];
 		
 		if (buffer[iterator + 1] == '.' || value[iterator + 1] == '\0') {
-			ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Setting counter value %d, at %d", counter - 1, last_position - buffer);
+			/* ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Setting counter value %d, at %d", counter - 1, last_position - buffer); */
 
 			/* set last position count and reset current counter */
 			if (value[iterator + 1] == '\0')
@@ -1260,7 +1260,8 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
 
 	iterator ++;
 
-	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Total length encoded was: %d, iter=%d", strlen (buffer) + 1, iterator);
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Total length encoded was: %d, iter=%d (for: %s, real length: %d)", 
+		     strlen (buffer) + 1, iterator, value, strlen (value));
 
 	return strlen (buffer) + 1;
 }

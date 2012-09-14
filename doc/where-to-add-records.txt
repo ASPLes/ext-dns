@@ -1,0 +1,5 @@
+1) Updated ext-dns-types.h to include:
+ 
+     extDnsType[Record] = [right value]
+
+2) Updated ext-dns-message.c to support that message
