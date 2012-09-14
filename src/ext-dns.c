@@ -1206,7 +1206,12 @@ void   ext_dns_set_32bit (int value, char * buffer)
  */
 int    ext_dns_get_32bit (const char * buffer)
 {
-	return (int)(buffer[0] << 24) | (int)(buffer[1] << 16) | (int)(buffer[2] << 8) | (int)(buffer[0]);
+	int part1 = (int)(buffer[0] & 0x0ff) << 24;
+	int part2 = (int)(buffer[1] & 0x0ff) << 16;
+	int part3 = (int)(buffer[2] & 0x0ff) << 8;
+	int part4 = (int)(buffer[3] & 0x0ff);
+
+	return part1 | part2 | part3 | part4;
 }
 
 /** 

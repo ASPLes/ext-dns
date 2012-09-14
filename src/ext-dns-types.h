@@ -712,7 +712,16 @@ typedef struct _extDnsResourceRecord {
 
 	/* MX specific values */
 	int            preference;
-	
+
+	/* SOA specific values */
+	char         * mname;
+	char         * contact_address;
+	int            serial;
+	int            refresh;
+	int            retry;
+	int            expire;
+	int            minimum;
+
 	/* raw data received */
 	int            rdlength;
 	char         * rdata;
