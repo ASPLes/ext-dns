@@ -705,6 +705,94 @@ axl_bool test_07 (void) {
 	return axl_true; /* return ok */
 }
 
+axl_bool test_08 (void) {
+
+	extDnsCtx        * ctx;
+	extDnsMessage    * message;
+	extDnsAsyncQueue * queue;
+
+	/* create context object */
+	ctx = ext_dns_ctx_new ();
+	if (ctx == NULL) {
+		printf ("ERROR: failed to allocate ctx object..\n");
+		return axl_false;
+	}
+
+	/* init context */
+	if (! ext_dns_init_ctx (ctx)) {
+		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
+		return axl_false;
+	}
+
+	/* run query and check results */
+	queue = ext_dns_async_queue_new ();
+	ext_dns_message_query (ctx, "soa", "in", "aspl.es", dns_server, dns_server_port, queue_reply, queue);
+
+	/* get reply (timeout in 3seconds) */
+	message = ext_dns_async_queue_timedpop (queue, 3000000);
+	if (message == NULL) {
+		printf ("ERROR: expected to find message reply but found NULL reference..\n");
+		return axl_false;
+	}
+
+	/* check header */
+	if (! check_header (message, 
+			    /* is query */ axl_false, 
+			    /* ans count */ 1, 
+			    /* query count */ 1,
+			    /* authority count */ 0,
+			    /* additional count */ 0))
+		return axl_false;
+
+	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content);   */
+ 	if (! check_answer (&message->answers[0], "aspl.es", extDnsTypeSOA, extDnsClassIN, NULL))
+		return axl_false;
+	/* printf ("values: mname=%s, rname=%s, serial=%d, refresh=%d, retry=%d, expire=%d, minimum=%d\n", 
+		message->answers[0].mname, message->answers[0].contact_address, message->answers[0].serial, message->answers[0].refresh, 
+		message->answers[0].retry, message->answers[0].expire, message->answers[0].minimum);  */
+	if (! axl_cmp (message->answers[0].mname, "ns1.cuentadns.com")) {
+		printf ("ERROR: expected to find ns1.cuentadns.com but found %s\n", message->answers[0].mname);
+		return axl_false;
+	}
+	if (! axl_cmp (message->answers[0].contact_address, "soporte.aspl.es")) {
+		printf ("ERROR: expected to find soporte.aspl.es but found %s\n", message->answers[0].contact_address);
+		return axl_false;
+	}
+	if (message->answers[0].serial != 2012091001) {
+		printf ("ERROR: expected to find %d but found %d\n", 2012091001, message->answers[0].serial);
+		return axl_false;
+	}
+
+	if (message->answers[0].refresh != 10800) {
+		printf ("ERROR: expected to find %d but found %d\n", 10800, message->answers[0].refresh);
+		return axl_false;
+	}
+
+	if (message->answers[0].retry != 3600) {
+		printf ("ERROR: expected to find %d but found %d\n", 3600, message->answers[0].retry);
+		return axl_false;
+	}
+	if (message->answers[0].expire != 604800) {
+		printf ("ERROR: expected to find %d but found %d\n", 604800, message->answers[0].expire);
+		return axl_false;
+	}
+	if (message->answers[0].minimum != 3600) {
+		printf ("ERROR: expected to find %d but found %d\n", 3600, message->answers[0].minimum);
+		return axl_false;
+	}
+	
+
+	/* release message */
+	ext_dns_message_unref (message);
+
+	ext_dns_async_queue_unref (queue);
+
+	/* terminate process */
+	ext_dns_exit_ctx (ctx, axl_true);
+
+	return axl_true; /* return ok */
+}
+
 typedef axl_bool  (*extDnsRegressionTest) (void);
 
 axl_bool disable_time_checks = axl_true;
@@ -835,6 +923,9 @@ int main (int argc, char ** argv) {
 		if (check_and_run_test (run_test_name, "test_07"))
 			run_test (test_07, "Test 07", "basic TXT query", -1, -1);
 
+		if (check_and_run_test (run_test_name, "test_08"))
+			run_test (test_08, "Test 08", "basic SOA query", -1, -1);
+
 		goto finish;
 	}
 
@@ -852,6 +943,8 @@ int main (int argc, char ** argv) {
 	run_test (test_06, "Test 06", "basic NS query", -1, -1);
 
 	run_test (test_07, "Test 07", "basic TXT query", -1, -1);
+
+	run_test (test_08, "Test 08", "basic TXT query", -1, -1);
 
 finish:
 

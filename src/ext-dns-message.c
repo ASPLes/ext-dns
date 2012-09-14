@@ -273,6 +273,38 @@ axl_bool ext_dns_message_parse_resource_record (extDnsCtx * ctx, extDnsResourceR
 		/* get TXT content */
 		rr->name_content = axl_new (char, rr->rdlength + 1);
 		memcpy (rr->name_content, rr->rdata + 1, rr->rdlength -1);
+	} else if (rr->type == extDnsTypeSOA) {
+
+		/* get mname */
+		rr->mname          = ext_dns_message_get_resource_name (ctx, buf, buf_size, &value, &is_label);
+
+		/* get rname */
+		rr->contact_address = ext_dns_message_get_resource_name (ctx, buf, buf_size, &value, &is_label);
+
+		/* get serial */
+		rr->serial  = ext_dns_get_32bit (buf + value);
+		value += 4;
+
+		/* get refresh */
+		rr->refresh = ext_dns_get_32bit (buf + value);
+		value += 4;
+
+		/* get retry */
+		rr->retry = ext_dns_get_32bit (buf + value);
+		value += 4;
+
+		/* get expire */
+		ext_dns_show_byte (ctx, buf[value], "expire[0] = ");
+		ext_dns_show_byte (ctx, buf[value + 1], "expire[1] = ");
+		ext_dns_show_byte (ctx, buf[value + 2], "expire[2] = ");
+		ext_dns_show_byte (ctx, buf[value + 3], "expire[3] = ");
+		rr->expire = ext_dns_get_32bit (buf + value);
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Reported expire value=%d", rr->expire);
+		value += 4;
+
+		/* get minimum */
+		rr->minimum = ext_dns_get_32bit (buf + value);
+		value += 4;
 	}
 
 	/* next position */
@@ -676,6 +708,8 @@ void ext_dns_message_unref (extDnsMessage * message)
 			axl_free (message->answers[count].name);
 			axl_free (message->answers[count].rdata);
 			axl_free (message->answers[count].name_content);
+			axl_free (message->answers[count].mname);
+			axl_free (message->answers[count].contact_address);
 			
 			count++;
 		}
@@ -691,6 +725,8 @@ void ext_dns_message_unref (extDnsMessage * message)
 			axl_free (message->authorities[count].name);
 			axl_free (message->authorities[count].rdata);
 			axl_free (message->authorities[count].name_content);
+			axl_free (message->authorities[count].mname);
+			axl_free (message->authorities[count].contact_address);
 			
 			count++;
 		}
@@ -706,6 +742,8 @@ void ext_dns_message_unref (extDnsMessage * message)
 			axl_free (message->additionals[count].name);
 			axl_free (message->additionals[count].rdata);
 			axl_free (message->additionals[count].name_content);
+			axl_free (message->additionals[count].mname);
+			axl_free (message->additionals[count].contact_address);
 		
 			count++;
 		}
