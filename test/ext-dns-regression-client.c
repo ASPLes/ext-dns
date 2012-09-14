@@ -759,8 +759,8 @@ axl_bool test_08 (void) {
 		printf ("ERROR: expected to find soporte.aspl.es but found %s\n", message->answers[0].contact_address);
 		return axl_false;
 	}
-	if (message->answers[0].serial != 2012091001) {
-		printf ("ERROR: expected to find %d but found %d\n", 2012091001, message->answers[0].serial);
+	if (message->answers[0].serial != 2012091403) {
+		printf ("ERROR: expected to find %d but found %d\n", 2012091403, message->answers[0].serial);
 		return axl_false;
 	}
 
@@ -883,50 +883,17 @@ axl_bool test_10 (void) {
 			    /* is query */ axl_false, 
 			    /* ans count */ 0, 
 			    /* query count */ 1,
-			    /* authority count */ 1,
+			    /* authority count */ 0,
 			    /* additional count */ 0))
 		return axl_false;
 
 	/* printf ("values: %s %d %d %s\n", message->authorities[0].name, message->authorities[0].type, 
 	   message->authorities[0].class, message->authorities[0].name_content);     */
- 	if (! check_answer (&message->authorities[0], "aspl.es", extDnsTypeSOA, extDnsClassIN, NULL))
+	if (message->header->rcode != extDnsResponseNameError ) {
+		printf ("ERROR: expected to find error code %d but found %d\n", message->header->rcode, extDnsResponseNameError);
 		return axl_false;
-
-	if (! axl_cmp (message->authorities[0].mname, "ns1.cuentadns.com")) {
-		printf ("ERROR: expected to find ns1.cuentadns.com but found %s\n", message->authorities[0].mname);
-		return axl_false;
-	}
-	if (! axl_cmp (message->authorities[0].contact_address, "soporte.aspl.es")) {
-		printf ("ERROR: expected to find soporte.aspl.es but found %s\n", message->authorities[0].contact_address);
-		return axl_false;
-	}
-	if (message->authorities[0].serial != 2012091403) {
-		printf ("ERROR: expected to find %d but found %d\n", 2012091403, message->authorities[0].serial);
-		return axl_false;
-	}
-
-	if (message->authorities[0].refresh != 10800) {
-		printf ("ERROR: expected to find %d but found %d\n", 10800, message->authorities[0].refresh);
-		return axl_false;
-	}
-
-	if (message->authorities[0].retry != 3600) {
-		printf ("ERROR: expected to find %d but found %d\n", 3600, message->authorities[0].retry);
-		return axl_false;
-	}
-	if (message->authorities[0].expire != 604800) {
-		printf ("ERROR: expected to find %d but found %d\n", 604800, message->authorities[0].expire);
-		return axl_false;
-	}
-	if (message->authorities[0].minimum != 3600) {
-		printf ("ERROR: expected to find %d but found %d\n", 3600, message->authorities[0].minimum);
-		return axl_false;
-	}
-
-	if (message->message_size != 108) {
-		printf ("ERROR: expected to fnid message size 108 but found: %d\n", message->message_size);
-		return axl_false;
-	}
+	} /* end if */
+	
 
 	/* release message */
 	ext_dns_message_unref (message);
@@ -1096,7 +1063,7 @@ int main (int argc, char ** argv) {
 
 	run_test (test_07, "Test 07", "basic TXT query", -1, -1);
 
-	run_test (test_08, "Test 08", "basic TXT query", -1, -1);
+	run_test (test_08, "Test 08", "basic SOA query", -1, -1);
 
 	run_test (test_09, "Test 09", "basic PTR query", -1, -1);
 

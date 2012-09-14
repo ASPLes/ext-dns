@@ -63,7 +63,7 @@ extDnsHeader * ext_dns_message_parse_header (extDnsCtx * ctx, const char * buf, 
 	header->is_query              = ext_dns_get_bit (buf[2], 7) == 0;
 
 	/* get opcode */
-	header->opcode                = (buf[2] >> 3 ) & 0x0000f;
+	header->opcode                = (buf[2] & 0x00f >> 3 );
 	/* ext_dns_show_byte (ctx, buf[2], "buf[2]");
 	   ext_dns_show_byte (ctx, header->opcode, "header->opcode"); */
 

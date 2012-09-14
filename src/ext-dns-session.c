@@ -819,7 +819,8 @@ int               __ext_dns_session_send_udp_common   (extDnsCtx     * ctx,
         memcpy(&dest_addr.sin_addr, haddr, sizeof(struct in_addr));
 	
 	/* enviamos el mensaje */
-	if ((numbytes = sendto (session, content, length, 0,(struct sockaddr *)&dest_addr, sizeof (struct sockaddr))) == -1) {
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Sending UDP message to %s:%d (size: %d)", address, port, length);
+	if ((numbytes = sendto (session, content, length, MSG_DONTWAIT,(struct sockaddr *)&dest_addr, sizeof (struct sockaddr))) == -1) {
 		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to send message, error was=%d", errno);
 
 		/* close socket */
