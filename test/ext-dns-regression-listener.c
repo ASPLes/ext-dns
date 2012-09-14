@@ -38,30 +38,158 @@
 
 #include <ext-dns.h>
 
-void on_received  (extDnsCtx     * ctx,
+#ifdef AXL_OS_UNIX
+#include <signal.h>
+#endif
+
+/* server we rely request to */
+const char * server = "8.8.8.8";
+int          server_port = 53;
+
+typedef struct _HandleReplyData {
+	int             id;
+	char          * source_address;
+	int             source_port;
+	extDnsSession * master_listener;
+} HandleReplyData;
+
+void handle_reply_data_free (HandleReplyData * data)
+{
+	axl_free (data->source_address);
+	axl_free (data);
+	return;
+}
+
+void handle_reply (extDnsCtx     * ctx,
 		   extDnsSession * session,
 		   const char    * source_address,
 		   int             source_port,
 		   extDnsMessage * message,
 		   axlPointer      data)
 {
-	int bytes_read;
-	char buf[1024];
+	char              buffer[512];
+	int               bytes_written;
+	HandleReplyData * reply_data = data;
+
+	if (message->answers) {
+		printf ("REPLY: received reply from %s:%d, values: %s %d %d %s\n", 
+			server, server_port,
+			message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content); 
+	} else {
+		printf ("REPLY: received reply from %s:%d\n", server, server_port);
+	}
+
+	/* ok, rewrite reply id to match the one sent by the client */
+	message->header->id = reply_data->id;
+
+	/* get the reply into a buffer */
+	bytes_written = ext_dns_message_to_buffer (ctx, message, buffer, 512);
+	if (bytes_written == -1) {
+		handle_reply_data_free (reply_data);
+
+		printf ("ERROR: failed to build buffer representation for reply received..\n");
+		return;
+	}
+	printf ("REPLY: build buffer reply in %d bytes\n", bytes_written);
+
+	/* relay reply to the regression client */
+	if (ext_dns_session_send_udp_s (ctx, reply_data->master_listener, buffer, bytes_written, reply_data->source_address, reply_data->source_port) != bytes_written) 
+		printf ("ERROR: failed to SEND UDP entire reply, expected to write %d bytes but something different was written\n", bytes_written);
+	else
+		printf ("INFO: reply sent!\n");
+	
+
+	/* release data */
+	handle_reply_data_free (reply_data);
+	return;
+}
+
+void on_received  (extDnsCtx     * ctx,
+		   extDnsSession * session,
+		   const char    * source_address,
+		   int             source_port,
+		   extDnsMessage * message,
+		   axlPointer      _data)
+{
+	axl_bool          result;
+	HandleReplyData * data;
 
 	printf ("INFO: received message from %s:%d..\n", source_address, source_port);
-	
-	/* build reply and send reply */
-	bytes_read = ext_dns_message_build_reply (ctx, message, buf, 3600, "192.168.0.23");
 
-	/* reply to the UDP resolver */
-	ext_dns_session_send_udp_s (ctx, session, buf, bytes_read, source_address, source_port);
+	/* skip messages that are queries */
+	if (! ext_dns_message_is_query (message)) {
+		printf ("ERROR: received a query message, dropping DNS message..\n");
+		return;
+	} /* end if */
+
+	/* build state data */
+	data                   = axl_new (HandleReplyData, 1);
+	data->id               = message->header->id;
+	data->source_address   = axl_strdup (source_address);
+	data->source_port      = source_port;
+	data->master_listener  = session;
+	
+	/* send query */
+	result = ext_dns_message_query_from_msg (ctx, message, server, server_port, handle_reply, data);
+	    
+	if (! result) 
+		printf ("ERROR: failed to send query to master server..\n");
+
+	return;
+}
+
+#ifdef AXL_OS_UNIX
+void __block_test (int value) 
+{
+	extDnsAsyncQueue * queue;
+
+	printf ("******\n");
+	printf ("****** Received a signal (the regression test is failing): pid %d..locking..!!!\n", ext_dns_getpid ());
+	printf ("******\n");
+
+	/* block the caller */
+	queue = ext_dns_async_queue_new ();
+	ext_dns_async_queue_pop (queue);
+
+	return;
+}
+#endif
+
+extDnsMutex doing_exit_mutex;
+axl_bool    __doing_exit = axl_false;
+
+extDnsCtx     * ctx = NULL;
+
+void __terminate_ext_dns_listener (int value)
+{
+	
+	ext_dns_mutex_lock (&doing_exit_mutex);
+	if (__doing_exit) {
+		ext_dns_mutex_unlock (&doing_exit_mutex);
+
+		return;
+	}
+	/* printf ("Terminating ext_dns regression listener..\n");*/
+	__doing_exit = axl_true;
+	ext_dns_mutex_unlock (&doing_exit_mutex);
+
+	/* unlocking listener */
+	/* printf ("Calling to unlock listener due to signal received: extDnsCtx %p", ctx); */
+	ext_dns_ctx_unlock (ctx);
 
 	return;
 }
 
 int main (int argc, char ** argv) {
-	extDnsCtx     * ctx;
 	extDnsSession * listener;
+
+	/* install default handling to get notification about
+	 * segmentation faults */
+#ifdef AXL_OS_UNIX
+	signal (SIGSEGV, __block_test);
+	signal (SIGABRT, __block_test);
+	signal (SIGTERM,  __terminate_ext_dns_listener);
+#endif
 	
 	/* create context object */
 	ctx = ext_dns_ctx_new ();

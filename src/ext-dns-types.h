@@ -643,6 +643,10 @@ typedef enum {
 	 */
 	extDnsTypeTXT    = 16,
 	/** 
+	 * IPv6 addresses
+	 */
+	extDnsTypeAAAA   = 28,
+	/** 
 	 * A request for a transfer of an entire zone
 	 */
 	extDnsTypeAXFR   = 252,
@@ -738,6 +742,9 @@ typedef struct _extDnsMessage {
 	 * future releases */
 	extDnsMutex            mutex;
 	int                    ref_count;
+
+	/* message size */
+	int                    message_size;
 } extDnsMessage;
 
 #endif /* __EXT_DNS_TYPES_H__ */

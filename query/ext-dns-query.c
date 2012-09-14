@@ -114,7 +114,6 @@ void ext_dns_query_on_message (extDnsCtx     * ctx,
 void ext_dns_query_show_message_as_host (extDnsCtx * ctx, extDnsMessage * message, const char * server, int server_port)
 {
 	int    count = 0;
-	char * printable_rdata;
 	/* extDnsResourceRecord * record; */
 
 	printf ("Using domain server:\n");
@@ -125,30 +124,25 @@ void ext_dns_query_show_message_as_host (extDnsCtx * ctx, extDnsMessage * messag
 
 	if (message->header->answer_count == 0) {
 		printf ("%s has no %s record\n", 
-			message->questions[0].qname, ext_dns_message_get_qtype_from_str (message->questions[0].qtype));
+			message->questions[0].qname, ext_dns_message_get_qtype_to_str (ctx, message->questions[0].qtype));
 		return;
 	}
 
 	while (count < message->header->answer_count) {
-		/* get printable data */
-		printable_rdata = ext_dns_message_get_printable_rdata (ctx, &message->answers[count]);
 		
 		/* get next count */
 		if (message->answers[count].type == extDnsTypeA)
-			printf ("%s has address %s\n", message->answers[count].name, printable_rdata);
+			printf ("%s has address %s\n", message->answers[count].name, message->answers[count].name_content);
 		else if (message->answers[count].type == extDnsTypeMX)
-			printf ("%s mail is handled by %s\n", message->answers[count].name, printable_rdata);
+			printf ("%s mail is handled by %s\n", message->answers[count].name, message->answers[count].name_content);
 		else
 			printf ("%s  %s  %s  ttl:%d   rdlength:%d\n", 
 				message->answers[count].name, 
-				ext_dns_message_get_qtype_from_str (message->answers[count].type), 
-				ext_dns_message_get_qclass_from_str (message->answers[count].class), 
+				ext_dns_message_get_qtype_to_str (ctx, message->answers[count].type), 
+				ext_dns_message_get_qclass_to_str (ctx, message->answers[count].class), 
 				message->answers[count].ttl,
 				message->answers[count].rdlength);
 
-
-		/* release printable rdata */
-		axl_free (printable_rdata);
 
 		/* next answer */
 		count++;
@@ -205,8 +199,8 @@ void ext_dns_query_do_request (extDnsCtx * ctx) {
 		qtype = exarg_get_string ("type");
 
 	/* check qtype and qclass received */
-	_qtype  = ext_dns_message_get_qtype (qtype);
-	_qclass = ext_dns_message_get_qclass (qclass);
+	_qtype  = ext_dns_message_get_qtype (ctx, qtype);
+	_qclass = ext_dns_message_get_qclass (ctx, qclass);
 	if (_qtype == -1) {
 		printf ("ERROR: provided a wrong qtype value: %s\n", qtype);
 		exit (-1);
