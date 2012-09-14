@@ -273,6 +273,9 @@ axl_bool ext_dns_message_parse_resource_record (extDnsCtx * ctx, extDnsResourceR
 		/* get TXT content */
 		rr->name_content = axl_new (char, rr->rdlength + 1);
 		memcpy (rr->name_content, rr->rdata + 1, rr->rdlength -1);
+	} else if (rr->type == extDnsTypePTR) {
+		/* get TXT content */
+		rr->name_content = ext_dns_message_get_resource_name (ctx, buf, buf_size, &value, &is_label);
 	} else if (rr->type == extDnsTypeSOA) {
 
 		/* get mname */
@@ -294,12 +297,7 @@ axl_bool ext_dns_message_parse_resource_record (extDnsCtx * ctx, extDnsResourceR
 		value += 4;
 
 		/* get expire */
-		ext_dns_show_byte (ctx, buf[value], "expire[0] = ");
-		ext_dns_show_byte (ctx, buf[value + 1], "expire[1] = ");
-		ext_dns_show_byte (ctx, buf[value + 2], "expire[2] = ");
-		ext_dns_show_byte (ctx, buf[value + 3], "expire[3] = ");
 		rr->expire = ext_dns_get_32bit (buf + value);
-		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Reported expire value=%d", rr->expire);
 		value += 4;
 
 		/* get minimum */
