@@ -77,6 +77,30 @@ typedef struct _extDnsOnMessageReceivedData {
 	extDnsCtx     * ctx;
 } extDnsOnMessageReceivedData;
 
+axl_bool __ext_dns_reader_consume_signal (extDnsCtx * ctx)
+{
+	char bytes[2];	
+	return recv (ctx->reader_pipe[0], bytes, 1, MSG_DONTWAIT) > 0;
+}
+
+axl_bool ext_dns_reader_was_awaken (extDnsCtx * ctx)
+{
+
+	if (ext_dns_io_waiting_invoke_is_set_fd_group (ctx, ctx->reader_pipe[0], ctx->on_reading, NULL)) {
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "FOUND SIGNAL AT INTERNAL PIPE, READER IS TIME TO WORK..");
+		__ext_dns_reader_consume_signal (ctx);
+		return axl_true;
+	}
+	return axl_false;
+}
+
+void ext_dns_reader_awake (extDnsCtx * ctx)
+{
+	if (send (ctx->reader_pipe[1], "w", 1, 0) != 1)
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to send awaken notification, error was errno=%d", errno);
+	return;
+}
+
 axlPointer __ext_dns_reader_on_message_received (extDnsOnMessageReceivedData * data)
 {
 	char          * source_address = data->source_address;
@@ -184,6 +208,17 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 
 	/* pointer to data received */
 	extDnsOnMessageReceivedData * data;
+
+	if (session == NULL) {
+		/* consume reader signal  and skip */
+		if (__ext_dns_reader_consume_signal (ctx)) {
+			ext_dns_log (EXT_DNS_LEVEL_DEBUG, "FOUND READER AWAKEN..");
+			return;
+		}
+
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Received NULL session reference (reader pipe?)");
+		return;
+	}
 
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Received query over session id=%d", 
 		     ext_dns_session_get_id (session));
@@ -299,6 +334,7 @@ axl_bool   ext_dns_reader_register_watch (extDnsReaderData * data, axlList * con
 			    ext_dns_session_get_host (session), 
 			    ext_dns_session_get_port (session));
 		axl_list_append (srv_list, session);
+
 		break;
 	case TERMINATE:
 	case IO_WAIT_CHANGED:
@@ -575,12 +611,16 @@ EXT_DNS_SOCKET __ext_dns_reader_build_set_to_watch_aux (extDnsCtx     * ctx,
 } /* end __ext_dns_reader_build_set_to_watch_aux */
 
 EXT_DNS_SOCKET   __ext_dns_reader_build_set_to_watch (extDnsCtx     * ctx,
-						    axlPointer      on_reading, 
-						    axlListCursor * con_cursor, 
-						    axlListCursor * srv_cursor)
+						      axlPointer      on_reading, 
+						      axlListCursor * con_cursor, 
+						      axlListCursor * srv_cursor)
 {
 
 	EXT_DNS_SOCKET       max_fds     = 0;
+
+	/* add the pipe */
+	if (! ext_dns_io_waiting_invoke_add_to_fd_group (ctx, ctx->reader_pipe[0], NULL, on_reading)) 
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to add reader pipe to watching set");
 
 	/* read server sessions */
 	max_fds = __ext_dns_reader_build_set_to_watch_aux (ctx, on_reading, srv_cursor, max_fds);
@@ -594,9 +634,9 @@ EXT_DNS_SOCKET   __ext_dns_reader_build_set_to_watch (extDnsCtx     * ctx,
 }
 
 void __ext_dns_reader_check_session_list (extDnsCtx     * ctx,
-					    axlPointer      on_reading, 
-					    axlListCursor * con_cursor, 
-					    int             changed)
+					  axlPointer      on_reading, 
+					  axlListCursor * con_cursor, 
+					  int             changed)
 {
 
 	EXT_DNS_SOCKET       fds        = 0;
@@ -763,10 +803,10 @@ void __ext_dns_reader_close_session (axlPointer pointer)
  * @param wait_to The purpose that was configured for the file set.
  * @param session The session that is notified for changes.
  */
-void __ext_dns_reader_dispatch_session (int                  fds,
-					extDnsIoWaitingFor   wait_to,
-					extDnsSession   * session,
-					axlPointer           user_data)
+void __ext_dns_reader_dispatch_session (EXT_DNS_SOCKET        fds,
+					extDnsIoWaitingFor    wait_to,
+					extDnsSession       * session,
+					axlPointer            user_data)
 {
 	/* cast the reference */
 	extDnsCtx * ctx = user_data;
@@ -870,6 +910,12 @@ axlPointer __ext_dns_reader_run (extDnsCtx * ctx)
 				ext_dns_io_waiting_invoke_dispatch (ctx, ctx->on_reading, __ext_dns_reader_dispatch_session, result, ctx);
 
 			} else {
+				/* check for reader awaken */
+				if (ext_dns_reader_was_awaken (ctx)) {
+					/* reduce the number of changes */
+					result--;
+				} /* end if */
+				    
 				/* call to check listener sessions */
 				result = __ext_dns_reader_check_listener_list (ctx, ctx->on_reading, ctx->srv_cursor, result);
 			
@@ -971,9 +1017,124 @@ void ext_dns_reader_watch_listener   (extDnsCtx        * ctx,
 	/* push data */
 	ext_dns_async_queue_push (ctx->reader_queue, data);
 
+	/* awake listener */
+	ext_dns_reader_awake (ctx);
+
 	return;
 }
 
+axl_bool __ext_dns_event_fd_init_pipe (extDnsCtx * ctx)
+{
+	struct sockaddr_in      saddr;
+	struct sockaddr_in      sin;
+
+	EXT_DNS_SOCKET           listener_fd;
+#if defined(AXL_OS_WIN32)
+/*	BOOL                    unit      = axl_true; */
+	int                     sin_size  = sizeof (sin);
+#else    	
+	int                     unit      = 1; 
+	socklen_t               sin_size  = sizeof (sin);
+#endif	  
+	int                     bind_res;
+	int                     result;
+
+	/* create listener socket */
+	if ((listener_fd = socket(AF_INET, SOCK_STREAM, 0)) <= 2) {
+		/* do not allow creating sockets reusing stdin (0),
+		   stdout (1), stderr (2) */
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG,  "failed to create listener socket: %d (errno=%d:%s)", listener_fd, errno, ext_dns_errno_get_error (errno));
+		return -1;
+        } /* end if */
+
+#if defined(AXL_OS_WIN32)
+	/* Do not issue a reuse addr which causes on windows to reuse
+	 * the same address:port for the same process. Under linux,
+	 * reusing the address means that consecutive process can
+	 * reuse the address without being blocked by a wait
+	 * state.  */
+	/* setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char  *)&unit, sizeof(BOOL)); */
+#else
+	setsockopt (listener_fd, SOL_SOCKET, SO_REUSEADDR, &unit, sizeof (unit));
+#endif 
+
+	memset(&saddr, 0, sizeof(struct sockaddr_in));
+	saddr.sin_family          = AF_INET;
+	saddr.sin_port            = 0;
+	saddr.sin_addr.s_addr     = htonl (INADDR_LOOPBACK);
+
+	/* call to bind */
+	bind_res = bind (listener_fd, (struct sockaddr *)&saddr,  sizeof (struct sockaddr_in));
+	if (bind_res == EXT_DNS_SOCKET_ERROR) {
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG,  "unable to bind address (port already in use or insufficient permissions). Closing socket: %d", listener_fd);
+		ext_dns_close_socket (listener_fd);
+		return axl_false;
+	}
+	
+	if (listen (listener_fd, 1) == EXT_DNS_SOCKET_ERROR) {
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG,  "an error have occur while executing listen");
+		ext_dns_close_socket (listener_fd);
+		return axl_false;
+        } /* end if */
+
+	/* notify listener */
+	if (getsockname (listener_fd, (struct sockaddr *) &sin, &sin_size) < -1) {
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG,  "an error have happen while executing getsockname");
+		ext_dns_close_socket (listener_fd);
+		return axl_false;
+	} /* end if */
+
+	ext_dns_log  (EXT_DNS_LEVEL_DEBUG, "created listener running listener at %s:%d (socket: %d)", inet_ntoa(sin.sin_addr), ntohs (sin.sin_port), listener_fd);
+
+	/* on now connect: read side */
+	ctx->reader_pipe[0]      = socket (AF_INET, SOCK_STREAM, 0);
+	if (ctx->reader_pipe[0] == EXT_DNS_INVALID_SOCKET) {
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG,   "Unable to create socket required for pipe");
+		ext_dns_close_socket (listener_fd);
+		return axl_false;
+	} /* end if */
+
+	/* disable nagle */
+	ext_dns_session_set_sock_tcp_nodelay (ctx->reader_pipe[0], axl_true);
+
+	/* set non blocking connection */
+	ext_dns_session_set_sock_block (ctx->reader_pipe[0], axl_false);  
+
+        memset(&saddr, 0, sizeof(saddr));
+	saddr.sin_addr.s_addr     = htonl(INADDR_LOOPBACK);
+        saddr.sin_family          = AF_INET;
+        saddr.sin_port            = sin.sin_port;
+
+	/* connect in non blocking manner */
+	result = connect (ctx->reader_pipe[0], (struct sockaddr *)&saddr, sizeof (saddr));
+	if (errno != EXT_DNS_EINPROGRESS) {
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG,  "connect () returned %d, errno=%d:%s", 
+				  result, errno, ext_dns_errno_get_last_error ());
+		ext_dns_close_socket (listener_fd);
+		return axl_false;
+	}
+
+	/* accept connection */
+	ext_dns_log  (EXT_DNS_LEVEL_DEBUG, "calling to accept () socket");
+	ctx->reader_pipe[1] = ext_dns_listener_accept (listener_fd);
+
+	if (ctx->reader_pipe[1] <= 0) {
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG,  "Unable to accept connection, failed to create pipe");
+		ext_dns_close_socket (listener_fd);
+		return axl_false;
+	}
+	/* set pipe read end from result returned by thread */
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Created pipe [%d, %d] for extDns context %p", ctx->reader_pipe[0], ctx->reader_pipe[1], ctx);
+
+	/* disable nagle */
+	ext_dns_session_set_sock_tcp_nodelay (ctx->reader_pipe[1], axl_true);
+
+	/* close listener */
+	ext_dns_close_socket (listener_fd);
+
+	/* report and return fd */
+	return axl_true;
+}
 
 
 /** 
@@ -989,6 +1150,10 @@ void ext_dns_reader_watch_listener   (extDnsCtx        * ctx,
 axl_bool  ext_dns_reader_run (extDnsCtx * ctx) 
 {
 	v_return_val_if_fail (ctx, axl_false);
+
+	/* init pipe */
+	if (! __ext_dns_event_fd_init_pipe (ctx))
+		return axl_false;
 
 	/* reader_queue */
 	ctx->reader_queue   = ext_dns_async_queue_new ();
@@ -1041,6 +1206,10 @@ void ext_dns_reader_stop (extDnsCtx * ctx)
 	} else {
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "timeout while waiting ext_dns reader thread to stop..");
 	}
+
+	/* clear pipe */
+	ext_dns_close_socket (ctx->reader_pipe[0]);
+	ext_dns_close_socket (ctx->reader_pipe[1]);
 
 	return;
 }

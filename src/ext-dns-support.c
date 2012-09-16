@@ -265,3 +265,4 @@ char   * ext_dns_support_inet_ntoa                  (extDnsCtx           * ctx,
 	/* return the string */
 	return result;
 }
+

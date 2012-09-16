@@ -38,6 +38,27 @@
 #include <ext-dns.h>
 #include <ext-dns-private.h>
 
+/** 
+ * @internal Nice random generation code taken from:
+ * http://stackoverflow.com/questions/1640258/need-a-fast-random-generator-for-c
+ */
+static unsigned long __ext_dns_message_x = 123456789, __ext_dns_message_y = 362436069, __ext_dns_message_z = 521288629;
+
+unsigned long ext_dns_message_rand (void) {
+
+	unsigned long t;
+	__ext_dns_message_x ^= __ext_dns_message_x << 16;
+	__ext_dns_message_x ^= __ext_dns_message_x >> 5;
+	__ext_dns_message_x ^= __ext_dns_message_x << 1;
+	
+	t = __ext_dns_message_x;
+	__ext_dns_message_x = __ext_dns_message_y;
+	__ext_dns_message_y = __ext_dns_message_z;
+	__ext_dns_message_z = t ^ __ext_dns_message_x ^ __ext_dns_message_y;
+	
+	return __ext_dns_message_z;
+}
+
 extDnsHeader * ext_dns_message_parse_header (extDnsCtx * ctx, const char * buf, int buf_size)
 {
 	extDnsHeader * header;
@@ -63,7 +84,8 @@ extDnsHeader * ext_dns_message_parse_header (extDnsCtx * ctx, const char * buf, 
 	header->is_query              = ext_dns_get_bit (buf[2], 7) == 0;
 
 	/* get opcode */
-	header->opcode                = (buf[2] & 0x00f >> 3 );
+	header->opcode                = ((int)(buf[2]) & 0x078) >> 3 ;
+	/* ext_dns_log (EXT_DNS_LEVEL_DEBUG, "####  OPCODE FOUND: %d", header->opcode); */
 	/* ext_dns_show_byte (ctx, buf[2], "buf[2]");
 	   ext_dns_show_byte (ctx, header->opcode, "header->opcode"); */
 
@@ -548,7 +570,7 @@ int __ext_dns_message_write_resource_record (extDnsCtx * ctx, extDnsResourceReco
 		position += rr->rdlength;
 	} else if (rr->type == extDnsTypeSOA) {
 		/* set RDLENGTH */
-		ext_dns_set_16bit (strlen (rr->mname) + strlen (rr->contact_address) + 16, buffer + position);
+		ext_dns_set_16bit (strlen (rr->mname) + strlen (rr->contact_address) + 24, buffer + position);
 		/* next four bytes */
 		position += 2;
 
@@ -1136,8 +1158,8 @@ int             ext_dns_message_build_query (extDnsCtx * ctx, const char * qname
 	extDnsHeader * _header;
 
 	/* Simple "srand()" seed: just use "time()" */
-	unsigned int iseed = (unsigned int) time(NULL);
-	srand (iseed);
+	/*	unsigned int iseed = (unsigned int) time(NULL);
+		srand (iseed); */
 
 	/* build header */
 	_header = axl_new (extDnsHeader, 1);
@@ -1148,7 +1170,7 @@ int             ext_dns_message_build_query (extDnsCtx * ctx, const char * qname
 	memset (buffer, 0, 512);
 
 	/* get id */
-	_header->id = rand () % 65536;
+	_header->id = ext_dns_message_rand () % 65536;
 
 	/* set id */
 	ext_dns_set_16bit (_header->id, buffer);

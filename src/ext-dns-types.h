@@ -500,22 +500,23 @@ typedef enum {
 } extDnsSessionType;
 
 typedef enum {
+	
 	/**
 	 * Unknown query value received. 
 	 */
-	extDnsUnknownQueryType = 1,
+	extDnsUnknownQueryType = -1,
 	/** 
 	 * Standard query (RFC opcode 0 QUERY)
 	 */
-	extDnsStandardQuery    = 2,
+	extDnsStandardQuery    = 0,
 	/** 
 	 * Inverse query (RFC opcode 1 IQUERY)
 	 */
-	extDnsInverseQuery     = 3,
+	extDnsInverseQuery     = 1,
 	/** 
 	 * Server status request (RFC opcode 2 STATUS)
 	 */
-	extDnsSeverStatusQuery = 4
+	extDnsSeverStatusQuery = 2
 } extDnsQueryType;
 
 typedef enum {

@@ -114,13 +114,17 @@ void on_received  (extDnsCtx     * ctx,
 	axl_bool          result;
 	HandleReplyData * data;
 
-	printf ("INFO: received message from %s:%d..\n", source_address, source_port);
-
 	/* skip messages that are queries */
 	if (! ext_dns_message_is_query (message)) {
 		printf ("ERROR: received a query message, dropping DNS message..\n");
 		return;
 	} /* end if */
+
+	printf ("INFO: received message from %s:%d, query type: %s %s %s..\n", 
+		source_address, source_port, 
+		ext_dns_message_get_qtype_to_str (ctx, message->questions[0].qtype),
+		ext_dns_message_get_qclass_to_str (ctx, message->questions[0].qclass),
+		message->questions[0].qname);
 
 	/* build state data */
 	data                   = axl_new (HandleReplyData, 1);
@@ -131,7 +135,7 @@ void on_received  (extDnsCtx     * ctx,
 	
 	/* send query */
 	result = ext_dns_message_query_from_msg (ctx, message, server, server_port, handle_reply, data);
-	    
+
 	if (! result) 
 		printf ("ERROR: failed to send query to master server..\n");
 

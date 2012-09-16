@@ -89,32 +89,32 @@ axl_bool check_header (extDnsMessage * message, axl_bool is_query, int ans_count
 {
 	/* check message values */
 	if (is_query != message->header->is_query) {
-		printf ("ERROR: expected to find a query %d but found %d in the message\n", 
+		printf ("ERROR (check_header is_query): expected to find a query %d but found %d in the message\n", 
 			is_query, message->header->is_query);
 		return axl_false;
 	}
 
 	/* check message values */
 	if (message->header->answer_count != ans_count) {
-		printf ("ERROR: expected to find a %d answer but found: %d\n", ans_count, message->header->answer_count);
+		printf ("ERROR (check_header answer_count): expected to find a %d answer but found: %d\n", ans_count, message->header->answer_count);
 		return axl_false;
 	}
 
 	/* check message values */
 	if (message->header->query_count != query_count) {
-		printf ("ERROR: expected to find a %d query but found: %d\n", query_count, message->header->query_count);
+		printf ("ERROR (check_header query_count): expected to find a %d query but found: %d\n", query_count, message->header->query_count);
 		return axl_false;
 	}
 
 	/* check message values */
 	if (message->header->additional_count != additional_count) {
-		printf ("ERROR: expected to find a %d query but found: %d\n", additional_count, message->header->additional_count);
+		printf ("ERROR (check_header additional_count): expected to find a %d query but found: %d\n", additional_count, message->header->additional_count);
 		return axl_false;
 	}
 
 	/* check message values */
 	if (message->header->authority_count != authority_count) {
-		printf ("ERROR: expected to find a %d query but found: %d\n", authority_count, message->header->authority_count);
+		printf ("ERROR (check_header authority_count): expected to find a %d query but found: %d\n", authority_count, message->header->authority_count);
 		return axl_false;
 	}
 	return axl_true; /* all records ok */
@@ -748,6 +748,13 @@ axl_bool test_08 (void) {
 	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content);   */
  	if (! check_answer (&message->answers[0], "aspl.es", extDnsTypeSOA, extDnsClassIN, NULL))
 		return axl_false;
+
+	/* check opcode */
+	if (message->header->opcode != 0) {
+		printf ("ERROR: expected to find no error code (0), but found found: (%d)\n", message->header->opcode);
+		return axl_false;
+	}
+
 	/* printf ("values: mname=%s, rname=%s, serial=%d, refresh=%d, retry=%d, expire=%d, minimum=%d\n", 
 		message->answers[0].mname, message->answers[0].contact_address, message->answers[0].serial, message->answers[0].refresh, 
 		message->answers[0].retry, message->answers[0].expire, message->answers[0].minimum);  */
@@ -779,6 +786,12 @@ axl_bool test_08 (void) {
 	}
 	if (message->answers[0].minimum != 3600) {
 		printf ("ERROR: expected to find %d but found %d\n", 3600, message->answers[0].minimum);
+		return axl_false;
+	}
+
+	/* printf ("RDLENGTH section size: %d\n", message->answers[0].rdlength); */
+	if (message->answers[0].rdlength != 49 && message->answers[0].rdlength != 56) {
+		printf ("ERROR: found different rdlength than expected (49, 56) != %d\n", message->answers[0].rdlength);
 		return axl_false;
 	}
 	
@@ -893,7 +906,13 @@ axl_bool test_10 (void) {
 		printf ("ERROR: expected to find error code %d but found %d\n", message->header->rcode, extDnsResponseNameError);
 		return axl_false;
 	} /* end if */
-	
+
+	/* printf ("Message size: %d\n", message->message_size); */
+	if (message->message_size != 33) {
+		printf ("ERROR: expected a message size reply of %d but fuond %d\n", 
+			33, message->message_size);
+		return axl_false;
+	} /* end if */
 
 	/* release message */
 	ext_dns_message_unref (message);

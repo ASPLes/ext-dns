@@ -43,9 +43,6 @@
 void ext_dns_reader_watch_listener              (extDnsCtx     * ctx,
 						 extDnsSession * session);
 
-void ext_dns_reader_watch_connection            (extDnsCtx     * ctx,
-						 extDnsSession * session);
-
 int  ext_dns_reader_connections_watched         (extDnsCtx     * ctx);
 
 int  ext_dns_reader_run                         (extDnsCtx * ctx);

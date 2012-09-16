@@ -135,6 +135,14 @@ extDnsSession    * ext_dns_listener_new2    (extDnsCtx           * ctx,
 struct in_addr * ext_dns_session_gethostbyname (extDnsCtx  * ctx, 
 						const char * hostname);
 
+axl_bool          ext_dns_session_set_sock_tcp_nodelay   (EXT_DNS_SOCKET socket,
+							  axl_bool      enable);
+
+axl_bool          ext_dns_session_set_sock_block         (EXT_DNS_SOCKET socket,
+							  axl_bool      enable);
+
+EXT_DNS_SOCKET    ext_dns_listener_accept (EXT_DNS_SOCKET server_socket);
+
 /** private functions */
 void                __ext_dns_session_shutdown_and_record_error (extDnsSession    * session,
 								 extDnsStatus       status,

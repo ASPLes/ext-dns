@@ -88,9 +88,9 @@ axl_bool             ext_dns_io_waiting_invoke_add_to_fd_group  (extDnsCtx      
 								 axlPointer            fd_group);
 
 axl_bool             ext_dns_io_waiting_invoke_is_set_fd_group  (extDnsCtx           * ctx,
-								 EXT_DNS_SOCKET         fds, 
-								 axlPointer fd_group,
-								 axlPointer user_data);
+								 EXT_DNS_SOCKET        fds, 
+								 axlPointer            fd_group,
+								 axlPointer            user_data);
 
 axl_bool             ext_dns_io_waiting_invoke_have_dispatch    (extDnsCtx           * ctx,
 								 axlPointer            fd_group);
