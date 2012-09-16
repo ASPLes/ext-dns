@@ -134,6 +134,65 @@ axl_bool      ext_dns_session_do_sanity_check (extDnsCtx * ctx, EXT_DNS_SOCKET s
 }
 
 /** 
+ * @brief Allows to enable/disable non-blocking/blocking behavior on
+ * the provided socket.
+ * 
+ * @param socket The socket to be configured.
+ *
+ * @param enable axl_true to enable blocking I/O, otherwise use
+ * axl_false to enable non blocking I/O.
+ * 
+ * @return axl_true if the operation was properly done, otherwise axl_false is
+ * returned.
+ */
+axl_bool                 ext_dns_session_set_sock_block         (EXT_DNS_SOCKET socket,
+								 axl_bool      enable)
+{
+#if defined(AXL_OS_UNIX)
+	int  flags;
+#endif
+
+	if (enable) {
+		/* enable blocking mode */
+#if defined(AXL_OS_WIN32)
+		if (!ext_dns_win32_blocking_enable (socket)) {
+			return axl_false;
+		}
+#else
+		if ((flags = fcntl (socket, F_GETFL, 0)) < 0) {
+			return axl_false;
+		} /* end if */
+
+		flags &= ~O_NONBLOCK;
+		if (fcntl (socket, F_SETFL, flags) < 0) {
+			return axl_false;
+		} /* end if */
+#endif
+	} else {
+		/* enable nonblocking mode */
+#if defined(AXL_OS_WIN32)
+		/* win32 case */
+		if (!ext_dns_win32_nonblocking_enable (socket)) {
+			return axl_false;
+		}
+#else
+		/* unix case */
+		if ((flags = fcntl (socket, F_GETFL, 0)) < 0) {
+			return axl_false;
+		}
+		
+		flags |= O_NONBLOCK;
+		if (fcntl (socket, F_SETFL, flags) < 0) {
+			return axl_false;
+		}
+#endif
+	} /* end if */
+
+	return axl_true;
+}
+
+
+/** 
  * \brief Allows to change session semantic to nonblocking.
  *
  * Sets a session to be non-blocking while sending and receiving

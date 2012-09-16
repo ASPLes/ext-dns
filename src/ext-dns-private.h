@@ -102,6 +102,7 @@ struct _extDnsCtx {
 	 * @internal Reference to the thread created for the reader loop.
 	 */
 	extDnsThread              reader_thread;
+	int                       reader_pipe[2];
 
 	/**** ext-dns thread pool module state ****/
 	/** 

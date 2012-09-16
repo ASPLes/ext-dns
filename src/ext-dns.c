@@ -268,7 +268,7 @@ void     ext_dns_exit_ctx             (extDnsCtx * ctx,
 		/* release lock */
 		ext_dns_mutex_unlock (&ctx->ref_mutex);
 	} /* end if */
-   
+
 	/* release the ctx */
 	if (free_ctx)
 		ext_dns_ctx_free2 (ctx, "end ctx");

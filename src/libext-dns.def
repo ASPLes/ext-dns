@@ -108,6 +108,7 @@ ext_dns_message_parse_resource_record
 ext_dns_message_query
 ext_dns_message_query_from_msg
 ext_dns_message_query_int
+ext_dns_message_rand
 ext_dns_message_ref
 ext_dns_message_release_and_return
 ext_dns_message_to_buffer
@@ -116,6 +117,7 @@ ext_dns_mutex_create
 ext_dns_mutex_destroy
 ext_dns_mutex_lock
 ext_dns_mutex_unlock
+ext_dns_reader_awake
 ext_dns_reader_foreach
 ext_dns_reader_foreach_impl
 ext_dns_reader_foreach_offline
@@ -128,6 +130,7 @@ ext_dns_reader_restart
 ext_dns_reader_run
 ext_dns_reader_sessions_watched
 ext_dns_reader_stop
+ext_dns_reader_was_awaken
 ext_dns_reader_watch_listener
 ext_dns_reader_watch_session
 ext_dns_session_check_socket_limit
@@ -151,6 +154,7 @@ ext_dns_session_send_udp
 ext_dns_session_send_udp_s
 ext_dns_session_set_nonblocking_socket
 ext_dns_session_set_on_message
+ext_dns_session_set_sock_block
 ext_dns_session_set_sock_tcp_nodelay
 ext_dns_session_set_socket
 ext_dns_session_unref

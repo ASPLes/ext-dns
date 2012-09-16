@@ -175,11 +175,15 @@ int __ext_dns_io_waiting_default_wait_on (axlPointer __fd_group, int max_fds, ex
  */
 axl_bool  __ext_dns_io_waiting_default_add_to (int                fds, 
 					       extDnsSession * session,
-					      axlPointer         __fd_set)
+					       axlPointer         __fd_set)
 {
 	extDnsSelect * select = (extDnsSelect *) __fd_set;
 #if defined(ENABLE_EXT_DNS_LOG)
-	extDnsCtx    * ctx    = ext_dns_session_get_ctx (session);
+	extDnsCtx    * ctx    = NULL;
+
+	/* set context */
+	if (select->ctx)
+		ctx = select->ctx;
 #endif
 
 #if defined(AXL_OS_UNIX)
@@ -329,8 +333,8 @@ void    __ext_dns_io_waiting_poll_clear (axlPointer __fd_group)
  * @param fd_set The fd set where the socket descriptor will be added.
  */
 axl_bool  __ext_dns_io_waiting_poll_add_to (int                fds, 
-					   extDnsSession * session,
-					   axlPointer         __fd_set)
+					    extDnsSession * session,
+					    axlPointer         __fd_set)
 {
 	extDnsPoll * poll   = (extDnsPoll *) __fd_set;
 	extDnsCtx  * ctx    = poll->ctx;
@@ -354,7 +358,7 @@ axl_bool  __ext_dns_io_waiting_poll_add_to (int                fds,
 		/* limit reached */
 		poll->max          = max;
 		poll->set          = axl_realloc (poll->set,         sizeof (struct pollfd)      * poll->max);
-		poll->sessions  = axl_realloc (poll->sessions, sizeof (extDnsSession *) * poll->max);
+		poll->sessions     = axl_realloc (poll->sessions, sizeof (extDnsSession *) * poll->max);
 	} /* end if */
 
 	/* configure the socket to be watched */
@@ -594,8 +598,8 @@ void    __ext_dns_io_waiting_epoll_clear (axlPointer __fd_group)
  * @param fd_set The fd set where the socket descriptor will be added.
  */
 axl_bool  __ext_dns_io_waiting_epoll_add_to (int                fds, 
-					    extDnsSession * session,
-					    axlPointer         __fd_set)
+					     extDnsSession * session,
+					     axlPointer         __fd_set)
 {
 	extDnsEPoll *        epoll  = (extDnsEPoll *) __fd_set;
 	extDnsCtx   *        ctx    = epoll->ctx;
@@ -698,13 +702,13 @@ axl_bool      __ext_dns_io_waiting_epoll_have_dispatch (axlPointer fd_group)
  * @param fd_set The fd set where the socket descriptor will be checked.
  */
 void     __ext_dns_io_waiting_epoll_dispatch (axlPointer           fd_group, 
-					     extDnsIoDispatchFunc dispatch_func,
-					     int                  changed,
-					     axlPointer           user_data)
+					      extDnsIoDispatchFunc dispatch_func,
+					      int                  changed,
+					      axlPointer           user_data)
 {
-	extDnsEPoll      * epoll    = (extDnsEPoll *) fd_group;
+	extDnsEPoll   * epoll    = (extDnsEPoll *) fd_group;
 	extDnsSession * session;
-	int                iterator = 0;
+	int             iterator = 0;
 
 	/* for all sockets polled */
 	while ((iterator < changed) && (iterator < epoll->length)) {
