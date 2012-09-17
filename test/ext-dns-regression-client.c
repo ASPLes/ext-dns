@@ -896,7 +896,7 @@ axl_bool test_10 (void) {
 			    /* is query */ axl_false, 
 			    /* ans count */ 0, 
 			    /* query count */ 1,
-			    /* authority count */ 0,
+			    /* authority count */ 1,
 			    /* additional count */ 0))
 		return axl_false;
 
@@ -908,9 +908,9 @@ axl_bool test_10 (void) {
 	} /* end if */
 
 	/* printf ("Message size: %d\n", message->message_size); */
-	if (message->message_size != 33) {
-		printf ("ERROR: expected a message size reply of %d but fuond %d\n", 
-			33, message->message_size);
+	if (message->message_size != 108 && message->message_size != 94) {
+		printf ("ERROR: expected a message size reply of 108 or 94 but found %d\n", 
+			message->message_size);
 		return axl_false;
 	} /* end if */
 
