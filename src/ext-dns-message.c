@@ -291,8 +291,8 @@ axl_bool ext_dns_message_parse_resource_record (extDnsCtx * ctx, extDnsResourceR
 	} else if (rr->type == extDnsTypeNS) {
 		/* get mail exchanger */
 		rr->name_content = ext_dns_message_get_resource_name (ctx, buf, buf_size, &value, &is_label);
-	} else if (rr->type == extDnsTypeTXT) {
-		/* get TXT content */
+	} else if (rr->type == extDnsTypeTXT || rr->type == extDnsTypeSPF) {
+		/* get TXT, SPF content */
 		rr->name_content = axl_new (char, rr->rdlength + 1);
 		memcpy (rr->name_content, rr->rdata + 1, rr->rdlength -1);
 	} else if (rr->type == extDnsTypePTR) {
@@ -557,7 +557,7 @@ int __ext_dns_message_write_resource_record (extDnsCtx * ctx, extDnsResourceReco
 		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "  enconding type %s: %s", ext_dns_message_get_qtype_to_str (ctx, rr->type), rr->name_content);
 		position += ext_dns_encode_domain_name (ctx, rr->name_content, buffer + position);
 
-	} else if (rr->type == extDnsTypeTXT) {
+	} else if (rr->type == extDnsTypeTXT || rr->type == extDnsTypeSPF) {
 		/* set RDLENGTH */
 		ext_dns_set_16bit (rr->rdlength, buffer + position);
 		/* next four bytes */
@@ -1248,6 +1248,8 @@ extDnsType      ext_dns_message_get_qtype (extDnsCtx * ctx, const char * qtype)
 		return extDnsTypeMX;
 	if (axl_cmp (qtype, "TXT") || axl_cmp (qtype, "txt"))
 		return extDnsTypeTXT;
+	if (axl_cmp (qtype, "SPF") || axl_cmp (qtype, "spf"))
+		return extDnsTypeSPF;
 	if (axl_cmp (qtype, "AAAA") || axl_cmp (qtype, "aaaa"))
 		return extDnsTypeAAAA;
 	if (axl_cmp (qtype, "AXFR") || axl_cmp (qtype, "axfr"))
@@ -1303,6 +1305,8 @@ const char *      ext_dns_message_get_qtype_to_str (extDnsCtx * ctx, extDnsType 
 		return "MX";
 	if (type == extDnsTypeTXT)
 		return "TXT";
+	if (type == extDnsTypeSPF)
+		return "SPF";
 	if (type == extDnsTypeAAAA)
 		return "AAAA";
 	if (type == extDnsTypeAXFR)

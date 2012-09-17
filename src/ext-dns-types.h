@@ -648,6 +648,10 @@ typedef enum {
 	 */
 	extDnsTypeAAAA   = 28,
 	/** 
+	 * SPF support type
+	 */
+	extDnsTypeSPF    = 99,
+	/** 
 	 * A request for a transfer of an entire zone
 	 */
 	extDnsTypeAXFR   = 252,
@@ -712,7 +716,7 @@ typedef struct _extDnsResourceRecord {
 	int            ttl;
 
 	/* MX exchange, NS nsdname, A the IP, CNAME the hostname
-	 * alias */
+	 * alias, TXT and SPF */
 	char         * name_content;
 
 	/* MX specific values */
