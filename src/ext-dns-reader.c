@@ -211,10 +211,8 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 
 	if (session == NULL) {
 		/* consume reader signal  and skip */
-		if (__ext_dns_reader_consume_signal (ctx)) {
-			ext_dns_log (EXT_DNS_LEVEL_DEBUG, "FOUND READER AWAKEN..");
+		if (__ext_dns_reader_consume_signal (ctx)) 
 			return;
-		}
 
 		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Received NULL session reference (reader pipe?)");
 		return;
