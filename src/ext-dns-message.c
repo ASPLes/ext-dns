@@ -295,6 +295,13 @@ axl_bool ext_dns_message_parse_resource_record (extDnsCtx * ctx, extDnsResourceR
 		/* get TXT, SPF content */
 		rr->name_content = axl_new (char, rr->rdlength + 1);
 		memcpy (rr->name_content, rr->rdata + 1, rr->rdlength -1);
+	} else if (rr->type == extDnsTypeSRV) {
+		/* get SRV content */
+		rr->name_content = axl_new (char, rr->rdlength + 1);
+		memcpy (rr->name_content, rr->rdata + 1, rr->rdlength -1);
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "### SRV: found service: %s", rr->name_content);
+		
+
 	} else if (rr->type == extDnsTypePTR) {
 		/* get PTR content */
 		rr->name_content = ext_dns_message_get_resource_name (ctx, buf, buf_size, &value, &is_label);
@@ -1248,6 +1255,8 @@ extDnsType      ext_dns_message_get_qtype (extDnsCtx * ctx, const char * qtype)
 		return extDnsTypeMX;
 	if (axl_cmp (qtype, "TXT") || axl_cmp (qtype, "txt"))
 		return extDnsTypeTXT;
+	if (axl_cmp (qtype, "SRV") || axl_cmp (qtype, "srv"))
+		return extDnsTypeSRV;
 	if (axl_cmp (qtype, "SPF") || axl_cmp (qtype, "spf"))
 		return extDnsTypeSPF;
 	if (axl_cmp (qtype, "AAAA") || axl_cmp (qtype, "aaaa"))
@@ -1305,6 +1314,8 @@ const char *      ext_dns_message_get_qtype_to_str (extDnsCtx * ctx, extDnsType 
 		return "MX";
 	if (type == extDnsTypeTXT)
 		return "TXT";
+	if (type == extDnsTypeSRV)
+		return "SRV";
 	if (type == extDnsTypeSPF)
 		return "SPF";
 	if (type == extDnsTypeAAAA)
