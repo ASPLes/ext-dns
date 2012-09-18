@@ -648,6 +648,10 @@ typedef enum {
 	 */
 	extDnsTypeAAAA   = 28,
 	/** 
+	 * SRV support type
+	 */
+	extDnsTypeSRV    = 33,
+	/** 
 	 * SPF support type
 	 */
 	extDnsTypeSPF    = 99,

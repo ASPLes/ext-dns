@@ -925,6 +925,70 @@ axl_bool test_10 (void) {
 	return axl_true; /* return ok */
 }
 
+axl_bool test_11 (void) {
+
+	extDnsCtx        * ctx;
+	extDnsMessage    * message;
+	extDnsAsyncQueue * queue;
+
+	/* create context object */
+	ctx = ext_dns_ctx_new ();
+	if (ctx == NULL) {
+		printf ("ERROR: failed to allocate ctx object..\n");
+		return axl_false;
+	}
+
+	/* init context */
+	if (! ext_dns_init_ctx (ctx)) {
+		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
+		return axl_false;
+	}
+
+	/* run query and check results */
+	queue = ext_dns_async_queue_new ();
+	ext_dns_message_query (ctx, "srv", "in", "_sip._udp.voztele.com", dns_server, dns_server_port, queue_reply, queue);
+
+	/* get reply (timeout in 3seconds) */
+	message = ext_dns_async_queue_timedpop (queue, 3000000);
+	if (message == NULL) {
+		printf ("ERROR: expected to find message reply but found NULL reference..\n");
+		return axl_false;
+	}
+
+	/* check header */
+	if (! check_header (message, 
+			    /* is query */ axl_false, 
+			    /* ans count */ 1, 
+			    /* query count */ 1,
+			    /* authority count */ 0,
+			    /* additional count */ 0))
+		return axl_false;
+
+	/* printf ("values: %s %d %d %s\n", message->authorities[0].name, message->authorities[0].type, 
+	   message->authorities[0].class, message->authorities[0].name_content);     */
+	if (message->header->rcode != extDnsResponseNameError ) {
+		printf ("ERROR: expected to find error code %d but found %d\n", message->header->rcode, extDnsResponseNameError);
+		return axl_false;
+	} /* end if */
+
+	/* printf ("Message size: %d\n", message->message_size); */
+	if (message->message_size != 108 && message->message_size != 94) {
+		printf ("ERROR: expected a message size reply of 108 or 94 but found %d\n", 
+			message->message_size);
+		return axl_false;
+	} /* end if */
+
+	/* release message */
+	ext_dns_message_unref (message);
+
+	ext_dns_async_queue_unref (queue);
+
+	/* terminate process */
+	ext_dns_exit_ctx (ctx, axl_true);
+
+	return axl_true; /* return ok */
+}
+
 typedef axl_bool  (*extDnsRegressionTest) (void);
 
 axl_bool disable_time_checks = axl_true;
@@ -1064,6 +1128,9 @@ int main (int argc, char ** argv) {
 		if (check_and_run_test (run_test_name, "test_10"))
 			run_test (test_10, "Test 10", "handle query for unknown records", -1, -1);
 
+		if (check_and_run_test (run_test_name, "test_11"))
+			run_test (test_11, "Test 11", "basic SRV query", -1, -1);
+
 		goto finish;
 	}
 
@@ -1087,6 +1154,8 @@ int main (int argc, char ** argv) {
 	run_test (test_09, "Test 09", "basic PTR query", -1, -1);
 
 	run_test (test_10, "Test 10", "handle query for unknown records", -1, -1);
+
+	run_test (test_11, "Test 11", "basic SRV query", -1, -1);
 
 finish:
 
