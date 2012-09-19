@@ -344,7 +344,7 @@ int ext_dns_create_child (int fds[2], const char * child_resolver) {
 		/* Parent process */
 		fds[0] = pipes[0];
 		fds[1] = pipes[3];
-		
+
 		close (pipes[1]);
 		close (pipes[2]);
 		
@@ -376,26 +376,72 @@ int ext_dns_create_child (int fds[2], const char * child_resolver) {
 	return -1; 
 }
 
+int  ext_dnsd_readline (int fd, char  * buffer, int  maxlen)
+{
+	int         n, rc;
+	int         desp = 0;
+	char        c, *ptr;
+
+	/* read current next line */
+	ptr = (buffer + desp);
+	for (n = 1; n < (maxlen - desp); n++) {
+	__ext_dnsd_readline_again:
+		if (( rc = read (fd, &c, 1)) == 1) {
+			*ptr++ = c;
+			if (c == '\x0A')
+				break;
+		}else if (rc == 0) {
+			if (n == 1)
+				return 0;
+			else
+				break;
+		} else {
+			if (errno == EXT_DNS_EINTR) 
+				goto __ext_dnsd_readline_again;
+			if ((errno == EXT_DNS_EWOULDBLOCK) || (errno == EXT_DNS_EAGAIN) || (rc == -2)) 
+				return (-2);
+			return (-1);
+		}
+	}
+
+	*ptr = 0;
+	return (n + desp);
+
+}
+
+
 axl_bool send_command (const char * command, childState * child, char * reply, int reply_size)
 {
 	int  bytes_written;
 
+	/* printf ("INFO: sending command %s to child %d\n", command, child->pid); */
+	
 	/* send command */
 	bytes_written = strlen (command);
-	if (send (child->fds[1], command, bytes_written, 0) != bytes_written) {
+	if (write (child->fds[1], command, bytes_written) != bytes_written) {
 		printf ("ERROR: failed to send command to child, error was errno=%d (%s)\n", errno, ext_dns_errno_get_last_error ());
 		return axl_false;
 	}
+	if (write (child->fds[1], "\n", 1) != 1) {
+		printf ("ERROR: failed to write trailing command, error was errno=%d (%s)\n", errno, ext_dns_errno_get_last_error ());
+		return axl_false;
+	}
+
+	/* printf ("INFO: reading reply to command..\n"); */
 
 	/* now wait for reply */
-	bytes_written = recv (child->fds[0], reply, reply_size, 0);
+	bytes_written = ext_dnsd_readline (child->fds[0], reply, reply_size);
 
 	if (bytes_written < 0) {
 		printf ("ERROR: failed to receive content from child, error was errno=%d (%s)\n", errno, ext_dns_errno_get_last_error ());
 		return axl_false;
 	} /* end if */
 
-	printf ("INFO: bytes received %d\n", bytes_written);
+	/* trim content and recalculate */
+	axl_stream_trim (reply);
+	bytes_written = strlen (reply);
+
+	/* printf ("INFO: bytes received %d\n", bytes_written); */
 	return bytes_written;
 }
 
@@ -453,6 +499,8 @@ void start_child_applications (void)
 		/* create and get child pid */
 		childs[iterator].pid = ext_dns_create_child (childs[iterator].fds, child_resolver);
 
+		/* printf ("INFO: child created with pid %d, fds [%d, %d]\n", childs[iterator].pid, childs[iterator].fds[0], childs[iterator].fds[1]); */
+
 		if (childs[iterator].pid < 0) {
 			printf ("ERROR: failed to create child process from child resolver '%s', error was errno=%d\n", child_resolver, errno);
 			exit (-1);
@@ -471,7 +519,6 @@ void start_child_applications (void)
 			
 
 		printf ("INFO: child resolver (pid %d) %s created..\n", childs[iterator].pid, child_resolver);
-
 
 		/* next iterator */
 		iterator++;

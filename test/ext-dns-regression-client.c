@@ -794,7 +794,6 @@ axl_bool test_08 (void) {
 		printf ("ERROR: found different rdlength than expected (49, 56) != %d\n", message->answers[0].rdlength);
 		return axl_false;
 	}
-	
 
 	/* release message */
 	ext_dns_message_unref (message);
