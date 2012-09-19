@@ -239,6 +239,7 @@ Makefile
 src/Makefile
 query/Makefile
 test/Makefile
+server/Makefile
 ])
 
 echo "------------------------------------------"
