@@ -296,11 +296,22 @@ axl_bool ext_dns_message_parse_resource_record (extDnsCtx * ctx, extDnsResourceR
 		rr->name_content = axl_new (char, rr->rdlength + 1);
 		memcpy (rr->name_content, rr->rdata + 1, rr->rdlength -1);
 	} else if (rr->type == extDnsTypeSRV) {
+
 		/* get SRV content */
-		rr->name_content = axl_new (char, rr->rdlength + 1);
-		memcpy (rr->name_content, rr->rdata + 1, rr->rdlength -1);
-		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "### SRV: found service: %s", rr->name_content);
-		
+		/* get SRV prio */
+		rr->preference   = ext_dns_get_16bit (buf + value);
+		value += 2;
+		/* get weight */
+		rr->weight       = ext_dns_get_16bit (buf + value);
+		value += 2;
+		/* get port */
+		rr->port         = ext_dns_get_16bit (buf + value);
+		value += 2;
+
+		/* get target */
+		rr->target = ext_dns_message_get_resource_name (ctx, buf, buf_size, &value, &is_label);
+
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "### SRV: Port: %d, Priority: %d, Weight: %d, Target: %s", rr->port, rr->preference, rr->weight, rr->target); 
 
 	} else if (rr->type == extDnsTypePTR) {
 		/* get PTR content */
@@ -1085,6 +1096,7 @@ void ext_dns_message_unref (extDnsMessage * message)
 			axl_free (message->answers[count].name_content);
 			axl_free (message->answers[count].mname);
 			axl_free (message->answers[count].contact_address);
+			axl_free (message->answers[count].target);
 			
 			count++;
 		}
@@ -1102,6 +1114,7 @@ void ext_dns_message_unref (extDnsMessage * message)
 			axl_free (message->authorities[count].name_content);
 			axl_free (message->authorities[count].mname);
 			axl_free (message->authorities[count].contact_address);
+			axl_free (message->authorities[count].target);
 			
 			count++;
 		}
@@ -1119,6 +1132,7 @@ void ext_dns_message_unref (extDnsMessage * message)
 			axl_free (message->additionals[count].name_content);
 			axl_free (message->additionals[count].mname);
 			axl_free (message->additionals[count].contact_address);
+			axl_free (message->additionals[count].target);
 		
 			count++;
 		}

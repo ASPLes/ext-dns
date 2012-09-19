@@ -723,8 +723,14 @@ typedef struct _extDnsResourceRecord {
 	 * alias, TXT and SPF */
 	char         * name_content;
 
-	/* MX specific values */
+	/* MX preference and SRV priority */
 	int            preference;
+	/* weight attribute for SRV records */
+	int            weight; 
+	/* port attribute for SRV records */
+	int            port;
+	/* target value for SRV records */
+	char         * target;
 
 	/* SOA specific values */
 	char         * mname;

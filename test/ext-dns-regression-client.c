@@ -964,16 +964,44 @@ axl_bool test_11 (void) {
 			    /* additional count */ 0))
 		return axl_false;
 
+	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content);     */
+	if (! check_answer (&message->answers[0], "_sip._udp.voztele.com", extDnsTypeSRV, extDnsClassIN, NULL))
+		return axl_false; 
+
 	/* printf ("values: %s %d %d %s\n", message->authorities[0].name, message->authorities[0].type, 
 	   message->authorities[0].class, message->authorities[0].name_content);     */
-	if (message->header->rcode != extDnsResponseNameError ) {
-		printf ("ERROR: expected to find error code %d but found %d\n", message->header->rcode, extDnsResponseNameError);
+	if (message->header->rcode != extDnsResponseNoError ) {
+		printf ("ERROR: expected to find error code %d but found %d\n", message->header->rcode, extDnsResponseNoError);
 		return axl_false;
 	} /* end if */
 
+	/* check additional values */
+	if (message->answers[0].preference != 0) {
+		printf ("ERROR: expected to find preference 0 but found %d\n", message->answers[0].preference);
+		return axl_false;
+	}
+
+	/* check additional values */
+	if (message->answers[0].weight != 0) {
+		printf ("ERROR: expected to find weight 0 but found %d\n", message->answers[0].weight);
+		return axl_false;
+	}
+
+	/* check additional values */
+	if (message->answers[0].port != 5060) {
+		printf ("ERROR: expected to find port 5060 but found %d\n", message->answers[0].port);
+		return axl_false;
+	}
+
+	if (! axl_cmp (message->answers[0].target, "voztele.com")) {
+		printf ("ERROR: expected to find target value voztele.com but found %s\n", message->answers[0].target);
+		return axl_false;
+	}
+			
+
 	/* printf ("Message size: %d\n", message->message_size); */
-	if (message->message_size != 108 && message->message_size != 94) {
-		printf ("ERROR: expected a message size reply of 108 or 94 but found %d\n", 
+	if (message->message_size != 91 && message->message_size != 70) {
+		printf ("ERROR: expected a message size reply of 91 or 70 but found %d\n", 
 			message->message_size);
 		return axl_false;
 	} /* end if */
