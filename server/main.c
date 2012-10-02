@@ -87,14 +87,135 @@ typedef struct _childState {
 } childState;
 
 /** reference to childs created and their state **/
-childState * childs;
-int child_number;
+childState * children;
+int          child_number;
+extDnsMutex  children_mutex;
+
+void ext_dnsd_release_child (childState * child)
+{
+	ext_dns_mutex_lock (&children_mutex);
+
+	/* flag as ready */
+	child->ready = axl_true;
+
+	/* child finished, release it */
+	axl_free (child->last_command);
+	child->last_command = NULL;
+
+	ext_dns_mutex_unlock (&children_mutex);
+
+	return;
+}
+
+childState * ext_dnsd_find_free_child (char * command)
+{
+	int          iterator;
+	childState * child = NULL;
+
+	ext_dns_mutex_lock (&children_mutex);
+
+	iterator = 0;
+	while (iterator < child_number) {
+
+		if (children[iterator].ready) {
+			/* flag it as not ready */
+			children[iterator].ready = axl_false;
+
+			/* get the reference */
+			child = &(children[iterator]);
+
+			/* prepare child and send query to a child */
+			child->last_command = command;
+
+			ext_dns_mutex_unlock (&children_mutex);
+			
+			return child;
+		}
+		
+		/* next iterator */
+		iterator++;
+	} /* end if */
+
+	ext_dns_mutex_unlock (&children_mutex);
+	
+	/* no child was found */
+	return NULL;
+}
+
 
 void handle_reply_data_free (HandleReplyData * data)
 {
 	axl_free (data->source_address);
 	axl_free (data);
 	return;
+}
+
+int  ext_dnsd_readline (int fd, char  * buffer, int  maxlen)
+{
+	int         n, rc;
+	int         desp = 0;
+	char        c, *ptr;
+
+	/* read current next line */
+	ptr = (buffer + desp);
+	for (n = 1; n < (maxlen - desp); n++) {
+	__ext_dnsd_readline_again:
+		if (( rc = read (fd, &c, 1)) == 1) {
+			*ptr++ = c;
+			if (c == '\x0A')
+				break;
+		}else if (rc == 0) {
+			if (n == 1)
+				return 0;
+			else
+				break;
+		} else {
+			if (errno == EXT_DNS_EINTR) 
+				goto __ext_dnsd_readline_again;
+			if ((errno == EXT_DNS_EWOULDBLOCK) || (errno == EXT_DNS_EAGAIN) || (rc == -2)) 
+				return (-2);
+			return (-1);
+		}
+	}
+
+	*ptr = 0;
+	return (n + desp);
+
+}
+
+axl_bool send_command (const char * command, childState * child, char * reply, int reply_size)
+{
+	int  bytes_written;
+
+	/* printf ("INFO: sending command %s to child %d\n", command, child->pid); */
+	
+	/* send command */
+	bytes_written = strlen (command);
+	if (write (child->fds[1], command, bytes_written) != bytes_written) {
+		printf ("ERROR: failed to send command to child, error was errno=%d (%s)\n", errno, ext_dns_errno_get_last_error ());
+		return axl_false;
+	}
+	if (write (child->fds[1], "\n", 1) != 1) {
+		printf ("ERROR: failed to write trailing command, error was errno=%d (%s)\n", errno, ext_dns_errno_get_last_error ());
+		return axl_false;
+	}
+
+	/* printf ("INFO: reading reply to command..\n"); */
+
+	/* now wait for reply */
+	bytes_written = ext_dnsd_readline (child->fds[0], reply, reply_size);
+
+	if (bytes_written < 0) {
+		printf ("ERROR: failed to receive content from child, error was errno=%d (%s)\n", errno, ext_dns_errno_get_last_error ());
+		return axl_false;
+	} /* end if */
+
+	/* trim content and recalculate */
+	axl_stream_trim (reply);
+	bytes_written = strlen (reply);
+
+	/* printf ("INFO: bytes received %d\n", bytes_written); */
+	return bytes_written;
 }
 
 void handle_reply (extDnsCtx     * ctx,
@@ -150,6 +271,9 @@ void on_received  (extDnsCtx     * ctx,
 {
 	axl_bool          result;
 	HandleReplyData * data;
+	char            * command;
+	childState      * child;
+	char              reply_buffer[1024];
 
 	/* skip messages that are queries */
 	if (! ext_dns_message_is_query (message)) {
@@ -162,6 +286,45 @@ void on_received  (extDnsCtx     * ctx,
 		ext_dns_message_get_qtype_to_str (ctx, message->questions[0].qtype),
 		ext_dns_message_get_qclass_to_str (ctx, message->questions[0].qclass),
 		message->questions[0].qname);
+
+	/* build query line to be resolved by child process */
+	command = axl_strdup_printf ("RESOLVE %s %s %s\n", ext_dns_message_get_qclass_to_str (ctx, message->questions[0].qclass),
+				     ext_dns_message_get_qtype_to_str (ctx, message->questions[0].qtype),
+				     message->questions[0].qname);
+
+	/* find a free child */
+	child = ext_dnsd_find_free_child (command);
+
+	if (! send_command (command, child, reply_buffer, 1024)) {
+		printf ("ERROR: unable to send command to child process\n");
+		/* kill child and recreate a new child */
+		return;
+	} /* end if */
+
+	/* release child */
+	ext_dnsd_release_child (child);
+	
+	/* get reply */
+	if (axl_cmp (reply_buffer, "DISCARD")) {
+		printf ("INFO: child requested to DISCARD request..\n");
+		return;
+	} else if (axl_cmp (reply_buffer, "REJECT")) {
+		printf ("INFO: child requested to REJECT request..\n");
+		
+		/* build a reject message */
+		
+
+	} else if (axl_cmp (reply_buffer, "GOAHEAD")) {
+		printf ("INFO: child requested to continue and resolve request as usual..\n");
+	} else if (axl_memcmp (reply_buffer, "REPLY ", 7)) {
+		/* parse reply received */
+		
+		
+	} else {
+		printf ("ERROR: unrecognized command reply found from child: %s..\n", reply_buffer);
+	}
+	
+	
 
 	/* build state data */
 	data                   = axl_new (HandleReplyData, 1);
@@ -376,75 +539,6 @@ int ext_dns_create_child (int fds[2], const char * child_resolver) {
 	return -1; 
 }
 
-int  ext_dnsd_readline (int fd, char  * buffer, int  maxlen)
-{
-	int         n, rc;
-	int         desp = 0;
-	char        c, *ptr;
-
-	/* read current next line */
-	ptr = (buffer + desp);
-	for (n = 1; n < (maxlen - desp); n++) {
-	__ext_dnsd_readline_again:
-		if (( rc = read (fd, &c, 1)) == 1) {
-			*ptr++ = c;
-			if (c == '\x0A')
-				break;
-		}else if (rc == 0) {
-			if (n == 1)
-				return 0;
-			else
-				break;
-		} else {
-			if (errno == EXT_DNS_EINTR) 
-				goto __ext_dnsd_readline_again;
-			if ((errno == EXT_DNS_EWOULDBLOCK) || (errno == EXT_DNS_EAGAIN) || (rc == -2)) 
-				return (-2);
-			return (-1);
-		}
-	}
-
-	*ptr = 0;
-	return (n + desp);
-
-}
-
-
-axl_bool send_command (const char * command, childState * child, char * reply, int reply_size)
-{
-	int  bytes_written;
-
-	/* printf ("INFO: sending command %s to child %d\n", command, child->pid); */
-	
-	/* send command */
-	bytes_written = strlen (command);
-	if (write (child->fds[1], command, bytes_written) != bytes_written) {
-		printf ("ERROR: failed to send command to child, error was errno=%d (%s)\n", errno, ext_dns_errno_get_last_error ());
-		return axl_false;
-	}
-	if (write (child->fds[1], "\n", 1) != 1) {
-		printf ("ERROR: failed to write trailing command, error was errno=%d (%s)\n", errno, ext_dns_errno_get_last_error ());
-		return axl_false;
-	}
-
-	/* printf ("INFO: reading reply to command..\n"); */
-
-	/* now wait for reply */
-	bytes_written = ext_dnsd_readline (child->fds[0], reply, reply_size);
-
-	if (bytes_written < 0) {
-		printf ("ERROR: failed to receive content from child, error was errno=%d (%s)\n", errno, ext_dns_errno_get_last_error ());
-		return axl_false;
-	} /* end if */
-
-	/* trim content and recalculate */
-	axl_stream_trim (reply);
-	bytes_written = strlen (reply);
-
-	/* printf ("INFO: bytes received %d\n", bytes_written); */
-	return bytes_written;
-}
-
 void start_child_applications (void)
 {
 	axlNode        * node;
@@ -488,37 +582,37 @@ void start_child_applications (void)
 	}
 
 	/* allocate memory to handle child state */
-	childs = axl_new (childState, child_number);
+	children = axl_new (childState, child_number);
 
 	iterator     = 0;
 	while (iterator < child_number) {
 		/* start child and set initial state */
-		childs[iterator].ready = axl_true;
-		ext_dns_mutex_create (&childs[iterator].mutex);
+		children[iterator].ready = axl_true;
+		ext_dns_mutex_create (&children[iterator].mutex);
 
 		/* create and get child pid */
-		childs[iterator].pid = ext_dns_create_child (childs[iterator].fds, child_resolver);
+		children[iterator].pid = ext_dns_create_child (children[iterator].fds, child_resolver);
 
 		/* printf ("INFO: child created with pid %d, fds [%d, %d]\n", childs[iterator].pid, childs[iterator].fds[0], childs[iterator].fds[1]); */
 
-		if (childs[iterator].pid < 0) {
+		if (children[iterator].pid < 0) {
 			printf ("ERROR: failed to create child process from child resolver '%s', error was errno=%d\n", child_resolver, errno);
 			exit (-1);
 		} /* end if */
 
 		/* send init command to check if the child is working */
-		if (! send_command ("INIT", &childs[iterator], reply, 20)) {
-			printf ("ERROR: child resolver (pid %d) %s didn't reply to INIT command..\n", childs[iterator].pid, child_resolver);
+		if (! send_command ("INIT", &children[iterator], reply, 20)) {
+			printf ("ERROR: child resolver (pid %d) %s didn't reply to INIT command..\n", children[iterator].pid, child_resolver);
 			exit (-1);
 		}
 
 		if (! axl_cmp (reply, "OK")) {
-			printf ("ERROR: child resolver (pid %d) %s didn't reply OK to INIT command..\n", childs[iterator].pid, child_resolver);
+			printf ("ERROR: child resolver (pid %d) %s didn't reply OK to INIT command..\n", children[iterator].pid, child_resolver);
 			exit (-1);
 		}
 			
 
-		printf ("INFO: child resolver (pid %d) %s created..\n", childs[iterator].pid, child_resolver);
+		printf ("INFO: child resolver (pid %d) %s created..\n", children[iterator].pid, child_resolver);
 
 		/* next iterator */
 		iterator++;
