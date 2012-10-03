@@ -133,9 +133,12 @@ char * ext_dns_message_get_resource_name (extDnsCtx * ctx, const char * buffer, 
 	int        iterator      = (* _iterator);
 	axl_bool   is_label      = axl_false;
 	
-
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Starting to get resource name at iterator=%d, buf_size=%d, buffer[iterator]='%d'",
 		     iterator, buf_size, buffer[iterator]);
+
+	/* get basic base where root "." is found */
+	if (buffer[iterator] == 0) 
+		resource_name = axl_strdup (".");
 
 	while (iterator < buf_size && buffer[iterator]) {
 		/* check if this is a we found a label pointer (message
@@ -211,6 +214,9 @@ char * ext_dns_message_get_resource_name (extDnsCtx * ctx, const char * buffer, 
 	/* set is label found */
 	if (_is_label)
 		(* _is_label) = is_label;
+
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Found resource name=%s next iterator=%d",
+		     resource_name, iterator+1);
 
 	return resource_name;
 }
@@ -371,11 +377,73 @@ axl_bool        ext_dns_message_is_query (extDnsMessage * message)
 	return message->header->is_query;
 }
 
+/** 
+ * @brief Allows to check if the provided message represents a reject
+ * reply.
+ *
+ * @param message The message message to be checked to be a rejection
+ * message.
+ *
+ * @return axl_true if it is a reject message or axl_false if not. The
+ * function axl returns axl_false when the reference received is NULL.
+ */
+axl_bool        ext_dns_message_is_reject (extDnsMessage * message)
+{
+	if (message == NULL || message->header == NULL)
+		return axl_false;
+
+	/* check error code */
+	return message->header->rcode == extDnsResponseRefused;
+}
+
+/** 
+ * @brief Allows to check if the provided message represents a name
+ * resolution error.
+ *
+ * @param message The message message to be checked to be a resolution
+ * error message.
+ *
+ * @return axl_true if it is a resolution error message or axl_false
+ * if not. The function axl returns axl_false when the reference
+ * received is NULL.
+ */
+axl_bool        ext_dns_message_is_name_error (extDnsMessage * message)
+{
+	if (message == NULL || message->header == NULL)
+		return axl_false;
+
+	/* check error code */
+	return message->header->rcode == extDnsResponseNameError;
+}
+
 
 axlPointer ext_dns_message_release_and_return (extDnsMessage * message)
 {
 	ext_dns_message_unref (message);
 	return NULL;
+}
+
+extDnsMessage * ext_dns_message_create (extDnsHeader * header, int buf_size)
+{
+	/* create empty message */
+	extDnsMessage * message = axl_new (extDnsMessage, 1);
+	if (message == NULL)
+		return NULL;
+
+	/* buffer size */
+	message->message_size = buf_size;
+
+	/* initialize mutex */
+	ext_dns_mutex_create (&message->mutex);
+	message->ref_count = 1;
+
+	/* set header */
+	if (header)
+		message->header = header;
+	else
+		message->header = axl_new (extDnsHeader, 1);
+
+	return message;
 }
 
 /** 
@@ -390,20 +458,10 @@ extDnsMessage * ext_dns_message_parse_message (extDnsCtx * ctx, extDnsHeader * h
 	axl_bool        is_label;
 
 	/* create empty message */
-	message = axl_new (extDnsMessage, 1);
+	message = ext_dns_message_create (header, buf_size);
 	if (message == NULL)
 		return NULL;
 
-	/* buffer size */
-	message->message_size = buf_size;
-
-	/* initialize mutex */
-	ext_dns_mutex_create (&message->mutex);
-	message->ref_count = 1;
-
-	/* set header */
-	message->header = header;
-	
 	/* parse query question */
 	if (header->query_count > 0) {
 		/* allocate structure to hold query question */
@@ -449,7 +507,6 @@ extDnsMessage * ext_dns_message_parse_message (extDnsCtx * ctx, extDnsHeader * h
 	/*** ANSWERS ***/
 	/* parse query question */
 	if (header->answer_count > 0) {
-		
 		/* allocate structure to hold query question */
 		message->answers = axl_new (extDnsResourceRecord, header->answer_count);
 	}
@@ -500,6 +557,150 @@ extDnsMessage * ext_dns_message_parse_message (extDnsCtx * ctx, extDnsHeader * h
 	return message;
 }
 
+/** 
+ * @internal Common implementation to build error replies
+ */
+extDnsMessage * __ext_dns_message_build_reply_common (extDnsCtx * ctx, extDnsMessage * message, extDnsResponseType response)
+{
+	extDnsMessage * reply;
+	int             iterator;
+
+	if (ctx == NULL || message == NULL)
+		return NULL;
+
+	/* build the message */
+	reply = ext_dns_message_create (NULL, 0);
+	if (reply == NULL)
+		return NULL;
+
+	/* set and id we are replying to */
+	reply->header->id = message->header->id;
+	
+	/* set authoritative */
+	reply->header->is_authorative_answer = axl_true;
+
+	/* copy question section */
+	if (message->header->query_count > 0) {
+		/* copy the entire reply */
+		reply->header->query_count = message->header->query_count; 
+
+		/* reply memory */
+		reply->questions = axl_new (extDnsQuestion, reply->header->query_count);
+		memcpy (reply->questions, message->questions, sizeof (extDnsQuestion) * reply->header->query_count); 
+
+		/* copy names */
+		iterator = 0;
+		while (iterator < reply->header->query_count) {
+			reply->questions[iterator].qname = axl_strdup (message->questions[iterator].qname);
+			iterator++;
+		}
+	} /* end if */
+
+	/* set op codes */
+	reply->header->rcode = response;
+
+	/* copy headers */
+	reply->header->recursion_desired = message->header->recursion_desired;
+	
+	/* return message built */
+	return reply;
+}
+
+
+/** 
+ * @brief Allows to build a DNS refuse (policy refuse) reply message,
+ * taking the id to reply to from the provided message.
+ *
+ * @param ctx The context where the operation will take place.
+ *
+ * @param message The message we are going to build a refuse reply to.
+ *
+ * @return A reference to the message or NULL if it fails.
+ */
+extDnsMessage * ext_dns_message_build_reject_reply (extDnsCtx * ctx, extDnsMessage * message)
+{
+	return __ext_dns_message_build_reply_common (ctx, message, extDnsResponseRefused);
+}
+
+/** 
+ * @brief Allows to build a DNS unknown reply message, taking the id
+ * to reply to from the provided message.
+ *
+ * @param ctx The context where the operation will take place.
+ *
+ * @param message The message we are going to build a refuse reply to.
+ *
+ * @return A reference to the message or NULL if it fails.
+ */
+extDnsMessage * ext_dns_message_build_unknown_reply (extDnsCtx * ctx, extDnsMessage * message)
+{
+	/* use common function */
+	return __ext_dns_message_build_reply_common (ctx, message, extDnsResponseNameError);
+}
+
+/** 
+ * @brief Allows to build a message reply to the provided message,
+ * using as reply to the question that holds the message the IP
+ * provided.
+ *
+ * @param ctx The context where the operation will take place.
+ *
+ * @param message A DNS message question that will be used to build a reply.
+ *
+ * @param ip An IPv4 string value what will be used to complete the
+ * ANSWER section of the message. Note the reply created will have IN
+ * for the DNS class, and A for the dns type record.
+ *
+ * @param ttl The ttl to be reported in the reply.
+ *
+ * @return A reference to a newly created message that represents the
+ * reply or NULL if the function fails. 
+ */
+extDnsMessage * ext_dns_message_build_ipv4_reply (extDnsCtx * ctx, extDnsMessage * message, const char * ip, int ttl)
+{
+	extDnsMessage   * reply;
+	char           ** ip_items;
+
+	if (ctx == NULL || message == NULL || ip == NULL)
+		return NULL;
+
+	/* check the ip received is indeed an ip */
+	if (! ext_dns_support_is_ipv4 (ip))
+		return NULL;
+
+	/* build reply without error */
+	reply = __ext_dns_message_build_reply_common (ctx, message, extDnsResponseNoError);
+
+	/* copy questions */
+	reply->header->answer_count = 1;
+	reply->answers = axl_new (extDnsResourceRecord, 1);
+
+	/* configure answer record type */
+	reply->answers[0].name  = axl_strdup (reply->questions[0].qname);
+	reply->answers[0].class = extDnsClassIN;
+	reply->answers[0].type  = extDnsTypeA;
+	reply->answers[0].rdlength = 4;
+	reply->answers[0].rdata = axl_new (char, 4);
+
+	/* copy pretty value */
+	reply->answers[0].name_content = axl_strdup (ip);
+
+	/* set ttl */
+	reply->answers[0].ttl = ttl;
+
+	/* place ip values */
+	ip_items = axl_split (ip, 1, ".");
+	reply->answers[0].rdata[0] = atoi(ip_items[0]);
+	reply->answers[0].rdata[1] = atoi(ip_items[1]);
+	reply->answers[0].rdata[2] = atoi(ip_items[2]);
+	reply->answers[0].rdata[3] = atoi(ip_items[3]);
+
+
+
+	/* return reply */
+	return reply;
+}
+
 
 /** 
  * @internal Function to dump DNS resource record into a buffer ready
@@ -507,6 +708,12 @@ extDnsMessage * ext_dns_message_parse_message (extDnsCtx * ctx, extDnsHeader * h
  */
 int __ext_dns_message_write_resource_record (extDnsCtx * ctx, extDnsResourceRecord * rr, char * buffer, int buffer_size, int position)
 {
+	
+	if (rr->name == NULL) {
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Recevied request to dump resource record with a NULL reference label..");
+		return position;
+	}
+		
 
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "PLACING Resource record:  Encoding resource name: %s", rr->name);
 	position += ext_dns_encode_domain_name (ctx, rr->name, buffer + position);

@@ -113,6 +113,9 @@ void on_received  (extDnsCtx     * ctx,
 {
 	axl_bool          result;
 	HandleReplyData * data;
+	extDnsMessage   * reply;
+	char              buffer[512];
+	int               bytes_written;
 
 	/* skip messages that are queries */
 	if (! ext_dns_message_is_query (message)) {
@@ -125,6 +128,50 @@ void on_received  (extDnsCtx     * ctx,
 		ext_dns_message_get_qtype_to_str (ctx, message->questions[0].qtype),
 		ext_dns_message_get_qclass_to_str (ctx, message->questions[0].qclass),
 		message->questions[0].qname);
+
+	/* check for rejections, unknowns or rewrites */
+	if (axl_cmp (message->questions[0].qname, "reject.aspl.es") ||
+	    axl_cmp (message->questions[0].qname, "rewrite-request.google.com") ||
+	    axl_cmp (message->questions[0].qname, "trigger-unknown.aspl.es")) {
+
+		/* build reply */
+		if (axl_cmp (message->questions[0].qname, "reject.aspl.es"))
+			reply = ext_dns_message_build_reject_reply (ctx, message);
+		else if (axl_cmp (message->questions[0].qname, "rewrite-request.google.com"))
+			reply = ext_dns_message_build_ipv4_reply (ctx, message, "17.17.17.17", 2000);
+		else {
+			/* trigger case */
+			reply = ext_dns_message_build_unknown_reply (ctx, message);
+		}
+		if (reply == NULL) {
+			printf ("ERROR: failed to build message reply, unable to reply to resolver..\n");
+			return;
+		}
+		
+		/* build buffer reply */
+		bytes_written = ext_dns_message_to_buffer (ctx, reply, buffer, 512);
+		if (bytes_written <= 0) {
+			printf ("ERROR: failed to dump message into the buffer, unable to reply to resolver..\n");
+			return;
+		}
+
+		printf ("INFO: buffer build from message was: %d bytes\n", bytes_written);
+
+		/* send reply */
+		if (ext_dns_session_send_udp_s (ctx, session, buffer, bytes_written, source_address, source_port) != bytes_written) {
+			/* release reply */
+			ext_dns_message_unref (reply);
+
+			printf ("ERROR: failed to send %d bytes as reply, different amount of bytes where written\n", bytes_written);
+			return;
+		} /* end if */
+
+		/* release reply */
+		ext_dns_message_unref (reply);
+
+		return;
+	}
+		
 
 	/* build state data */
 	data                   = axl_new (HandleReplyData, 1);

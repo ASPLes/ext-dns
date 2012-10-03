@@ -266,3 +266,50 @@ char   * ext_dns_support_inet_ntoa                  (extDnsCtx           * ctx,
 	return result;
 }
 
+/** 
+ * @brief Allows to check if the value provided (an string) represents
+ * an IPv4 value.
+ *
+ * @param value The value to be checked to hold an IPv4 value.
+ * 
+ * @return axl_true in the case the value contains an IPv4 value or
+ * not.
+ */
+axl_bool ext_dns_support_is_ipv4 (const char * value)
+{
+	int     iterator;
+	char ** ip_items;
+	int     int_value;
+
+	if (value == NULL)
+		return axl_false;
+	
+	/* get ip items */
+	ip_items = axl_split (value, 1, ".");
+	iterator = 0;
+	while (ip_items[iterator]) {
+		if (iterator > 5)
+			break;
+		
+		/* get the value */
+		int_value = atoi (ip_items[iterator]);
+		if (iterator == 1 || iterator == 2) {
+			if (int_value < 0 || 255 < int_value) {
+				axl_freev (ip_items);
+				return axl_false;
+			}
+		} else {
+			if (int_value < 1 || 254 < int_value) {
+				axl_freev (ip_items);
+				return axl_false;
+			}
+		}
+
+		iterator++;
+	} /* end if */
+	axl_freev (ip_items);
+
+	/* report iteratoring */
+	return iterator == 4;
+}
+

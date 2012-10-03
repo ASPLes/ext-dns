@@ -6,7 +6,7 @@ EXTRA_DIST = ext-dns.example.conf
 
 bin_PROGRAMS = ext-dnsd
 
-INCLUDES = -I$(top_srcdir)/src  $(AXL_CFLAGS)  $(PTHREAD_CFLAGS) \
+INCLUDES = -I$(top_srcdir)/src  $(AXL_CFLAGS)  $(PTHREAD_CFLAGS) $(EXARG_FLAGS) \
 	$(compiler_options) -D__axl_disable_broken_bool_def__   \
         -DVERSION=\""$(EXT_DNS_VERSION)"\" $(INCLUDE_EXT_DNS_POLL) $(INCLUDE_EXT_DNS_EPOLL) $(INCLUDE_EXT_DNS_LOG) 
 

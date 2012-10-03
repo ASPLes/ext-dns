@@ -1,5 +1,5 @@
 /* 
- *  ext-dns: another, but configurable, DNS server
+ *  ext-dnsd: another, but configurable, DNS server
  *  Copyright (C) 2012 Advanced Software Production Line, S.L.
  *
  *  This program is free software; you can redistribute it and/or
@@ -210,6 +210,8 @@ axl_bool send_command (const char * command, childState * child, char * reply, i
 		return axl_false;
 	} /* end if */
 
+	/* printf ("INFO: data received '%s' (size: %d)\n", reply, bytes_written); */
+
 	/* trim content and recalculate */
 	axl_stream_trim (reply);
 	bytes_written = strlen (reply);
@@ -262,6 +264,83 @@ void handle_reply (extDnsCtx     * ctx,
 	return;
 }
 
+axl_bool ext_dnsd_send_reply (extDnsCtx * ctx, extDnsSession * session, const char * source_address, int source_port, extDnsMessage * reply, axl_bool release_message)
+{
+	char     buffer[512];
+	int      bytes_written;
+	axl_bool result = axl_false;
+
+	/* build buffer reply */
+	bytes_written = ext_dns_message_to_buffer (ctx, reply, buffer, 512);
+	if (bytes_written <= 0) {
+		printf ("ERROR: failed to dump message into the buffer, unable to reply to resolver..\n");
+		goto return_result;
+	}
+
+	printf ("INFO: buffer build from message was: %d bytes\n", bytes_written);
+	
+	/* send reply */
+	if (ext_dns_session_send_udp_s (ctx, session, buffer, bytes_written, source_address, source_port) != bytes_written) {
+		printf ("ERROR: failed to send %d bytes as reply, different amount of bytes where written\n", bytes_written);
+		goto return_result;
+	} /* end if */
+
+	/* reached this point we were able to send the message */
+	result = axl_true;
+
+return_result:
+	
+	/* release reply */
+	if (release_message)
+		ext_dns_message_unref (reply);
+	
+	return axl_true;
+}
+
+
+extDnsMessage * ext_dnsd_handle_reply (extDnsCtx * ctx, extDnsMessage * query, const char * reply_buffer)
+{
+	int              ttl;
+	char          ** items = axl_split (reply_buffer, 1, " ");
+	extDnsMessage  * reply = NULL;
+	const char     * value;
+	
+	/* check result */
+	if (items == NULL)
+		return NULL;
+
+	/* clean split */
+	axl_stream_clean_split (items);
+
+	/* check result */
+	if (axl_memcmp (items[1], "ipv4:", 5)) {
+
+		/* get value */
+		value = items[1] + 5;
+
+		/* check if the value reported a valid ipv4 value */
+		if (! ext_dns_support_is_ipv4 (value)) {
+			printf ("ERROR: reported something that is not an IP %s..\n", value ? value : "(null value)" );
+			axl_freev (items);
+			return NULL;
+		} /* end if */
+
+		/* get ttl */
+		ttl = atoi (items[2]);
+		printf ("Script reported to use IP %s (with ttl %d) as reply..\n", items[1] + 5, ttl);
+		reply = ext_dns_message_build_ipv4_reply (ctx, query, value, ttl);
+		
+	} else if (axl_memcmp (items[1], "name:", 5)) {
+		/* get ttl */
+		ttl = atoi (items[2]);
+		printf ("Script reported to use Name %s (with ttl %d) as reply..\n", items[1] + 5, ttl);
+	}
+
+	axl_freev (items);
+	return reply;
+}
+
+
 void on_received  (extDnsCtx     * ctx,
 		   extDnsSession * session,
 		   const char    * source_address,
@@ -274,6 +353,8 @@ void on_received  (extDnsCtx     * ctx,
 	char            * command;
 	childState      * child;
 	char              reply_buffer[1024];
+	extDnsMessage   * reply = NULL;
+	int               bytes_written;
 
 	/* skip messages that are queries */
 	if (! ext_dns_message_is_query (message)) {
@@ -288,15 +369,19 @@ void on_received  (extDnsCtx     * ctx,
 		message->questions[0].qname);
 
 	/* build query line to be resolved by child process */
-	command = axl_strdup_printf ("RESOLVE %s %s %s\n", ext_dns_message_get_qclass_to_str (ctx, message->questions[0].qclass),
+	command = axl_strdup_printf ("RESOLVE %s %s %s", 
+				     message->questions[0].qname,
 				     ext_dns_message_get_qtype_to_str (ctx, message->questions[0].qtype),
-				     message->questions[0].qname);
+				     ext_dns_message_get_qclass_to_str (ctx, message->questions[0].qclass));
 
 	/* find a free child */
 	child = ext_dnsd_find_free_child (command);
 
-	if (! send_command (command, child, reply_buffer, 1024)) {
-		printf ("ERROR: unable to send command to child process\n");
+	printf ("INFO: selected child pid %d to resolve query..\n", child->pid);
+
+	bytes_written = send_command (command, child, reply_buffer, 1024);
+	if (bytes_written <= 0) {
+		printf ("ERROR: unable to send command to child process (bytes_written=%d)\n", bytes_written);
 		/* kill child and recreate a new child */
 		return;
 	} /* end if */
@@ -308,23 +393,32 @@ void on_received  (extDnsCtx     * ctx,
 	if (axl_cmp (reply_buffer, "DISCARD")) {
 		printf ("INFO: child requested to DISCARD request..\n");
 		return;
+	} else if (axl_cmp (reply_buffer, "UNKNOWN")) {
+		printf ("INFO: child requested to send UNKNOWN code reply..\n");
+
+		/* build the unknown reply */
+		reply = ext_dns_message_build_unknown_reply (ctx, message);
 	} else if (axl_cmp (reply_buffer, "REJECT")) {
 		printf ("INFO: child requested to REJECT request..\n");
 		
-		/* build a reject message */
-		
+		/* build the reject reply */
+		reply = ext_dns_message_build_unknown_reply (ctx, message);
 
-	} else if (axl_cmp (reply_buffer, "GOAHEAD")) {
-		printf ("INFO: child requested to continue and resolve request as usual..\n");
-	} else if (axl_memcmp (reply_buffer, "REPLY ", 7)) {
+	} else if (axl_cmp (reply_buffer, "FORWARD")) {
+		printf ("INFO: child requested to continue and resolve request as usual using forward dns server..\n");
+	} else if (axl_memcmp (reply_buffer, "REPLY ", 6)) {
 		/* parse reply received */
-		
-		
+		reply = ext_dnsd_handle_reply (ctx, message, reply_buffer);
 	} else {
 		printf ("ERROR: unrecognized command reply found from child: %s..\n", reply_buffer);
 	}
-	
-	
+
+	if (reply) {
+		/* found reply we've got now, send it back to the user */
+		ext_dnsd_send_reply (ctx, session, source_address, source_port, reply, axl_true);
+
+		return;
+	} /* end if */
 
 	/* build state data */
 	data                   = axl_new (HandleReplyData, 1);
@@ -472,13 +566,18 @@ void start_listeners (void)
 		/* init a listener */
 		listener = ext_dns_listener_new (ctx, values[0], values[1], extDnsUdpSession, NULL, NULL);
 
-		/* release values */
-		axl_stream_freev (values);
 
 		if (! ext_dns_session_is_ok (listener, axl_false)) {
-			printf ("ERROR: failed to start serving requests..\n");
+			printf ("ERROR: failed to start serving requests at %s:%s..\n", values[0], values[1]);
+			if (! exarg_is_defined ("debug"))
+				printf ("       (run with -d to get more information about the error)\n");
+			/* release values */
+			axl_stream_freev (values);
 			exit (-1);
 		} /* end if */
+
+		/* release values */
+		axl_stream_freev (values);
 	
 		/* configure on received handler */
 		ext_dns_session_set_on_message (listener, on_received, NULL);

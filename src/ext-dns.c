@@ -1224,6 +1224,12 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
 	int          iterator = 0;
 	char       * last_position = buffer;
 
+	/* support for root (.) domain */
+	if (axl_cmp (value, ".")) {
+		buffer[0] = 0;
+		return 1;
+	} /* end if */
+
 	while (value[iterator]) {
 		/* copy value */
 		buffer[iterator + 1] = value[iterator];
