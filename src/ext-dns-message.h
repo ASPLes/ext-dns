@@ -44,7 +44,17 @@ extDnsHeader  * ext_dns_message_parse_header (extDnsCtx * ctx, const char * buf,
 
 extDnsMessage * ext_dns_message_parse_message (extDnsCtx * ctx, extDnsHeader * header, const char * buf, int buf_size);
 
+extDnsMessage * ext_dns_message_build_reject_reply (extDnsCtx * ctx, extDnsMessage * message);
+
+extDnsMessage * ext_dns_message_build_unknown_reply (extDnsCtx * ctx, extDnsMessage * message);
+
+extDnsMessage * ext_dns_message_build_ipv4_reply (extDnsCtx * ctx, extDnsMessage * message, const char * ip, int ttl);
+
 axl_bool        ext_dns_message_is_query (extDnsMessage * message);
+
+axl_bool        ext_dns_message_is_reject (extDnsMessage * message);
+
+axl_bool        ext_dns_message_is_name_error (extDnsMessage * message);
 
 axl_bool        ext_dns_message_ref (extDnsMessage * message);
 

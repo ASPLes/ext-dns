@@ -216,18 +216,23 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 
 		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Received NULL session reference (reader pipe?)");
 		return;
-	}
-
-	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Received query over session id=%d", 
-		     ext_dns_session_get_id (session));
+	} /* end if */
 
 	/* read content from socket */
 	sin_size        = sizeof (remote_addr);
 	bytes_read      = recvfrom (session->session, buf, 1023, MSG_DONTWAIT, (struct sockaddr *) &remote_addr, &sin_size);
 	buf[bytes_read] = 0;
 
+	/* get source and port address */
+	source_address = ext_dns_support_inet_ntoa (ctx, &remote_addr);
+	source_port    = ntohs (remote_addr.sin_port);
+
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Received DNS message over session id=%d (size: %d), from: %s:%d", 
+		     ext_dns_session_get_id (session), bytes_read, source_address, source_port);
+
 	/* check here message size to limit incoming queries */
 	if (bytes_read > 512) {
+		axl_free (source_address);
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Received a DNS message that is bigger than allowed values (%d > 512)",
 			     bytes_read);
 		return;
@@ -246,10 +251,6 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 
 	/* now parse rest of the message */
 	message = ext_dns_message_parse_message (ctx, header, buf, bytes_read);
-
-	/* get source and port address */
-	source_address = ext_dns_support_inet_ntoa (ctx, &remote_addr);
-	source_port    = ntohs (remote_addr.sin_port);
 
 	if (message == NULL) {
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Parse error for incoming message from %s:%d, skipping userlevel notification", source_address, source_port);

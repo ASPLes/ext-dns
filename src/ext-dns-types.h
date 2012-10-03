@@ -560,10 +560,12 @@ typedef struct _extDnsHeader {
 	unsigned int       id;
 	axl_bool           is_query;
 	extDnsQueryType    opcode;
+
 	axl_bool           is_authorative_answer;
 	axl_bool           was_truncated;
 	axl_bool           recursion_desired;
 	axl_bool           recursion_available;
+
 	extDnsResponseType rcode;
 	int                query_count;
 	int                answer_count;

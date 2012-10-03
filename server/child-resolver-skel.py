@@ -7,13 +7,41 @@ while True:
     sys.stdout.flush ()
     command = raw_input ().strip ()
 
-    # sys.stderr.write ("COMMAND RECEIVED: %s\n" % command)
+    sys.stderr.write ("COMMAND RECEIVED: %s\n" % command)
 
     if command == "INIT":
         # sys.stderr.write ("REPLYING INIT OK\n")
         # ext-dnsd is requesting to start this resolver, we have to
         # reply OK to satisfy its inquire anyway
-        print "OK\n"
+        print "OK"
+    elif command[0:7] == "RESOLVE":
+        query_items = command.split (" ")
+        name        = query_items[1]
+        dns_record  = query_items[2]
+        dns_class   = query_items[3]
+
+        if dns_class != "IN":
+            # we only resolve in IN
+            print "FORWARD"
+            continue
+
+        if dns_record != "A":
+            # we only resolve in IN
+            print "FORWARD"
+            continue
+
+        # do dome database seach and resolve
+        sys.stderr.write (" ...reply to command: %s\n" % command)
+        print "REPLY ipv4:192.168.0.1 3600"
+
+        if name == "www.google.com":
+            print "REPLY name:www.aspl.es 3600"            
+        
+    else:
+        # by default, if command is not handled, reply forward to make
+        # the server to forward the reply to the forward dns server
+        # configured and reply to the user with the result
+        print "FORWARD"
     # end if
 
 # end while

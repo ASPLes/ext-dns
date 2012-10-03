@@ -766,8 +766,8 @@ axl_bool test_08 (void) {
 		printf ("ERROR: expected to find soporte.aspl.es but found %s\n", message->answers[0].contact_address);
 		return axl_false;
 	}
-	if (message->answers[0].serial != 2012091403) {
-		printf ("ERROR: expected to find %d but found %d\n", 2012091403, message->answers[0].serial);
+	if (message->answers[0].serial <= 2012091403) {
+		printf ("ERROR: expected to find something bigger or equal to %d but found %d\n", 2012091403, message->answers[0].serial);
 		return axl_false;
 	}
 
@@ -1005,6 +1005,11 @@ axl_bool test_11 (void) {
 		return axl_false;
 	} /* end if */
 
+	if (ext_dns_message_is_reject (message)) {
+		printf ("ERROR: expected to NOT find name resolution error but found the function doesn't reports that\n");
+		return axl_false;
+	}
+
 	/* release message */
 	ext_dns_message_unref (message);
 
@@ -1015,6 +1020,319 @@ axl_bool test_11 (void) {
 
 	return axl_true; /* return ok */
 }
+
+axl_bool test_12 (void) {
+
+	extDnsCtx        * ctx;
+	extDnsMessage    * message;
+	extDnsAsyncQueue * queue;
+
+	if (! axl_cmp (dns_server, "localhost")) {
+		printf ("WARNING: skip asking to %s for this test..because we would need the server to reject answering to reject.aspl.es\n", dns_server);
+		return axl_true;
+	}
+
+	/* create context object */
+	ctx = ext_dns_ctx_new ();
+	if (ctx == NULL) {
+		printf ("ERROR: failed to allocate ctx object..\n");
+		return axl_false;
+	}
+
+	/* init context */
+	if (! ext_dns_init_ctx (ctx)) {
+		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
+		return axl_false;
+	}
+
+	/* run query and check results */
+	queue = ext_dns_async_queue_new ();
+	ext_dns_message_query (ctx, "a", "in", "reject.aspl.es", dns_server, dns_server_port, queue_reply, queue);
+
+	/* get reply (timeout in 3seconds) */
+	message = ext_dns_async_queue_timedpop (queue, 3000000);
+	if (message == NULL) {
+		printf ("ERROR: expected to find message reply but found NULL reference..\n");
+		return axl_false;
+	}
+
+	/* check header */
+	if (! check_header (message, 
+			    /* is query */ axl_false, 
+			    /* ans count */ 0, 
+			    /* query count */ 1,
+			    /* authority count */ 0,
+			    /* additional count */ 0))
+		return axl_false;
+
+	/* printf ("values: %s %d %d %s\n", message->authorities[0].name, message->authorities[0].type, 
+	   message->authorities[0].class, message->authorities[0].name_content);     */
+	if (message->header->rcode != extDnsResponseRefused ) {
+		printf ("ERROR: expected to find error code %d but found %d\n", message->header->rcode, extDnsResponseNoError);
+		return axl_false;
+	} /* end if */
+
+	
+/*	printf ("Message size: %d\n", message->message_size);  */
+	if (message->message_size != 32) {
+		printf ("ERROR: expected a message size reply of 12 but found %d\n", 
+			message->message_size);
+		return axl_false;
+	} /* end if */
+
+	if (ext_dns_message_is_name_error (message)) {
+		printf ("ERROR: expected to NOT find name resolution error but found the function doesn't reports that\n");
+		return axl_false;
+	}
+
+	if (! ext_dns_message_is_reject (message)) {
+		printf ("ERROR: expected to find name reject error but found the function doesn't reports that\n");
+		return axl_false;
+	}
+
+	/* release message */
+	ext_dns_message_unref (message);
+
+	ext_dns_async_queue_unref (queue);
+
+	/* terminate process */
+	ext_dns_exit_ctx (ctx, axl_true);
+
+	return axl_true; /* return ok */
+}
+
+axl_bool test_13 (void) {
+
+	extDnsCtx        * ctx;
+	extDnsMessage    * message;
+	extDnsAsyncQueue * queue;
+
+	/* create context object */
+	ctx = ext_dns_ctx_new ();
+	if (ctx == NULL) {
+		printf ("ERROR: failed to allocate ctx object..\n");
+		return axl_false;
+	}
+
+	/* init context */
+	if (! ext_dns_init_ctx (ctx)) {
+		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
+		return axl_false;
+	}
+
+	/* run query and check results */
+	queue = ext_dns_async_queue_new ();
+	ext_dns_message_query (ctx, "a", "in", "reject.aspl.es.builder", dns_server, dns_server_port, queue_reply, queue);
+
+	/* get reply (timeout in 3seconds) */
+	message = ext_dns_async_queue_timedpop (queue, 3000000);
+	if (message == NULL) {
+		printf ("ERROR: expected to find message reply but found NULL reference..\n");
+		return axl_false;
+	}
+
+	/* check header */
+	if (! check_header (message, 
+			    /* is query */ axl_false, 
+			    /* ans count */ 0, 
+			    /* query count */ 1,
+			    /* authority count */ 1,
+			    /* additional count */ 0))
+		return axl_false;
+
+	if (! check_answer (&message->authorities[0], ".", extDnsTypeSOA, extDnsClassIN, NULL))
+		return axl_false; 
+
+	if (message->header->rcode != extDnsResponseNameError ) {
+		printf ("ERROR: expected to find error code %d but found %d\n", message->header->rcode, extDnsResponseNameError);
+		return axl_false;
+	} /* end if */
+
+	/* printf ("Message size: %d\n", message->message_size); */
+	if (message->message_size != 115) {
+		printf ("ERROR: expected a message size reply of 115 or 70 but found %d\n", 
+			message->message_size);
+		return axl_false;
+	} /* end if */
+
+	if (! ext_dns_message_is_name_error (message)) {
+		printf ("ERROR: expected to find name resolution error but found the function doesn't reports that\n");
+		return axl_false;
+	}
+
+	/* release message */
+	ext_dns_message_unref (message);
+
+	ext_dns_async_queue_unref (queue);
+
+	/* terminate process */
+	ext_dns_exit_ctx (ctx, axl_true);
+
+	return axl_true; /* return ok */
+}
+
+axl_bool test_14 (void) {
+
+	extDnsCtx        * ctx;
+	extDnsMessage    * message;
+	extDnsAsyncQueue * queue;
+
+	if (! axl_cmp (dns_server, "localhost")) {
+		printf ("WARNING: skip asking to %s for this test..because we would need the server to reject answering to reject.aspl.es\n", dns_server);
+		return axl_true;
+	}
+
+	/* create context object */
+	ctx = ext_dns_ctx_new ();
+	if (ctx == NULL) {
+		printf ("ERROR: failed to allocate ctx object..\n");
+		return axl_false;
+	}
+
+	/* init context */
+	if (! ext_dns_init_ctx (ctx)) {
+		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
+		return axl_false;
+	}
+
+	/* run query and check results */
+	queue = ext_dns_async_queue_new ();
+	ext_dns_message_query (ctx, "a", "in", "trigger-unknown.aspl.es", dns_server, dns_server_port, queue_reply, queue);
+
+	/* get reply (timeout in 3seconds) */
+	message = ext_dns_async_queue_timedpop (queue, 3000000);
+	if (message == NULL) {
+		printf ("ERROR: expected to find message reply but found NULL reference..\n");
+		return axl_false;
+	}
+
+	/* check header */
+	if (! check_header (message, 
+			    /* is query */ axl_false, 
+			    /* ans count */ 0, 
+			    /* query count */ 1,
+			    /* authority count */ 0,
+			    /* additional count */ 0))
+		return axl_false;
+
+	/* printf ("values: %s %d %d %s\n", message->authorities[0].name, message->authorities[0].type, 
+	   message->authorities[0].class, message->authorities[0].name_content);     */
+	if (message->header->rcode != extDnsResponseNameError ) {
+		printf ("ERROR: expected to find error code %d but found %d\n", message->header->rcode, extDnsResponseNameError);
+		return axl_false;
+	} /* end if */
+
+	/* printf ("Message size: %d\n", message->message_size); */
+	if (message->message_size != 41) {
+		printf ("ERROR: expected a message size reply of 108 or 94 but found %d\n", 
+			message->message_size);
+		return axl_false;
+	} /* end if */
+
+	/* release message */
+	ext_dns_message_unref (message);
+
+	ext_dns_async_queue_unref (queue);
+
+	/* terminate process */
+	ext_dns_exit_ctx (ctx, axl_true);
+
+	return axl_true; /* return ok */
+}
+
+axl_bool check_ipv4 (const char * ip, axl_bool should_work)
+{
+	axl_bool result = ext_dns_support_is_ipv4 (ip);
+
+	if (should_work && ! result) {
+		printf ("ERROR: expected to find function to detect %s as IPv4 but it wasn't..\n", ip);
+		exit (-1);
+	} else if (! should_work && result) {
+		printf ("ERROR: expected to find function to NOT detect %s as IPv4 but it was..\n", ip);
+		exit (-1);
+	}
+	
+	return axl_true;
+}
+
+axl_bool test_15 (void) {
+
+	extDnsCtx        * ctx;
+	extDnsMessage    * message;
+	extDnsAsyncQueue * queue;
+
+	if (! axl_cmp (dns_server, "localhost")) {
+		printf ("WARNING: skip asking to %s for this test..because we would need the server to reject answering to reject.aspl.es\n", dns_server);
+		return axl_true;
+	}
+
+	/* check IPv4 value detection .. */
+	check_ipv4 ("192.168.0.12", axl_true);
+	check_ipv4 ("1.168.0.12", axl_true);
+	check_ipv4 ("1.1.0.1", axl_true);
+	check_ipv4 ("192.168.0.255", axl_false);
+	check_ipv4 ("255.168.0.12", axl_false);
+	check_ipv4 ("0.168.0.0", axl_false);
+	check_ipv4 ("0.0.0.0", axl_false);
+
+	/* create context object */
+	ctx = ext_dns_ctx_new ();
+	if (ctx == NULL) {
+		printf ("ERROR: failed to allocate ctx object..\n");
+		return axl_false;
+	}
+
+	/* init context */
+	if (! ext_dns_init_ctx (ctx)) {
+		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
+		return axl_false;
+	}
+
+	/* run query and check results */
+	queue = ext_dns_async_queue_new ();
+	ext_dns_message_query (ctx, "a", "in", "rewrite-request.google.com", dns_server, dns_server_port, queue_reply, queue);
+
+	/* get reply (timeout in 3seconds) */
+	message = ext_dns_async_queue_timedpop (queue, 3000000);
+	if (message == NULL) {
+		printf ("ERROR: expected to find message reply but found NULL reference..\n");
+		return axl_false;
+	}
+
+	/* check header */
+	if (! check_header (message, 
+			    /* is query */ axl_false, 
+			    /* ans count */ 1, 
+			    /* query count */ 1,
+			    /* authority count */ 0,
+			    /* additional count */ 0))
+		return axl_false;
+
+	printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, 
+		message->answers[0].class, message->answers[0].name_content);     
+	if (message->header->rcode != extDnsResponseNoError ) {
+		printf ("ERROR: expected to find error code %d but found %d\n", message->header->rcode, extDnsResponseNoError);
+		return axl_false;
+	} /* end if */
+
+	/* printf ("Message size: %d\n", message->message_size); */
+	if (message->message_size != 86) {
+		printf ("ERROR: expected a message size reply of 86 but found %d\n", 
+			message->message_size);
+		return axl_false;
+	} /* end if */
+
+	/* release message */
+	ext_dns_message_unref (message);
+
+	ext_dns_async_queue_unref (queue);
+
+	/* terminate process */
+	ext_dns_exit_ctx (ctx, axl_true);
+
+	return axl_true; /* return ok */
+}
+
 
 typedef axl_bool  (*extDnsRegressionTest) (void);
 
@@ -1103,6 +1421,8 @@ int main (int argc, char ** argv) {
 	printf ("**\n");
 	printf ("**       Providing --run-test=NAME will run only the provided regression test.\n");
 	printf ("**       Test available: test_01, test_02, test_03, test_04, test_05\n");
+	printf ("**                       test_06, test_07, test_08, test_09, test_10\n");
+	printf ("**                       test_11, test_12\n");
 	printf ("**\n");
 
 	/* check for disable-time-checks */
@@ -1158,6 +1478,18 @@ int main (int argc, char ** argv) {
 		if (check_and_run_test (run_test_name, "test_11"))
 			run_test (test_11, "Test 11", "basic SRV query", -1, -1);
 
+		if (check_and_run_test (run_test_name, "test_12"))
+			run_test (test_12, "Test 12", "handing reject codes", -1, -1);
+
+		if (check_and_run_test (run_test_name, "test_13"))
+			run_test (test_13, "Test 13", "handing query for unknown domains", -1, -1);
+
+		if (check_and_run_test (run_test_name, "test_14"))
+			run_test (test_14, "Test 14", "handle fake unknown records", -1, -1);
+
+		if (check_and_run_test (run_test_name, "test_15"))
+			run_test (test_15, "Test 15", "handling IPv4 rewritting replies", -1, -1);
+
 		goto finish;
 	}
 
@@ -1183,6 +1515,14 @@ int main (int argc, char ** argv) {
 	run_test (test_10, "Test 10", "handle query for unknown records", -1, -1);
 
 	run_test (test_11, "Test 11", "basic SRV query", -1, -1);
+
+	run_test (test_12, "Test 12", "handing reject codes", -1, -1);
+
+	run_test (test_13, "Test 13", "handing query for unknown domains", -1, -1);
+
+	run_test (test_14, "Test 14", "handle fake unknown records", -1, -1);
+
+	run_test (test_15, "Test 15", "handling IPv4 rewritting replies", -1, -1);
 
 finish:
 
