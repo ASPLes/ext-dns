@@ -505,9 +505,9 @@ axl_bool          ext_dns_session_is_ok      (extDnsSession * session, axl_bool 
  * 
  */
 void                __ext_dns_session_shutdown_and_record_error (extDnsSession    * session,
-								    extDnsStatus       status,
-								    const char       * message,
-								    ...)
+								 extDnsStatus       status,
+								 const char       * message,
+								 ...)
 {
 	va_list     args;
 	char      * _msg;
@@ -533,8 +533,13 @@ void                __ext_dns_session_shutdown_and_record_error (extDnsSession  
 		axl_free (_msg);
 	} 
 
+	/* close socket */
+	ext_dns_session_shutdown (session);
+
 	return;
 }
+
+
 
 /** 
  * @brief Closes a session and releases all its resources
@@ -600,6 +605,22 @@ axl_bool                    ext_dns_session_close                  (extDnsSessio
 	} 
 
 	return axl_true;
+}
+
+/** 
+ * @brief Allows to close the socket that is supporting the provided
+ * session.
+ *
+ * @param session The session to be shutted down.
+ */
+void              ext_dns_session_shutdown   (extDnsSession * session)
+{
+	/* close socket */
+	if (session && session->session) {
+		ext_dns_close_socket (session->session);
+		session->session = -1;
+	} /* end if */
+	return;
 }
 
 /** 

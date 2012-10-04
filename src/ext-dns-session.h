@@ -68,6 +68,8 @@ axl_bool          ext_dns_session_is_ok      (extDnsSession * session, axl_bool 
 
 axl_bool          ext_dns_session_close      (extDnsSession * session);
 
+void              ext_dns_session_shutdown   (extDnsSession * session);
+
 void              ext_dns_session_set_on_message (extDnsSession            * session, 
 						  extDnsOnMessageReceived    on_dns_message, 
 						  axlPointer                 data);

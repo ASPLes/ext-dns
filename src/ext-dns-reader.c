@@ -153,6 +153,11 @@ axlPointer __ext_dns_reader_on_message_received (extDnsOnMessageReceivedData * d
 		session->expected_header = NULL;
 	} /* end if */
 
+	/* close the listener if indicated so */
+	if (session->close_on_reply)  {
+		ext_dns_session_close (session);
+	}
+
 	/* call to release message */
 	ext_dns_message_unref (message);
 	return NULL;

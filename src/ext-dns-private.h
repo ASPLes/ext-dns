@@ -207,6 +207,11 @@ struct _extDnsSession {
 	axl_bool                   close_on_message;
 
 	extDnsHeader             * expected_header;
+
+	/*** a flag used to close the listener when the first reply is
+	 * received: usually a listener created just to receive a DNS
+	 * reply ***/
+	axl_bool   close_on_reply;
 };
 
 /** 

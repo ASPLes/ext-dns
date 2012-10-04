@@ -1598,6 +1598,8 @@ int main (int argc, char ** argv) {
 
 	run_test (test_16, "Test 16", "handling CNAME rewritting replies", -1, -1);
 
+	run_test (test_17, "Test 17", "handling queries with multiple results ", -1, -1);
+
 finish:
 
 	printf ("**\n");

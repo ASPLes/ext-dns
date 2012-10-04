@@ -744,6 +744,40 @@ extDnsMessage * ext_dns_message_build_cname_reply (extDnsCtx * ctx, extDnsMessag
 	return reply;	
 }
 
+int __ext_dns_message_get_resource_size (extDnsResourceRecord * rr)
+{
+	int result = 2 + 2 + 4 + strlen (rr->name) + 2; /* type, class, ttl, name encoded */
+	
+	/* now according to the type, add additional values */
+	if (rr->type == extDnsTypeA) {
+		/* check values */
+		result += 2 + rr->rdlength;
+
+	} else if (rr->type == extDnsTypeMX) {
+		/* check values */
+		result += 2 + strlen (rr->name_content);
+
+	} else if (rr->type == extDnsTypeCNAME || rr->type == extDnsTypePTR || rr->type == extDnsTypeNS) {
+
+		/* check values */
+		result += 2 + strlen (rr->name_content) + 2;
+
+	} else if (rr->type == extDnsTypeTXT || rr->type == extDnsTypeSPF) {
+		/* check values */
+		result += 2 + rr->rdlength;
+
+	} else if (rr->type == extDnsTypeSOA) {
+
+		/* check values */
+		result += 26 + strlen (rr->mname) + strlen (rr->contact_address);
+
+	} else {
+		/* check values */
+		result += 2 + rr->rdlength;
+	}
+
+	return result;
+}
 
 /** 
  * @internal Function to dump DNS resource record into a buffer ready
@@ -751,12 +785,21 @@ extDnsMessage * ext_dns_message_build_cname_reply (extDnsCtx * ctx, extDnsMessag
  */
 int __ext_dns_message_write_resource_record (extDnsCtx * ctx, extDnsResourceRecord * rr, char * buffer, int buffer_size, int position)
 {
+	int limit;
 	
 	if (rr->name == NULL) {
 		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Recevied request to dump resource record with a NULL reference label..");
 		return position;
 	}
-		
+
+	/* check values before encoding (the following check protects
+	 * name, type, class and ttl) */
+	limit = position + __ext_dns_message_get_resource_size (rr);
+	if (limit > buffer_size) {
+		ext_dns_log (EXT_DNS_LEVEL_WARNING, "found more content %d (bytes) to be placed into the buffer than is accepted %d (bytes) while writting record",
+			     limit, buffer_size);
+		return -1;
+	} /* end if */
 
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "PLACING Resource record:  Encoding resource name: %s", rr->name);
 	position += ext_dns_encode_domain_name (ctx, rr->name, buffer + position);
@@ -837,6 +880,7 @@ int __ext_dns_message_write_resource_record (extDnsCtx * ctx, extDnsResourceReco
 		/* next record */
 		position += rr->rdlength;
 	} else if (rr->type == extDnsTypeSOA) {
+
 		/* set RDLENGTH */
 		ext_dns_set_16bit (strlen (rr->mname) + strlen (rr->contact_address) + 24, buffer + position);
 		/* next four bytes */
@@ -868,6 +912,7 @@ int __ext_dns_message_write_resource_record (extDnsCtx * ctx, extDnsResourceReco
 		ext_dns_set_32bit (rr->minimum, buffer + position);
 		position += 4;
 	} else {
+
 		/**** UNKNOWN RECORD ****/
 		/* unknown record type, write it as received */
 		ext_dns_set_16bit (rr->rdlength, buffer + position);
@@ -903,7 +948,9 @@ int __ext_dns_message_write_resource_record (extDnsCtx * ctx, extDnsResourceReco
 int             ext_dns_message_to_buffer (extDnsCtx * ctx, extDnsMessage * message, char * buffer,  int buffer_size)
 {
 	int position;
+	int result;
 	int count;
+	int limit;
 
 	/* check buffer size received */
 	if (buffer_size < 512)
@@ -1027,6 +1074,15 @@ int             ext_dns_message_to_buffer (extDnsCtx * ctx, extDnsMessage * mess
 	count = 0;
 	while (count < message->header->query_count) {
 		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "PLACING QUESTION:  Encoding resource name: %s", message->questions[count].qname);
+
+		/* check values before encoding */
+		limit = position + strlen (message->questions[count].qname) + 6;
+		if (limit > buffer_size) {
+			ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "found more content %d (bytes) to be placed into the buffer than is accepted %d (bytes)",
+				     limit, buffer_size);
+			return -1;
+		} /* end if */
+			
 		position += ext_dns_encode_domain_name (ctx, message->questions[count].qname, buffer + position);
 		
 		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "   qname position after placing name: %d", position);
@@ -1056,7 +1112,10 @@ int             ext_dns_message_to_buffer (extDnsCtx * ctx, extDnsMessage * mess
 	while (count < message->header->answer_count) {
 
 		/* dump resource record */
-		position = __ext_dns_message_write_resource_record (ctx, &message->answers[count], buffer, buffer_size, position);
+		result = __ext_dns_message_write_resource_record (ctx, &message->answers[count], buffer, buffer_size, position);
+		if (result == -1)
+			break;
+		position = result;
 
 		/* next count */ 
 		count++;
@@ -1067,7 +1126,10 @@ int             ext_dns_message_to_buffer (extDnsCtx * ctx, extDnsMessage * mess
 	while (count < message->header->authority_count) {
 
 		/* dump resource record */
-		position = __ext_dns_message_write_resource_record (ctx, &message->authorities[count], buffer, buffer_size, position);
+		result = __ext_dns_message_write_resource_record (ctx, &message->authorities[count], buffer, buffer_size, position);
+		if (result == -1)
+			break;
+		position = result;
 
 		/* next count */ 
 		count++;
@@ -1078,7 +1140,10 @@ int             ext_dns_message_to_buffer (extDnsCtx * ctx, extDnsMessage * mess
 	while (count < message->header->additional_count) {
 
 		/* dump resource record */
-		position = __ext_dns_message_write_resource_record (ctx, &message->additionals[count], buffer, buffer_size, position);
+		result = __ext_dns_message_write_resource_record (ctx, &message->additionals[count], buffer, buffer_size, position);
+		if (result == -1)
+			break;
+		position = result;
 
 		/* next count */ 
 		count++;
@@ -1144,6 +1209,9 @@ axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "ERROR: failed to start listener to receive the reply");
 		return axl_false; 
 	}
+
+	/* flag to close listener on reply */
+	listener->close_on_reply = axl_true;
 
 	/* configure on received message */
 	ext_dns_session_set_on_message (listener, on_message, data);
