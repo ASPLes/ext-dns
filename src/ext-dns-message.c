@@ -640,8 +640,7 @@ extDnsMessage * ext_dns_message_build_unknown_reply (extDnsCtx * ctx, extDnsMess
 
 /** 
  * @brief Allows to build a message reply to the provided message,
- * using as reply to the question that holds the message the IP
- * provided.
+ * using as reply to the question the IP provided.
  *
  * @param ctx The context where the operation will take place.
  *
@@ -695,10 +694,54 @@ extDnsMessage * ext_dns_message_build_ipv4_reply (extDnsCtx * ctx, extDnsMessage
 	reply->answers[0].rdata[2] = atoi(ip_items[2]);
 	reply->answers[0].rdata[3] = atoi(ip_items[3]);
 
-
-
 	/* return reply */
 	return reply;
+}
+
+/** 
+ * @brief Allows to build a message reply to the provided message,
+ * using as reply to the question the name provided.
+ *
+ * @param ctx The context where the operation will take place.
+ *
+ * @param message A DNS message question that will be used to build a reply.
+ *
+ * @param ip A name string value what will be used to complete the
+ * ANSWER section of the message. Note the reply created will have IN
+ * for the DNS class, and CNAME for the dns type record.
+ *
+ * @param ttl The ttl to be reported in the reply.
+ *
+ * @return A reference to a newly created message that represents the
+ * reply or NULL if the function fails. 
+ */
+extDnsMessage * ext_dns_message_build_cname_reply (extDnsCtx * ctx, extDnsMessage * message, const char * name, int ttl)
+{
+	extDnsMessage   * reply;
+
+	if (ctx == NULL || message == NULL || name == NULL)
+		return NULL;
+
+	/* build reply without error */
+	reply = __ext_dns_message_build_reply_common (ctx, message, extDnsResponseNoError);
+
+	/* copy questions */
+	reply->header->answer_count = 1;
+	reply->answers = axl_new (extDnsResourceRecord, 1);
+
+	/* configure answer record type */
+	reply->answers[0].name  = axl_strdup (reply->questions[0].qname);
+	reply->answers[0].class = extDnsClassIN;
+	reply->answers[0].type  = extDnsTypeCNAME;
+
+	/* copy pretty value */
+	reply->answers[0].name_content = axl_strdup (name);
+
+	/* set ttl */
+	reply->answers[0].ttl = ttl;
+
+	/* return reply */
+	return reply;	
 }
 
 

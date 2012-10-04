@@ -16,27 +16,30 @@ while True:
         print "OK"
     elif command[0:7] == "RESOLVE":
         query_items = command.split (" ")
-        name        = query_items[1]
-        dns_record  = query_items[2]
-        dns_class   = query_items[3]
+        source_ip   = query_items[1]
+        name        = query_items[2]
+        dns_record  = query_items[3]
+        dns_class   = query_items[4]
 
         if dns_class != "IN":
             # we only resolve in IN
             print "FORWARD"
             continue
 
+        # example about letting the server to do the resolution
         if dns_record != "A":
             # we only resolve in IN
             print "FORWARD"
             continue
 
-        # do dome database seach and resolve
-        sys.stderr.write (" ...reply to command: %s\n" % command)
+        # example about rewriting a request into another name
+        if name == "www.google.com":
+            print "REPLY name:www.aspl.es 3600"
+            continue
+
+        # example about giving an ip as a reply
         print "REPLY ipv4:192.168.0.1 3600"
 
-        if name == "www.google.com":
-            print "REPLY name:www.aspl.es 3600"            
-        
     else:
         # by default, if command is not handled, reply forward to make
         # the server to forward the reply to the forward dns server

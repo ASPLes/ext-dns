@@ -1333,6 +1333,75 @@ axl_bool test_15 (void) {
 	return axl_true; /* return ok */
 }
 
+axl_bool test_16 (void) {
+
+	extDnsCtx        * ctx;
+	extDnsMessage    * message;
+	extDnsAsyncQueue * queue;
+
+	if (! axl_cmp (dns_server, "localhost")) {
+		printf ("WARNING: skip asking to %s for this test..because we would need the server rewrite rewrite.asplhosting.com\n", dns_server);
+		return axl_true;
+	}
+
+	/* create context object */
+	ctx = ext_dns_ctx_new ();
+	if (ctx == NULL) {
+		printf ("ERROR: failed to allocate ctx object..\n");
+		return axl_false;
+	}
+
+	/* init context */
+	if (! ext_dns_init_ctx (ctx)) {
+		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
+		return axl_false;
+	}
+
+	/* run query and check results */
+	queue = ext_dns_async_queue_new ();
+	ext_dns_message_query (ctx, "a", "in", "rewrite.asplhosting.com", dns_server, dns_server_port, queue_reply, queue);
+
+	/* get reply (timeout in 3seconds) */
+	message = ext_dns_async_queue_timedpop (queue, 3000000);
+	if (message == NULL) {
+		printf ("ERROR: expected to find message reply but found NULL reference..\n");
+		return axl_false;
+	}
+
+	/* check header */
+	if (! check_header (message, 
+			    /* is query */ axl_false, 
+			    /* ans count */ 1, 
+			    /* query count */ 1,
+			    /* authority count */ 0,
+			    /* additional count */ 0))
+		return axl_false;
+
+	printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, 
+		message->answers[0].class, message->answers[0].name_content);     
+	if (message->header->rcode != extDnsResponseNoError ) {
+		printf ("ERROR: expected to find error code %d but found %d\n", message->header->rcode, extDnsResponseNoError);
+		return axl_false;
+	} /* end if */
+
+	/* printf ("Message size: %d\n", message->message_size); */
+	if (message->message_size != 86) {
+		printf ("ERROR: expected a message size reply of 86 but found %d\n", 
+			message->message_size);
+		return axl_false;
+	} /* end if */
+
+	/* release message */
+	ext_dns_message_unref (message);
+
+	ext_dns_async_queue_unref (queue);
+
+	/* terminate process */
+	ext_dns_exit_ctx (ctx, axl_true);
+
+	return axl_true; /* return ok */
+}
+
 
 typedef axl_bool  (*extDnsRegressionTest) (void);
 
@@ -1490,6 +1559,9 @@ int main (int argc, char ** argv) {
 		if (check_and_run_test (run_test_name, "test_15"))
 			run_test (test_15, "Test 15", "handling IPv4 rewritting replies", -1, -1);
 
+		if (check_and_run_test (run_test_name, "test_16"))
+			run_test (test_16, "Test 16", "handling CNAME rewritting replies", -1, -1);
+
 		goto finish;
 	}
 
@@ -1523,6 +1595,8 @@ int main (int argc, char ** argv) {
 	run_test (test_14, "Test 14", "handle fake unknown records", -1, -1);
 
 	run_test (test_15, "Test 15", "handling IPv4 rewritting replies", -1, -1);
+
+	run_test (test_16, "Test 16", "handling CNAME rewritting replies", -1, -1);
 
 finish:
 
