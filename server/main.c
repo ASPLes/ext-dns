@@ -328,12 +328,21 @@ extDnsMessage * ext_dnsd_handle_reply (extDnsCtx * ctx, extDnsMessage * query, c
 		/* get ttl */
 		ttl = atoi (items[2]);
 		printf ("Script reported to use IP %s (with ttl %d) as reply..\n", items[1] + 5, ttl);
+
+		/* build reply */
 		reply = ext_dns_message_build_ipv4_reply (ctx, query, value, ttl);
 		
 	} else if (axl_memcmp (items[1], "name:", 5)) {
 		/* get ttl */
 		ttl = atoi (items[2]);
-		printf ("Script reported to use Name %s (with ttl %d) as reply..\n", items[1] + 5, ttl);
+
+		/* get value */
+		value = items[1] + 5;
+
+		printf ("Script reported to use Name %s (with ttl %d) as reply..\n", value, ttl);
+
+		/* build reply */
+		reply = ext_dns_message_build_cname_reply (ctx, query, value, ttl);
 	}
 
 	axl_freev (items);
@@ -369,7 +378,8 @@ void on_received  (extDnsCtx     * ctx,
 		message->questions[0].qname);
 
 	/* build query line to be resolved by child process */
-	command = axl_strdup_printf ("RESOLVE %s %s %s", 
+	command = axl_strdup_printf ("RESOLVE %s %s %s %s", 
+				     source_address,
 				     message->questions[0].qname,
 				     ext_dns_message_get_qtype_to_str (ctx, message->questions[0].qtype),
 				     ext_dns_message_get_qclass_to_str (ctx, message->questions[0].qclass));

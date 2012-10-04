@@ -132,6 +132,7 @@ void on_received  (extDnsCtx     * ctx,
 	/* check for rejections, unknowns or rewrites */
 	if (axl_cmp (message->questions[0].qname, "reject.aspl.es") ||
 	    axl_cmp (message->questions[0].qname, "rewrite-request.google.com") ||
+	    axl_cmp (message->questions[0].qname, "rewrite.asplhosting.com") ||
 	    axl_cmp (message->questions[0].qname, "trigger-unknown.aspl.es")) {
 
 		/* build reply */
@@ -139,6 +140,8 @@ void on_received  (extDnsCtx     * ctx,
 			reply = ext_dns_message_build_reject_reply (ctx, message);
 		else if (axl_cmp (message->questions[0].qname, "rewrite-request.google.com"))
 			reply = ext_dns_message_build_ipv4_reply (ctx, message, "17.17.17.17", 2000);
+		else if (axl_cmp (message->questions[0].qname, "rewrite.asplhosting.com"))
+			reply = ext_dns_message_build_cname_reply (ctx, message, "www.aspl.es", 2000);
 		else {
 			/* trigger case */
 			reply = ext_dns_message_build_unknown_reply (ctx, message);
