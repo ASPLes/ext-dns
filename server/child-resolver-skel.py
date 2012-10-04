@@ -32,6 +32,9 @@ while True:
             print "FORWARD"
             continue
 
+        print "FORWARD"
+        continue
+
         # example about rewriting a request into another name
         if name == "www.google.com":
             print "REPLY name:www.aspl.es 3600"
