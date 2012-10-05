@@ -1308,8 +1308,8 @@ axl_bool test_15 (void) {
 			    /* additional count */ 0))
 		return axl_false;
 
-	printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, 
-		message->answers[0].class, message->answers[0].name_content);     
+	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, 
+	   message->answers[0].class, message->answers[0].name_content);      */
 	if (message->header->rcode != extDnsResponseNoError ) {
 		printf ("ERROR: expected to find error code %d but found %d\n", message->header->rcode, extDnsResponseNoError);
 		return axl_false;
@@ -1377,15 +1377,16 @@ axl_bool test_16 (void) {
 			    /* additional count */ 0))
 		return axl_false;
 
-	printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, 
-		message->answers[0].class, message->answers[0].name_content);     
+	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, 
+	   message->answers[0].class, message->answers[0].name_content);      */
 	if (message->header->rcode != extDnsResponseNoError ) {
 		printf ("ERROR: expected to find error code %d but found %d\n", message->header->rcode, extDnsResponseNoError);
 		return axl_false;
 	} /* end if */
 
 	/* printf ("Message size: %d\n", message->message_size); */
-	if (message->message_size != 86) {
+	if (message->message_size != 86 &&
+	    message->message_size != 89) {
 		printf ("ERROR: expected a message size reply of 86 but found %d\n", 
 			message->message_size);
 		return axl_false;
@@ -1395,6 +1396,109 @@ axl_bool test_16 (void) {
 	ext_dns_message_unref (message);
 
 	ext_dns_async_queue_unref (queue);
+
+	/* terminate process */
+	ext_dns_exit_ctx (ctx, axl_true);
+
+	return axl_true; /* return ok */
+}
+
+axl_bool test_17 (void) {
+
+	extDnsCtx        * ctx;
+	extDnsMessage    * message;
+	extDnsAsyncQueue * queue;
+
+	if (! axl_cmp (dns_server, "localhost")) {
+		printf ("WARNING: skip asking to %s for this test..because we would need the server rewrite rewrite.asplhosting.com\n", dns_server);
+		return axl_true;
+	}
+
+	/* create context object */
+	ctx = ext_dns_ctx_new ();
+	if (ctx == NULL) {
+		printf ("ERROR: failed to allocate ctx object..\n");
+		return axl_false;
+	}
+
+	/* init context */
+	if (! ext_dns_init_ctx (ctx)) {
+		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
+		return axl_false;
+	}
+
+	/* run query and check results */
+	queue = ext_dns_async_queue_new ();
+	ext_dns_message_query (ctx, "a", "in", "www.google-analytics.com", dns_server, dns_server_port, queue_reply, queue);
+
+	/* get reply (timeout in 3seconds) */
+	message = ext_dns_async_queue_timedpop (queue, 3000000);
+	if (message == NULL) {
+		printf ("ERROR: expected to find message reply but found NULL reference..\n");
+		return axl_false;
+	}
+
+	/* check header */
+	if (! check_header (message, 
+			    /* is query */ axl_false, 
+			    /* ans count */ 12, 
+			    /* query count */ 1,
+			    /* authority count */ 0,
+			    /* additional count */ 0))
+		return axl_false;
+
+	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, 
+	   message->answers[0].class, message->answers[0].name_content);      */
+	if (message->header->rcode != extDnsResponseNoError ) {
+		printf ("ERROR: expected to find error code %d but found %d\n", message->header->rcode, extDnsResponseNoError);
+		return axl_false;
+	} /* end if */
+
+	/* printf ("Message size: %d\n", message->message_size); */
+	if (message->message_size != 505) {
+		printf ("ERROR: expected a message size reply of 86 but found %d\n", 
+			message->message_size);
+		return axl_false;
+	} /* end if */
+
+	/* release message */
+	ext_dns_message_unref (message);
+
+	ext_dns_async_queue_unref (queue);
+
+	/* terminate process */
+	ext_dns_exit_ctx (ctx, axl_true);
+
+	return axl_true; /* return ok */
+}
+
+axl_bool test_18 (void) {
+
+	extDnsCtx        * ctx;
+
+	if (! axl_cmp (dns_server, "localhost")) {
+		printf ("WARNING: skip asking to %s for this test..because we would need the server rewrite rewrite.asplhosting.com\n", dns_server);
+		return axl_true;
+	}
+
+	/* create context object */
+	ctx = ext_dns_ctx_new ();
+	if (ctx == NULL) {
+		printf ("ERROR: failed to allocate ctx object..\n");
+		return axl_false;
+	}
+
+	/* init context */
+	if (! ext_dns_init_ctx (ctx)) {
+		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
+		return axl_false;
+	}
+
+	/* run query and check results */
+	if (ext_dns_message_query (ctx, "a", "in", "www.asplfkdfskjdfaklsdfjawlekjqrqwjkerksdfjkljwerkwlejrlkjweqklejrlsdfsdf.es", dns_server, dns_server_port, NULL, NULL)) {
+		printf ("ERROR: bigger labels aren't allowed and ext-dns message query reported ok..\n");
+		return axl_false;
+	}
 
 	/* terminate process */
 	ext_dns_exit_ctx (ctx, axl_true);
@@ -1561,6 +1665,12 @@ int main (int argc, char ** argv) {
 
 		if (check_and_run_test (run_test_name, "test_16"))
 			run_test (test_16, "Test 16", "handling CNAME rewritting replies", -1, -1);
+		
+		if (check_and_run_test (run_test_name, "test_17"))
+			run_test (test_17, "Test 17", "handling queries with multiple results ", -1, -1);
+
+		if (check_and_run_test (run_test_name, "test_18"))
+			run_test (test_18, "Test 18", "handling longer query names", -1, -1);
 
 		goto finish;
 	}
@@ -1599,6 +1709,8 @@ int main (int argc, char ** argv) {
 	run_test (test_16, "Test 16", "handling CNAME rewritting replies", -1, -1);
 
 	run_test (test_17, "Test 17", "handling queries with multiple results ", -1, -1);
+
+	run_test (test_18, "Test 18", "handling longer query names", -1, -1);
 
 finish:
 

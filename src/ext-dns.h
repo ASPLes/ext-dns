@@ -479,7 +479,7 @@ void   ext_dns_set_32bit (int value, char * buffer);
 
 int    ext_dns_get_32bit (const char * buffer);
 
-int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * buffer);
+int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * buffer, int buffer_size);
 
 #if defined(__COMPILING_EXT_DNS__) && defined(__GNUC__)
 /* makes gcc happy, by prototyping functions which aren't exported
