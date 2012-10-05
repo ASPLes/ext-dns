@@ -1217,8 +1217,11 @@ int    ext_dns_get_32bit (const char * buffer)
 /** 
  * @internal Allows to set the the provided value encoded using DNS
  * rules on the buffer provided, returning the last position written.
+ *
+ * @return The number of bytes that were written to the buffer or -1
+ * if it fails.
  */
-int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * buffer)
+int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * buffer, int buffer_size)
 {
 	int          counter = 0;
 	int          iterator = 0;
@@ -1230,7 +1233,7 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
 		return 1;
 	} /* end if */
 
-	while (value[iterator]) {
+	while (value[iterator] && (iterator + 1) < buffer_size) {
 		/* copy value */
 		buffer[iterator + 1] = value[iterator];
 		
@@ -1257,9 +1260,20 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
 		/* copy value */
 		counter ++;
 
+		/* check for labels biggers than supported value */
+		if (counter > 63) {
+			ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Trying to encode a label that is bigger than allowed (63 bytes): %s", 
+				     value);
+			return -1;
+		}
+
 		/* next position */
 		iterator++;
 	} /* end if */
+
+	/* check for buffer overflow */
+	if ((iterator + 1) >= buffer_size)
+		return -1;
 
 	/* write last \0 */
 	buffer[iterator + 1] = 0;

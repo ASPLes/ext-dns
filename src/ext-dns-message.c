@@ -113,7 +113,7 @@ char * ext_dns_message_get_label (extDnsCtx * ctx, const char * buffer)
 	char * label;
 	int    bytes_to_read = (char)(buffer[0]) & 0x3f;
 
-	if (bytes_to_read == 0)
+	if (bytes_to_read == 0 || bytes_to_read > 63)
 		return NULL;
 	
 	label = axl_new (char, bytes_to_read + 1);
@@ -476,8 +476,8 @@ extDnsMessage * ext_dns_message_parse_message (extDnsCtx * ctx, extDnsHeader * h
 		message->questions[count].qname  = ext_dns_message_get_resource_name (ctx, buf, buf_size, &iterator, &is_label);
 
 		/* failed to get query name */
-		if (message->questions[count].qname == NULL)
-			break;
+		if (message->questions[count].qname == NULL) 
+			return ext_dns_message_release_and_return (message);
 
 		/* if (! is_label)
 			iterator += strlen (message->questions[count].qname) + 2;
@@ -693,6 +693,7 @@ extDnsMessage * ext_dns_message_build_ipv4_reply (extDnsCtx * ctx, extDnsMessage
 	reply->answers[0].rdata[1] = atoi(ip_items[1]);
 	reply->answers[0].rdata[2] = atoi(ip_items[2]);
 	reply->answers[0].rdata[3] = atoi(ip_items[3]);
+	axl_freev (ip_items);
 
 	/* return reply */
 	return reply;
@@ -786,7 +787,8 @@ int __ext_dns_message_get_resource_size (extDnsResourceRecord * rr)
 int __ext_dns_message_write_resource_record (extDnsCtx * ctx, extDnsResourceRecord * rr, char * buffer, int buffer_size, int position)
 {
 	int limit;
-	
+	int result;
+
 	if (rr->name == NULL) {
 		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Recevied request to dump resource record with a NULL reference label..");
 		return position;
@@ -802,7 +804,10 @@ int __ext_dns_message_write_resource_record (extDnsCtx * ctx, extDnsResourceReco
 	} /* end if */
 
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "PLACING Resource record:  Encoding resource name: %s", rr->name);
-	position += ext_dns_encode_domain_name (ctx, rr->name, buffer + position);
+	result = ext_dns_encode_domain_name (ctx, rr->name, buffer + position, buffer_size - position);
+	if (result == -1)
+		return -1;
+	position += result;
 	
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "   name position after placing name: %d", position);
 	
@@ -852,7 +857,10 @@ int __ext_dns_message_write_resource_record (extDnsCtx * ctx, extDnsResourceReco
 		position += 2;
 
 		/* encode MX server */
-		position += ext_dns_encode_domain_name (ctx, rr->name_content, buffer + position);
+		result = ext_dns_encode_domain_name (ctx, rr->name_content, buffer + position, buffer_size - position);
+		if (result == -1)
+			return -1;
+		position += result;
 
 		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "   written rdlength: %d", strlen (rr->name_content) + 4);
 
@@ -866,7 +874,10 @@ int __ext_dns_message_write_resource_record (extDnsCtx * ctx, extDnsResourceReco
 
 		/* encode CNAME, PTR or NS value */
 		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "  enconding type %s: %s", ext_dns_message_get_qtype_to_str (ctx, rr->type), rr->name_content);
-		position += ext_dns_encode_domain_name (ctx, rr->name_content, buffer + position);
+		result = ext_dns_encode_domain_name (ctx, rr->name_content, buffer + position, buffer_size - position);
+		if (result == -1)
+			return -1;
+		position += result;
 
 	} else if (rr->type == extDnsTypeTXT || rr->type == extDnsTypeSPF) {
 		/* set RDLENGTH */
@@ -887,10 +898,16 @@ int __ext_dns_message_write_resource_record (extDnsCtx * ctx, extDnsResourceReco
 		position += 2;
 
 		/* encode mname value */
-		position += ext_dns_encode_domain_name (ctx, rr->mname, buffer + position);
+		result = ext_dns_encode_domain_name (ctx, rr->mname, buffer + position, buffer_size - position);
+		if (result == -1)
+			return -1;
+		position += result;
 
 		/* encode contact address value */
-		position += ext_dns_encode_domain_name (ctx, rr->contact_address, buffer + position);
+		result = ext_dns_encode_domain_name (ctx, rr->contact_address, buffer + position, buffer_size - position);
+		if (result == -1)
+			return -1;
+		position += result;
 
 		/* set serial preference */
 		ext_dns_set_32bit (rr->serial, buffer + position);
@@ -1083,7 +1100,10 @@ int             ext_dns_message_to_buffer (extDnsCtx * ctx, extDnsMessage * mess
 			return -1;
 		} /* end if */
 			
-		position += ext_dns_encode_domain_name (ctx, message->questions[count].qname, buffer + position);
+		result = ext_dns_encode_domain_name (ctx, message->questions[count].qname, buffer + position, buffer_size - position);
+		if (result == -1)
+			return -1;
+		position += result;
 		
 		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "   qname position after placing name: %d", position);
 		
@@ -1489,12 +1509,13 @@ void ext_dns_message_unref (extDnsMessage * message)
  * query sent.
  *
  * @return The function returns the number of bytes written into the
- * buffer
+ * buffer or -1 if it fails.
  */
 int             ext_dns_message_build_query (extDnsCtx * ctx, const char * qname, extDnsType qtype, extDnsClass qclass, char * buffer, extDnsHeader ** header)
 {
 	int            position;
 	extDnsHeader * _header;
+	int            result;
 
 	/* Simple "srand()" seed: just use "time()" */
 	/*	unsigned int iseed = (unsigned int) time(NULL);
@@ -1524,7 +1545,12 @@ int             ext_dns_message_build_query (extDnsCtx * ctx, const char * qname
 	position = 12;
 
 	/* now write question */
-	position += ext_dns_encode_domain_name (ctx, qname, buffer + position);
+	result = ext_dns_encode_domain_name (ctx, qname, buffer + position, 512 - position);
+	if (result == -1) {
+		axl_free (_header);
+		return -1;
+	}
+	position += result;
 
 	/* place qtype */
 	ext_dns_set_16bit (qtype, buffer + position);
