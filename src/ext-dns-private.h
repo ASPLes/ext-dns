@@ -176,7 +176,7 @@ struct _extDnsSession {
 	extDnsMutex pending_errors_mutex;
 
 	axlHash     * data;
-	extDnsMutex * data_mutex;
+	extDnsMutex   data_mutex;
 
 	/** 
 	 * @brief Host name this connection is actually connected to.

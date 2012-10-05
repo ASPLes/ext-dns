@@ -74,6 +74,15 @@ void              ext_dns_session_set_on_message (extDnsSession            * ses
 						  extDnsOnMessageReceived    on_dns_message, 
 						  axlPointer                 data);
 
+void              ext_dns_session_set_data (extDnsSession * session,
+					    const char    * key,
+					    axlDestroyFunc  key_destroy,
+					    axlPointer      data,
+					    axlDestroyFunc  data_destroy);
+
+axlPointer        ext_dns_session_get_data (extDnsSession * session, 
+					    const char    * key);
+
 axl_bool          ext_dns_session_ref        (extDnsSession * session, 
 					      const char    * who);
 

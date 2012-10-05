@@ -94,6 +94,7 @@ ext_dns_log_get_handler
 ext_dns_log_is_enabled
 ext_dns_log_set_handler
 ext_dns_log_set_prepare_log
+ext_dns_message_build_cname_reply
 ext_dns_message_build_ipv4_reply
 ext_dns_message_build_query
 ext_dns_message_build_reject_reply
@@ -144,6 +145,7 @@ ext_dns_session_close
 ext_dns_session_do_sanity_check
 ext_dns_session_free
 ext_dns_session_get_ctx
+ext_dns_session_get_data
 ext_dns_session_get_host
 ext_dns_session_get_id
 ext_dns_session_get_port
@@ -158,11 +160,13 @@ ext_dns_session_ref
 ext_dns_session_ref_internal
 ext_dns_session_send_udp
 ext_dns_session_send_udp_s
+ext_dns_session_set_data
 ext_dns_session_set_nonblocking_socket
 ext_dns_session_set_on_message
 ext_dns_session_set_sock_block
 ext_dns_session_set_sock_tcp_nodelay
 ext_dns_session_set_socket
+ext_dns_session_shutdown
 ext_dns_session_unref
 ext_dns_set_16bit
 ext_dns_set_32bit
