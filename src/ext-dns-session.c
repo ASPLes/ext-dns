@@ -654,6 +654,89 @@ void              ext_dns_session_set_on_message (extDnsSession             * se
 	return;
 }
 
+/** 
+ * @brief Allows to set a key and a value associated to the provided
+ * session which can be used later to retrieve those values.
+ *
+ * The function also accepts a set of destroy functions that are
+ * called automatically when the session is destroyed to release those
+ * elements (they are optional).
+ *
+ * @param session The session where to store the key and value.
+ *
+ * @param key The under which the data will be associated and
+ * indexed. If there is a previously value stored with the same key,
+ * it will be replaced by this new value (having key_destroy and
+ * data_destroy called if they were defined). NOTE key cannot be
+ * NULL. If NULL key value is provided, the function will return
+ * without doing anything
+ *
+ * @param key_destroy The optional key destroy function to be called
+ * to release memory hold by the key.
+ *
+ * @param data The data to be associated to the provided key. If the
+ * data is NULL, it will cause the function to remove the key and data
+ * associated. Passing the valid key and NULL as data is the way to
+ * remove entries from the hash.
+ *
+ * @param data_destroy The optional data destroy function to be called
+ * to release the data reference.
+ */
+void              ext_dns_session_set_data (extDnsSession * session,
+					    const char    * key,
+					    axlDestroyFunc  key_destroy,
+					    axlPointer      data,
+					    axlDestroyFunc  data_destroy)
+{
+	if (session == NULL || key == NULL)
+		return;
+
+	ext_dns_mutex_lock (&session->data_mutex);
+	if (data == NULL) {
+		/* user requested to remove the value */
+		axl_hash_remove (session->data, (axlPointer) key);
+	} else {
+		/* set (and replace if there weren't some data) */
+		axl_hash_insert_full (session->data, (axlPointer) key, key_destroy, (axlPointer) data, data_destroy);
+	} /* end if */
+
+	ext_dns_mutex_unlock (&session->data_mutex);
+
+	return;
+}
+
+/** 
+ * @brief Allows to get the data associated to the provided key on the
+ * provided session.
+ *
+ * Data that can be retrieved by this function were previously stored
+ * by \ref ext_dns_session_set_data.
+ *
+ * @param session The session where the data is stored.
+ *
+ * @param key The key under which the data was stored.
+ *
+ * @return A reference to the data or NULL if it fails.
+ *
+ */
+axlPointer        ext_dns_session_get_data (extDnsSession * session, 
+					    const char    * key)
+{
+	axlPointer data;
+
+	if (session == NULL || key == NULL)
+		return NULL;
+
+	ext_dns_mutex_lock (&session->data_mutex);
+
+	/* get data */
+	data = axl_hash_get (session->data, (axlPointer) key);
+
+	ext_dns_mutex_unlock (&session->data_mutex);
+
+	return data;
+}
+
 /**
  * @internal Reference counting update implementation.
  */
@@ -778,7 +861,7 @@ void               ext_dns_session_unref                  (extDnsSession * sessi
 	/* decrease reference counting */
 	session->ref_count--;
 
-	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "%d decreased session id=%d (%p) reference count to %d decreased by %s\n", 
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "-------> %d decreased session id=%d (%p) reference count to %d decreased by %s\n", 
 		ext_dns_getpid (),
 		session->id, session,
 		session->ref_count, who ? who : "??");  
@@ -1155,6 +1238,13 @@ void               ext_dns_session_free (extDnsSession * session)
 		session->session = -1;
 		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "session socket closed");
 	}
+
+	/* release data */
+	axl_hash_free (session->data);
+	ext_dns_mutex_destroy (&session->data_mutex);
+
+	/* release expected header */
+	axl_free (session->expected_header);
 	
 	/* release reference to context */
 	ext_dns_ctx_unref2 (&session->ctx, "end session");
@@ -1806,6 +1896,9 @@ extDnsSession * ext_dns_session_new_empty_from_session (extDnsCtx          * ctx
 	session->ctx                = ctx;
 	ext_dns_ctx_ref2 (ctx, "new session"); /* acquire a reference to context */
 	session->id                 = __ext_dns_session_get_next_id (ctx);
+
+	/* init hash data */
+	ext_dns_mutex_create (&session->data_mutex);
 
 	/* set the session type */
 	session->type               = type;

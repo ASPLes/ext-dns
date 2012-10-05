@@ -1244,6 +1244,7 @@ axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type
 
 	/* send message */
 	if (ext_dns_session_send_udp_s (ctx, listener, buffer, bytes_written, server, 53) != bytes_written) {
+		ext_dns_session_close (listener);
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "ERROR: failed to message..");
 		return axl_false;
 	} /* end if */

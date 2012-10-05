@@ -245,7 +245,9 @@ void handle_reply (extDnsCtx     * ctx,
 	/* get the reply into a buffer */
 	bytes_written = ext_dns_message_to_buffer (ctx, message, buffer, 512);
 	if (bytes_written == -1) {
-		handle_reply_data_free (reply_data);
+		/* handle_reply_data_free (reply_data); */
+		/* not required to release data here because this is
+		 * done by the engine when the session is finished */
 
 		printf ("ERROR: failed to build buffer representation for reply received..\n");
 		return;
@@ -259,8 +261,9 @@ void handle_reply (extDnsCtx     * ctx,
 		printf ("INFO: reply sent!\n");
 	
 
-	/* release data */
-	handle_reply_data_free (reply_data);
+	/* handle_reply_data_free (reply_data); */
+	/* not required to release data here because this is done by
+	 * the engine when the session is finished */
 	return;
 }
 
@@ -436,12 +439,17 @@ void on_received  (extDnsCtx     * ctx,
 	data->source_address   = axl_strdup (source_address);
 	data->source_port      = source_port;
 	data->master_listener  = session;
+
+	/* link this data to the session to be released in the case on
+	 * received isn't called */
+	ext_dns_session_set_data (session, "reply_status", NULL, data, (axlDestroyFunc) handle_reply_data_free); 
 	
 	/* send query */
 	result = ext_dns_message_query_from_msg (ctx, message, server, server_port, handle_reply, data);
 
-	if (! result) 
+	if (! result) {
 		printf ("ERROR: failed to send query to master server..\n");
+	}
 
 	return;
 }
@@ -793,6 +801,9 @@ int main (int argc, char ** argv) {
 
 	/* finish exarg */
 	exarg_end ();	
+
+	/* free configuration object */
+	axl_doc_free (config);
 	
 	return 0;
 }

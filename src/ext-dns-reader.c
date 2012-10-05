@@ -154,9 +154,8 @@ axlPointer __ext_dns_reader_on_message_received (extDnsOnMessageReceivedData * d
 	} /* end if */
 
 	/* close the listener if indicated so */
-	if (session->close_on_reply)  {
+	if (session->close_on_reply)  
 		ext_dns_session_close (session);
-	}
 
 	/* call to release message */
 	ext_dns_message_unref (message);
@@ -237,6 +236,10 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 
 	/* check here message size to limit incoming queries */
 	if (bytes_read > 512) {
+		/* check to close session for thise reply */
+		if (session->close_on_reply)  
+			ext_dns_session_close (session);
+
 		axl_free (source_address);
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Received a DNS message that is bigger than allowed values (%d > 512)",
 			     bytes_read);
@@ -260,11 +263,19 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 	if (message == NULL) {
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Parse error for incoming message from %s:%d, skipping userlevel notification", source_address, source_port);
 		axl_free (source_address);
+
+		/* check to close session for thise reply */
+		if (session->close_on_reply)  
+			ext_dns_session_close (session);
+
 		return;
 	}
 
 	/* queue message to be handled in other part */
 	if (! session->on_message && ! ctx->on_message) {
+		if (session->close_on_reply)  
+			ext_dns_session_close (session);
+
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Received a DNS message but no on message handler was found configured, dropping DNS message");
 
 		/* release the message */
@@ -275,6 +286,9 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 	/* build on data */
 	data = axl_new (extDnsOnMessageReceivedData, 1);
 	if (data == NULL) {
+		if (session->close_on_reply)  
+			ext_dns_session_close (session);
+
 		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to allocate memory, unable to process message received");
 		return;
 	} /* end if */
