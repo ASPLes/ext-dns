@@ -426,6 +426,37 @@ typedef void     (*extDnsOnMessageReceived) (extDnsCtx     * ctx,
 					     extDnsMessage * message,
 					     axlPointer      data);
 
+/** 
+ * @brief Defines the set of handler functions that are called to
+ * notify a bad DNS request received (malformed message, incomplete
+ * values or wrong values).
+ *
+ * @param session The DNS session where the message was received.
+ *
+ * @param source_address The source address where the message comes from.
+ *
+ * @param source_port The source port where the message comes from.
+ *
+ * @param buffer The binary message received that was considered as bad request.
+ *
+ * @param buffer_size The size of the message.
+ *
+ * @param reason A textual message that indicates why it was
+ * considered a bad message.
+ *
+ * @param data A user defined pointer that was configured along with
+ * the handler.
+ * 
+ */
+typedef void     (*extDnsOnBadRequest) (extDnsCtx     * ctx,
+					extDnsSession * session,
+					const char    * source_address,
+					int             source_port,
+					const char    * buffer,
+					int             buffer_size,
+					const char    * reason,
+					axlPointer      data);
+
 
 
 #endif /* __EXT_DNS_HANDLERS_H__ */

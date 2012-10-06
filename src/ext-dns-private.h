@@ -204,14 +204,16 @@ struct _extDnsSession {
 	/*** handler for message received ***/
 	extDnsOnMessageReceived    on_message;
 	axlPointer                 on_message_data;
-	axl_bool                   close_on_message;
-
 	extDnsHeader             * expected_header;
 
 	/*** a flag used to close the listener when the first reply is
 	 * received: usually a listener created just to receive a DNS
 	 * reply ***/
 	axl_bool   close_on_reply;
+
+	/*** handler for bad request received  ***/
+	extDnsOnBadRequest       on_bad_request;
+	axlPointer               on_bad_request_data;
 };
 
 /** 

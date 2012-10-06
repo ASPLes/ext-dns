@@ -46,6 +46,8 @@ at <ext-dns@lists.aspl.es>."
 
 #include <ext-dns.h>
 
+#include <syslog.h>
+
 #ifdef AXL_OS_UNIX
 #include <signal.h>
 #endif
@@ -90,6 +92,23 @@ typedef struct _childState {
 childState * children;
 int          child_number;
 extDnsMutex  children_mutex;
+
+void ext_dnsd_finish_childs (void) {
+	int iterator = 0;
+
+	while (iterator < child_number) {
+		ext_dns_mutex_destroy (&(children[iterator].mutex));
+		axl_free (children[iterator].last_command);
+
+		/* next iterator */
+		iterator++;
+	}
+
+	axl_free (children);
+	ext_dns_mutex_destroy (&children_mutex);
+
+	return;
+}
 
 void ext_dnsd_release_child (childState * child)
 {
@@ -192,11 +211,11 @@ axl_bool send_command (const char * command, childState * child, char * reply, i
 	/* send command */
 	bytes_written = strlen (command);
 	if (write (child->fds[1], command, bytes_written) != bytes_written) {
-		printf ("ERROR: failed to send command to child, error was errno=%d (%s)\n", errno, ext_dns_errno_get_last_error ());
+		syslog (LOG_ERR, "ERROR: failed to send command to child, error was errno=%d (%s)\n", errno, ext_dns_errno_get_last_error ());
 		return axl_false;
 	}
 	if (write (child->fds[1], "\n", 1) != 1) {
-		printf ("ERROR: failed to write trailing command, error was errno=%d (%s)\n", errno, ext_dns_errno_get_last_error ());
+		syslog (LOG_ERR, "ERROR: failed to write trailing command, error was errno=%d (%s)\n", errno, ext_dns_errno_get_last_error ());
 		return axl_false;
 	}
 
@@ -206,7 +225,7 @@ axl_bool send_command (const char * command, childState * child, char * reply, i
 	bytes_written = ext_dnsd_readline (child->fds[0], reply, reply_size);
 
 	if (bytes_written < 0) {
-		printf ("ERROR: failed to receive content from child, error was errno=%d (%s)\n", errno, ext_dns_errno_get_last_error ());
+		syslog (LOG_ERR, "ERROR: failed to receive content from child, error was errno=%d (%s)\n", errno, ext_dns_errno_get_last_error ());
 		return axl_false;
 	} /* end if */
 
@@ -231,14 +250,6 @@ void handle_reply (extDnsCtx     * ctx,
 	int               bytes_written;
 	HandleReplyData * reply_data = data;
 
-	if (message->answers) {
-		printf ("REPLY: received reply from %s:%d, values: %s %d %d %s\n", 
-			server, server_port,
-			message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content); 
-	} else {
-		printf ("REPLY: received reply from %s:%d\n", server, server_port);
-	}
-
 	/* ok, rewrite reply id to match the one sent by the client */
 	message->header->id = reply_data->id;
 
@@ -249,16 +260,13 @@ void handle_reply (extDnsCtx     * ctx,
 		/* not required to release data here because this is
 		 * done by the engine when the session is finished */
 
-		printf ("ERROR: failed to build buffer representation for reply received..\n");
+		syslog (LOG_ERR, "ERROR: failed to build buffer representation for reply received..\n");
 		return;
 	}
-	printf ("REPLY: build buffer reply in %d bytes\n", bytes_written);
 
 	/* relay reply to the regression client */
 	if (ext_dns_session_send_udp_s (ctx, reply_data->master_listener, buffer, bytes_written, reply_data->source_address, reply_data->source_port) != bytes_written) 
-		printf ("ERROR: failed to SEND UDP entire reply, expected to write %d bytes but something different was written\n", bytes_written);
-	else
-		printf ("INFO: reply sent!\n");
+		syslog (LOG_ERR, "ERROR: failed to SEND UDP entire reply, expected to write %d bytes but something different was written\n", bytes_written);
 	
 
 	/* handle_reply_data_free (reply_data); */
@@ -276,15 +284,13 @@ axl_bool ext_dnsd_send_reply (extDnsCtx * ctx, extDnsSession * session, const ch
 	/* build buffer reply */
 	bytes_written = ext_dns_message_to_buffer (ctx, reply, buffer, 512);
 	if (bytes_written <= 0) {
-		printf ("ERROR: failed to dump message into the buffer, unable to reply to resolver..\n");
+		syslog (LOG_ERR, "ERROR: failed to dump message into the buffer, unable to reply to resolver..\n");
 		goto return_result;
 	}
 
-	printf ("INFO: buffer build from message was: %d bytes\n", bytes_written);
-	
 	/* send reply */
 	if (ext_dns_session_send_udp_s (ctx, session, buffer, bytes_written, source_address, source_port) != bytes_written) {
-		printf ("ERROR: failed to send %d bytes as reply, different amount of bytes where written\n", bytes_written);
+		syslog (LOG_ERR, "ERROR: failed to send %d bytes as reply, different amount of bytes where written\n", bytes_written);
 		goto return_result;
 	} /* end if */
 
@@ -323,14 +329,14 @@ extDnsMessage * ext_dnsd_handle_reply (extDnsCtx * ctx, extDnsMessage * query, c
 
 		/* check if the value reported a valid ipv4 value */
 		if (! ext_dns_support_is_ipv4 (value)) {
-			printf ("ERROR: reported something that is not an IP %s..\n", value ? value : "(null value)" );
+			syslog (LOG_ERR, "ERROR: reported something that is not an IP %s..\n", value ? value : "(null value)" );
 			axl_freev (items);
 			return NULL;
 		} /* end if */
 
 		/* get ttl */
 		ttl = atoi (items[2]);
-		printf ("Script reported to use IP %s (with ttl %d) as reply..\n", items[1] + 5, ttl);
+		syslog (LOG_INFO, "Script reported to use IP %s (with ttl %d) as reply..\n", items[1] + 5, ttl);
 
 		/* build reply */
 		reply = ext_dns_message_build_ipv4_reply (ctx, query, value, ttl);
@@ -342,7 +348,7 @@ extDnsMessage * ext_dnsd_handle_reply (extDnsCtx * ctx, extDnsMessage * query, c
 		/* get value */
 		value = items[1] + 5;
 
-		printf ("Script reported to use Name %s (with ttl %d) as reply..\n", value, ttl);
+		syslog (LOG_INFO, "Script reported to use Name %s (with ttl %d) as reply..\n", value, ttl);
 
 		/* build reply */
 		reply = ext_dns_message_build_cname_reply (ctx, query, value, ttl);
@@ -370,11 +376,11 @@ void on_received  (extDnsCtx     * ctx,
 
 	/* skip messages that are queries */
 	if (! ext_dns_message_is_query (message)) {
-		printf ("ERROR: received a query message, dropping DNS message..\n");
+		syslog (LOG_ERR, "ERROR: received a query message, dropping DNS message..\n");
 		return;
 	} /* end if */
 
-	printf ("INFO: received message from %s:%d, query type: %s %s %s..\n", 
+	syslog (LOG_INFO, "INFO: received message from %s:%d, query type: %s %s %s..\n", 
 		source_address, source_port, 
 		ext_dns_message_get_qtype_to_str (ctx, message->questions[0].qtype),
 		ext_dns_message_get_qclass_to_str (ctx, message->questions[0].qclass),
@@ -390,11 +396,9 @@ void on_received  (extDnsCtx     * ctx,
 	/* find a free child */
 	child = ext_dnsd_find_free_child (command);
 
-	printf ("INFO: selected child pid %d to resolve query..\n", child->pid);
-
 	bytes_written = send_command (command, child, reply_buffer, 1024);
 	if (bytes_written <= 0) {
-		printf ("ERROR: unable to send command to child process (bytes_written=%d)\n", bytes_written);
+		syslog (LOG_ERR, "ERROR: unable to send command to child process (bytes_written=%d)\n", bytes_written);
 		/* kill child and recreate a new child */
 		return;
 	} /* end if */
@@ -404,26 +408,26 @@ void on_received  (extDnsCtx     * ctx,
 	
 	/* get reply */
 	if (axl_cmp (reply_buffer, "DISCARD")) {
-		printf ("INFO: child requested to DISCARD request..\n");
+		syslog (LOG_INFO, "INFO: child requested to DISCARD request..\n");
 		return;
 	} else if (axl_cmp (reply_buffer, "UNKNOWN")) {
-		printf ("INFO: child requested to send UNKNOWN code reply..\n");
+		syslog (LOG_INFO, "INFO: child requested to send UNKNOWN code reply..\n");
 
 		/* build the unknown reply */
 		reply = ext_dns_message_build_unknown_reply (ctx, message);
 	} else if (axl_cmp (reply_buffer, "REJECT")) {
-		printf ("INFO: child requested to REJECT request..\n");
+		syslog (LOG_INFO, "INFO: child requested to REJECT request..\n");
 		
 		/* build the reject reply */
 		reply = ext_dns_message_build_unknown_reply (ctx, message);
 
 	} else if (axl_cmp (reply_buffer, "FORWARD")) {
-		printf ("INFO: child requested to continue and resolve request as usual using forward dns server..\n");
+		/* syslog (LOG_INFO, "INFO: child requested to continue and resolve request as usual using forward dns server..\n"); */
 	} else if (axl_memcmp (reply_buffer, "REPLY ", 6)) {
 		/* parse reply received */
 		reply = ext_dnsd_handle_reply (ctx, message, reply_buffer);
 	} else {
-		printf ("ERROR: unrecognized command reply found from child: %s..\n", reply_buffer);
+		syslog (LOG_INFO, "ERROR: unrecognized command reply found from child: %s..\n", reply_buffer);
 	}
 
 	if (reply) {
@@ -442,13 +446,13 @@ void on_received  (extDnsCtx     * ctx,
 
 	/* link this data to the session to be released in the case on
 	 * received isn't called */
-	ext_dns_session_set_data (session, "reply_status", NULL, data, (axlDestroyFunc) handle_reply_data_free); 
+	ext_dns_session_set_data (session, axl_strdup_printf ("%p", data), axl_free, data, (axlDestroyFunc) handle_reply_data_free); 
 	
 	/* send query */
 	result = ext_dns_message_query_from_msg (ctx, message, server, server_port, handle_reply, data);
 
 	if (! result) {
-		printf ("ERROR: failed to send query to master server..\n");
+		syslog (LOG_ERR, "ERROR: failed to send query to master server..\n");
 	}
 
 	return;
@@ -471,6 +475,8 @@ void __terminate_ext_dns_listener (int value)
 	/* printf ("Terminating ext_dns regression listener..\n");*/
 	__doing_exit = axl_true;
 	ext_dns_mutex_unlock (&doing_exit_mutex);
+
+	syslog (LOG_INFO, "Received signal %d, finishing server..", value);
 
 	/* unlocking listener */
 	/* printf ("Calling to unlock listener due to signal received: extDnsCtx %p", ctx); */
@@ -538,7 +544,7 @@ void load_configuration_file (void)
 		exit (-1);
 	}
 	
-	printf ("INFO: configuration from %s loaded ok\n", path);
+	syslog (LOG_INFO, "INFO: configuration from %s loaded ok\n", path);
 
 	return;
 }
@@ -599,6 +605,8 @@ void start_listeners (void)
 	
 		/* configure on received handler */
 		ext_dns_session_set_on_message (listener, on_received, NULL);
+		/*		ext_dns_session_sed_on_badrequest (listener, on_badrequest, NULL); */
+		
 
 		/* next node declaration */
 		node = axl_node_get_next_called (node, "listen");
@@ -729,7 +737,7 @@ void start_child_applications (void)
 		}
 			
 
-		printf ("INFO: child resolver (pid %d) %s created..\n", children[iterator].pid, child_resolver);
+		syslog (LOG_INFO, "child resolver (pid %d) %s created..\n", children[iterator].pid, child_resolver);
 
 		/* next iterator */
 		iterator++;
@@ -744,7 +752,7 @@ void child_terminated (int _signal) {
 	int pid;
 
 	pid = wait (&exit_status);
-	printf ("INFO: Child %d finished with %d\n", pid, exit_status);
+	syslog (LOG_INFO, "Child %d finished with %d\n", pid, exit_status);
 
 	/* reinstall signal */
 	signal (SIGCHLD, child_terminated);
@@ -758,8 +766,12 @@ int main (int argc, char ** argv) {
 	 * segmentation faults */
 #ifdef AXL_OS_UNIX
 	signal (SIGTERM,  __terminate_ext_dns_listener);
+	signal (SIGQUIT,  __terminate_ext_dns_listener);
 	signal (SIGCHLD, child_terminated);
 #endif
+
+	/* open syslog */
+	openlog ("ext-dnsd", LOG_PID, LOG_DAEMON);
 
 	/* install arguments */
 	install_arguments (argc, argv);	
@@ -794,6 +806,7 @@ int main (int argc, char ** argv) {
 	start_child_applications ();
 	
 	/* wait and process requests */
+	syslog (LOG_INFO, "ext-dnsD started OK");
 	ext_dns_ctx_wait (ctx);
 
 	/* terminate process */
@@ -804,6 +817,9 @@ int main (int argc, char ** argv) {
 
 	/* free configuration object */
 	axl_doc_free (config);
+
+	/* finalize childs */
+	ext_dnsd_finish_childs ();
 	
 	return 0;
 }

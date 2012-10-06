@@ -7,7 +7,7 @@ while True:
     sys.stdout.flush ()
     command = raw_input ().strip ()
 
-    sys.stderr.write ("COMMAND RECEIVED: %s\n" % command)
+    # sys.stderr.write ("COMMAND RECEIVED: %s\n" % command)
 
     if command == "INIT":
         # sys.stderr.write ("REPLYING INIT OK\n")

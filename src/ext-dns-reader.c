@@ -135,8 +135,8 @@ axlPointer __ext_dns_reader_on_message_received (extDnsOnMessageReceivedData * d
 			ext_dns_log (EXT_DNS_LEVEL_WARNING, "Expected to receive id %d, but found %d, discarding reply",
 				     session->expected_header->id, message->header->id);
 			on_received = NULL;
-		}
-	}
+		} /* end if */
+	} /* end if */
 
 	/* call to notify handler */
 	if (on_received) {
@@ -225,6 +225,9 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 	/* read content from socket */
 	sin_size        = sizeof (remote_addr);
 	bytes_read      = recvfrom (session->session, buf, 1023, MSG_DONTWAIT, (struct sockaddr *) &remote_addr, &sin_size);
+	/* ensure bytes_read have a value inside the buffer */
+	if (bytes_read > 1023)
+		bytes_read = 1023;
 	buf[bytes_read] = 0;
 
 	/* get source and port address */
@@ -235,19 +238,53 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 		     ext_dns_session_get_id (session), bytes_read, source_address, source_port);
 
 	/* check here message size to limit incoming queries */
-	if (bytes_read > 512) {
+	if (bytes_read > 512 || bytes_read < 12) {
 		/* check to close session for thise reply */
 		if (session->close_on_reply)  
 			ext_dns_session_close (session);
 
+		/* notify bad request */
+		if (bytes_read > 512)
+			__ext_dns_session_notify_bad_request (ctx, session, source_address, source_port, buf, bytes_read,
+							      "Received a DNS message that is bigger than allowed value (%d > 512)", bytes_read);
+		else
+			__ext_dns_session_notify_bad_request (ctx, session, source_address, source_port, buf, bytes_read,
+							      "Received a DNS message that is smaller than allowed value (%d < 12)", bytes_read);
 		axl_free (source_address);
-		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Received a DNS message that is bigger than allowed values (%d > 512)",
-			     bytes_read);
 		return;
 	} /* end if */
 
 	/* get the header */
 	header = ext_dns_message_parse_header (ctx, buf, bytes_read);
+	if (header == NULL) {
+		/* notify bad request */
+		__ext_dns_session_notify_bad_request (ctx, session, source_address, source_port, buf, bytes_read,
+						      "Failed to parse DNS message header");
+
+		axl_free (source_address);
+
+		/* check to close session for thise reply */
+		if (session->close_on_reply)  
+			ext_dns_session_close (session);
+
+		return;
+	}
+
+	/* check header values */
+	if (header->query_count == 0 && 
+	    header->answer_count == 0 && 
+	    header->authority_count == 0 && 
+	    header->additional_count == 0) {
+		/* notify bad request */
+		__ext_dns_session_notify_bad_request (ctx, session, source_address, source_port, buf, bytes_read,
+						      "Received a DNS message with a heading having no sections (answers, queries...)");
+		axl_free (source_address);
+
+		/* check to close session for thise reply */
+		if (session->close_on_reply)  
+			ext_dns_session_close (session);
+		return;
+	}
 
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Received header id: %u, is query: %d, opcode: %d, AA: %d, TC: %d, RD: %d, RA: %d", 
 		     header->id, header->is_query, header->opcode, header->is_authorative_answer, header->was_truncated, 
@@ -261,7 +298,10 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 	message = ext_dns_message_parse_message (ctx, header, buf, bytes_read);
 
 	if (message == NULL) {
-		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Parse error for incoming message from %s:%d, skipping userlevel notification", source_address, source_port);
+		/* notify bad request */
+		__ext_dns_session_notify_bad_request (ctx, session, source_address, source_port, buf, bytes_read,
+						      "Parse error for incoming message from %s:%d, skipping userlevel notification", source_address, source_port);
+
 		axl_free (source_address);
 
 		/* check to close session for thise reply */
@@ -286,6 +326,9 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 	/* build on data */
 	data = axl_new (extDnsOnMessageReceivedData, 1);
 	if (data == NULL) {
+		/* release the message */
+		ext_dns_message_unref (message);
+
 		if (session->close_on_reply)  
 			ext_dns_session_close (session);
 
