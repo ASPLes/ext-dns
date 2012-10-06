@@ -1,5 +1,5 @@
 /* 
- *  ext-dns: a DNS framework
+ *  ext-dns: a framework to build DNS solutions
  *  Copyright (C) 2012 Advanced Software Production Line, S.L.
  *
  *  This program is free software; you can redistribute it and/or
@@ -37,7 +37,6 @@
  */
 #include <ext-dns.h>
 #include <ext-dns-private.h>
-#include <ctype.h>
 
 /** 
  * @internal Nice random generation code taken from:
@@ -444,6 +443,45 @@ axl_bool        ext_dns_message_is_name_error (extDnsMessage * message)
 	return message->header->rcode == extDnsResponseNameError;
 }
 
+/** 
+ * @internal Allows to check if the message is valid, that is, it
+ * represents a reply and has a valid response with a current ttl.
+ *
+ * @param message The message to be checked.
+ *
+ * @return axl_true if the message is valid, otherwise axl_false is
+ * returned.
+ */       
+axl_bool        ext_dns_message_is_answer_valid (extDnsCtx * ctx, extDnsMessage * message)
+{
+	int iterator;
+
+	if (message == NULL || message->header == NULL) {
+		return axl_false;
+	}
+
+	/* check it is not a query */
+	if (message->header->is_query) {
+		return axl_false;
+	}
+
+	if (message->answers == NULL) {
+		return axl_false;
+	}
+
+	iterator = 0;
+	while (iterator < message->header->answer_count) {
+		/* check that the message stamp plus its ttl is still valid */
+		if ((message->answers[iterator].ttl + message->stamp) < time (NULL))
+			return axl_false;
+
+		iterator++;
+	}
+
+	/* valid message */
+	return axl_true;
+}
+
 
 axlPointer ext_dns_message_release_and_return (extDnsMessage * message)
 {
@@ -464,6 +502,9 @@ extDnsMessage * ext_dns_message_create (extDnsHeader * header, int buf_size)
 	/* initialize mutex */
 	ext_dns_mutex_create (&message->mutex);
 	message->ref_count = 1;
+
+	/* set its stamp */
+	message->stamp = (int) time (NULL);
 
 	/* set header */
 	if (header)
@@ -1213,6 +1254,37 @@ int             ext_dns_message_to_buffer (extDnsCtx * ctx, extDnsMessage * mess
 
 	/* return bytes written in the buffer */
 	return position;
+}
+
+/** 
+ * @brief Assuming the provided buffer has a valid DNS message to be
+ * send, this function updates that buffer to use the ID from the
+ * message's header provided.
+ *
+ * This function is especially useful when it is reused a message to
+ * reply several incoming queries so using \ref
+ * ext_dns_message_to_buffer is not enough because that function will
+ * write the ID of the message used to reply but not the ID of the
+ * incoming query. 
+ *
+ * This function is especially designed to be used in combination with
+ * a result obtained \ref from ext_dns_cache_get.
+ *
+ * @param message The message to extract the header id from to be written into the buffer.
+ *
+ * @param buffer A refernce to the buffer where a valid message is
+ * written and that must be updated with the provided message's header
+ * id.
+ * 
+ */
+void            ext_dns_message_write_header_id (extDnsMessage * message, char * buffer)
+{
+	if (message == NULL || buffer == NULL)
+		return;
+	
+	/* set ID */
+	ext_dns_set_16bit (message->header->id, buffer);
+	return;
 }
 
 /** 

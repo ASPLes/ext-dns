@@ -267,7 +267,10 @@ void handle_reply (extDnsCtx     * ctx,
 	/* relay reply to the regression client */
 	if (ext_dns_session_send_udp_s (ctx, reply_data->master_listener, buffer, bytes_written, reply_data->source_address, reply_data->source_port) != bytes_written) 
 		syslog (LOG_ERR, "ERROR: failed to SEND UDP entire reply, expected to write %d bytes but something different was written\n", bytes_written);
-	
+	else {
+		/* store reply in the cache */
+		ext_dns_cache_store (ctx, message);
+	}
 
 	/* handle_reply_data_free (reply_data); */
 	/* not required to release data here because this is done by
@@ -431,9 +434,11 @@ void on_received  (extDnsCtx     * ctx,
 	}
 
 	if (reply) {
+		/* store reply in the cache */
+		ext_dns_cache_store (ctx, reply);
+
 		/* found reply we've got now, send it back to the user */
 		ext_dnsd_send_reply (ctx, session, source_address, source_port, reply, axl_true);
-
 		return;
 	} /* end if */
 
@@ -811,7 +816,10 @@ int main (int argc, char ** argv) {
 	if (! ext_dns_init_ctx (ctx)) {
 		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
 		exit (-1);
-	}
+	} 
+
+	/* init cache */
+	ext_dns_cache_init (ctx, 1000);
 
 	/* start listener declarations */
 	start_listeners ();

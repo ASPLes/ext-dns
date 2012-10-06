@@ -1,5 +1,5 @@
 /* 
- *  ext-dns: a DNS framework
+ *  ext-dns: a framework to build DNS solutions
  *  Copyright (C) 2012 Advanced Software Production Line, S.L.
  *
  *  This program is free software; you can redistribute it and/or
@@ -39,7 +39,7 @@
 #include <ext-dns.h>
 #include <exarg.h>
 
-#define HELP_HEADER "ext-dns: a DNS framework\n\
+#define HELP_HEADER "ext-dns: a framework to build DNS solutions\n\
 Copyright (C) 2012  Advanced Software Production Line, S.L.\n\
 \n\
 To run a simple A query use:\n\

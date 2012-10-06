@@ -1,5 +1,5 @@
 /* 
- *  ext-dns: a DNS framework
+ *  ext-dns: a framework to build DNS solutions
  *  Copyright (C) 2012 Advanced Software Production Line, S.L.
  *
  *  This program is free software; you can redistribute it and/or
@@ -203,12 +203,14 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 	struct sockaddr_in remote_addr;
 	socklen_t       sin_size;
 	int             bytes_read;
+	int             bytes_written;
 
 	char          * source_address;
 	int             source_port;
 
 	extDnsHeader  * header;
 	extDnsMessage * message;
+	extDnsMessage * reply;
 
 	/* pointer to data received */
 	extDnsOnMessageReceivedData * data;
@@ -310,6 +312,43 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 
 		return;
 	}
+
+	/* CACHE SUPPORT: check we have something in the cache */
+	if (ctx->cache && ext_dns_message_is_query (message)) {
+		/* try to find a cached reply */
+		reply = ext_dns_cache_get_by_query (ctx, message);
+		if (reply) {
+			/* build buffer reply */
+			bytes_written = ext_dns_message_to_buffer (ctx, reply, buf, 512);
+			if (bytes_written <= 0) {
+				/* release reply */
+				ext_dns_message_unref (reply);
+				ext_dns_message_unref (message);
+				axl_free (source_address);
+				return;
+			}
+
+			/* update the Id in the buffer to match the incomming
+			 * message (to ensure even a cached response) will
+			 * have the right Id value in the reply  */
+			ext_dns_message_write_header_id (message, buf);
+
+			/* send reply */
+			if (ext_dns_session_send_udp_s (ctx, session, buf, bytes_written, source_address, source_port) != bytes_written) {
+				/* release reply */
+				ext_dns_message_unref (reply);
+				ext_dns_message_unref (message);
+				axl_free (source_address);
+				return;
+			} /* end if */
+			
+			/* release reply */
+			ext_dns_message_unref (reply);
+			ext_dns_message_unref (message);
+			axl_free (source_address);
+			return;
+		} /* end if */
+	} /* CACHE SUPPORT: end if */
 
 	/* queue message to be handled in other part */
 	if (! session->on_message && ! ctx->on_message) {

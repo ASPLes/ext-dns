@@ -1,5 +1,5 @@
 /* 
- *  ext-dns: a DNS framework
+ *  ext-dns: a framework to build DNS solutions
  *  Copyright (C) 2012 Advanced Software Production Line, S.L.
  *
  *  This program is free software; you can redistribute it and/or
@@ -74,10 +74,10 @@ void ext_dns_thread_pool_new_task            (extDnsCtx        * ctx,
 					     axlPointer         data);
 
 int  ext_dns_thread_pool_new_event           (extDnsCtx              * ctx,
-					     long                     microseconds,
-					     extDnsThreadAsyncEvent   event_handler,
-					     axlPointer               user_data,
-					     axlPointer               user_data2);
+					      long                     microseconds,
+					      extDnsThreadAsyncEvent   event_handler,
+					      axlPointer               user_data,
+					      axlPointer               user_data2);
 
 axl_bool ext_dns_thread_pool_remove_event        (extDnsCtx              * ctx,
 						 int                      event_id);

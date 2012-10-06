@@ -1,5 +1,5 @@
 /* 
- *  ext-dns: a DNS framework
+ *  ext-dns: a framework to build DNS solutions
  *  Copyright (C) 2012 Advanced Software Production Line, S.L.
  *
  *  This program is free software; you can redistribute it and/or
@@ -253,6 +253,9 @@ void        ext_dns_ctx_free2 (extDnsCtx * ctx, const char * who)
 	/* release hostname hash */
 	axl_hash_free (ctx->hostname_hash);
 	ext_dns_mutex_destroy (&ctx->hostname_mutex);
+
+	/* call to finish cache (if it was initialized) */
+	ext_dns_cache_finish (ctx);
 
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "about.to.free extDnsCtx %p", ctx);
 

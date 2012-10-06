@@ -1,5 +1,5 @@
 /* 
- *  ext-dns: a DNS framework
+ *  ext-dns: a framework to build DNS solutions
  *  Copyright (C) 2012 Advanced Software Production Line, S.L.
  *
  *  This program is free software; you can redistribute it and/or
@@ -1840,6 +1840,9 @@ int main (int argc, char ** argv) {
 	
 	/* test sending q query where the replies should have several
 	   but only were found a few */
+
+	/* set sending a query message (flagged as is) but no
+	 * questions in the body */
 
 finish:
 

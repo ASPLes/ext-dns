@@ -1,5 +1,5 @@
 /* 
- *  ext-dns: a DNS framework
+ *  ext-dns: a framework to build DNS solutions
  *  Copyright (C) 2012 Advanced Software Production Line, S.L.
  *
  *  This program is free software; you can redistribute it and/or
@@ -95,8 +95,12 @@ void handle_reply (extDnsCtx     * ctx,
 	/* relay reply to the regression client */
 	if (ext_dns_session_send_udp_s (ctx, reply_data->master_listener, buffer, bytes_written, reply_data->source_address, reply_data->source_port) != bytes_written) 
 		printf ("ERROR: failed to SEND UDP entire reply, expected to write %d bytes but something different was written\n", bytes_written);
-	else
+	else {
 		printf ("INFO: reply sent!\n");
+
+		/* store reply in the cache */
+		ext_dns_cache_store (ctx, message);
+	}
 	
 
 	/* release data */
@@ -150,13 +154,21 @@ void on_received  (extDnsCtx     * ctx,
 			printf ("ERROR: failed to build message reply, unable to reply to resolver..\n");
 			return;
 		}
-		
+
+		/* store reply in the cache */
+		ext_dns_cache_store (ctx, reply);
+
 		/* build buffer reply */
 		bytes_written = ext_dns_message_to_buffer (ctx, reply, buffer, 512);
 		if (bytes_written <= 0) {
 			printf ("ERROR: failed to dump message into the buffer, unable to reply to resolver..\n");
 			return;
 		}
+
+		/* update the Id in the buffer to match the incomming
+		 * message (to ensure even a cached response) will
+		 * have the right Id value in the reply  */
+		ext_dns_message_write_header_id (message, buffer);
 
 		printf ("INFO: buffer build from message was: %d bytes\n", bytes_written);
 
@@ -271,6 +283,9 @@ int main (int argc, char ** argv) {
 		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
 		exit (-1);
 	}
+
+	/* init cache */
+	ext_dns_cache_init (ctx, 1000);
 
 	/* init a listener */
 	listener = ext_dns_listener_new (ctx, "0.0.0.0", "53", extDnsUdpSession, NULL, NULL);

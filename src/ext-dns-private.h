@@ -1,5 +1,5 @@
 /* 
- *  ext-dns: a DNS framework
+ *  ext-dns: a framework to build DNS solutions
  *  Copyright (C) 2012 Advanced Software Production Line, S.L.
  *
  *  This program is free software; you can redistribute it and/or
@@ -142,6 +142,12 @@ struct _extDnsCtx {
 	/*** handler for message received ***/
 	extDnsOnMessageReceived  on_message;
 	axlPointer               on_message_data;
+
+	/*** cache support ***/
+	axlHash            * cache;
+	extDnsMutex          cache_mutex;
+	int                  max_cache_size;
+	axlHashCursor      * cache_cursor;
 };
 
 struct _extDnsSession {
