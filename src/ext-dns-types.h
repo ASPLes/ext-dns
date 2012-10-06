@@ -1,5 +1,5 @@
 /* 
- *  ext-dns: a DNS framework
+ *  ext-dns: a framework to build DNS solutions
  *  Copyright (C) 2012 Advanced Software Production Line, S.L.
  *
  *  This program is free software; you can redistribute it and/or
@@ -762,6 +762,9 @@ typedef struct _extDnsMessage {
 
 	/* message size */
 	int                    message_size;
+
+	/* when the message was created */
+	int                    stamp;
 } extDnsMessage;
 
 #endif /* __EXT_DNS_TYPES_H__ */

@@ -1,5 +1,5 @@
 /* 
- *  ext-dns: a DNS framework
+ *  ext-dns: a framework to build DNS solutions
  *  Copyright (C) 2012 Advanced Software Production Line, S.L.
  *
  *  This program is free software; you can redistribute it and/or
@@ -58,6 +58,8 @@ axl_bool        ext_dns_message_is_reject (extDnsMessage * message);
 
 axl_bool        ext_dns_message_is_name_error (extDnsMessage * message);
 
+axl_bool        ext_dns_message_is_answer_valid (extDnsCtx * ctx, extDnsMessage * message);
+
 axl_bool        ext_dns_message_ref (extDnsMessage * message);
 
 void            ext_dns_message_unref (extDnsMessage * message);
@@ -66,6 +68,8 @@ int             ext_dns_message_build_query (extDnsCtx * ctx, const char * qname
 					     char * buffer, extDnsHeader ** header);
 
 int             ext_dns_message_to_buffer (extDnsCtx * ctx, extDnsMessage * message, char * buffer,  int buffer_size);
+
+void            ext_dns_message_write_header_id (extDnsMessage * message, char * buffer);
 
 axl_bool        ext_dns_message_query (extDnsCtx * ctx, const char * type, const char * class, const char * name, 
 				       const char * server, int server_port,
