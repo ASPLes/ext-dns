@@ -1027,7 +1027,7 @@ int               __ext_dns_session_send_udp_common   (extDnsCtx     * ctx,
 	/* enviamos el mensaje */
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Sending UDP message to %s:%d (size: %d)", address, port, length);
 	if ((numbytes = sendto (session, content, length, MSG_DONTWAIT,(struct sockaddr *)&dest_addr, sizeof (struct sockaddr))) == -1) {
-		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to send message, error was=%d", errno);
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to send message, error was=%d (%s)", errno, ext_dns_errno_get_last_error ());
 
 		/* close socket */
 		if (close_socket)
@@ -1985,6 +1985,7 @@ extDnsSession * ext_dns_session_new_empty_from_session (extDnsCtx          * ctx
 	return session;	
 }
 
+
 void               __ext_dns_session_notify_bad_request (extDnsCtx      * ctx,
 							 extDnsSession  * session,
 							 const char     * source_address,
@@ -1994,14 +1995,15 @@ void               __ext_dns_session_notify_bad_request (extDnsCtx      * ctx,
 							 const char     * reason,
 							 ...)
 {
-	va_list     args;
-	char      * _msg;
+	va_list            args;
+	char             * _msg;
 
 	/* prepare message */
 	va_start (args, reason);
 	_msg = axl_strdup_printfv (reason, args);
 	va_end (args);
 
+	/* log and release message */
 	ext_dns_log (EXT_DNS_LEVEL_WARNING, _msg);
 
 	/* check incoming data received */
@@ -2013,8 +2015,7 @@ void               __ext_dns_session_notify_bad_request (extDnsCtx      * ctx,
 	/* call on handler defined */
 	session->on_bad_request (ctx, session, source_address, source_port, buffer, buffer_size, _msg, session->on_bad_request_data);
 
-	/* log and release message */
-
+	/* release message */
 	axl_free (_msg);
 
 	

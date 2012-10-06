@@ -1572,6 +1572,54 @@ axl_bool test_19 (void) {
 	return axl_true; /* return ok */
 }
 
+axl_bool test_20 (void) {
+
+	extDnsCtx        * ctx;
+	char               buffer[512];
+	int                bytes_written;
+	int                iterator;
+
+	if (! axl_cmp (dns_server, "localhost")) {
+		printf ("WARNING: skip asking to %s for this test..because we would need the server rewrite rewrite.asplhosting.com\n", dns_server);
+		return axl_true;
+	}
+
+	/* create context object */
+	ctx = ext_dns_ctx_new ();
+	if (ctx == NULL) {
+		printf ("ERROR: failed to allocate ctx object..\n");
+		return axl_false;
+	}
+
+	/* init context */
+	if (! ext_dns_init_ctx (ctx)) {
+		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
+		return axl_false;
+	}
+
+	/* build query */
+	bytes_written = ext_dns_message_build_query (ctx, "www.aspl.es", extDnsTypeA, extDnsClassIN, buffer, NULL);
+	/* now increase number of questions */
+	ext_dns_set_16bit (3, buffer + 4);
+
+	/* now send content */
+	iterator = 0;
+	while (iterator < 10) {
+		if (ext_dns_session_send_udp (ctx, buffer, bytes_written, dns_server, dns_server_port, NULL, NULL) != bytes_written) {
+			printf ("ERROR: failed to send buffer with wrong message..\n");
+			return axl_false;
+		} /* end if */
+
+		/* next iterator */
+		iterator++;
+	} /* end while */
+	
+	/* terminate process */
+	ext_dns_exit_ctx (ctx, axl_true);
+
+	return axl_true; /* return ok */
+}
+
 
 typedef axl_bool  (*extDnsRegressionTest) (void);
 
@@ -1741,6 +1789,9 @@ int main (int argc, char ** argv) {
 		if (check_and_run_test (run_test_name, "test_19"))
 			run_test (test_19, "Test 19", "testing malformed messages..", -1, -1);
 
+		if (check_and_run_test (run_test_name, "test_20"))
+			run_test (test_20, "Test 20", "testing malformed messages (2)..", -1, -1);
+
 		goto finish;
 	}
 
@@ -1785,6 +1836,7 @@ int main (int argc, char ** argv) {
 	run_test (test_19, "Test 19", "testing malformed messages..", -1, -1);
 
 	/* test sending a query with several queries but only placing one.. */
+	run_test (test_20, "Test 20", "testing malformed messages (2)..", -1, -1);
 	
 	/* test sending q query where the replies should have several
 	   but only were found a few */

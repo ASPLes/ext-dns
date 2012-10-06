@@ -206,7 +206,7 @@ axl_bool send_command (const char * command, childState * child, char * reply, i
 {
 	int  bytes_written;
 
-	/* printf ("INFO: sending command %s to child %d\n", command, child->pid); */
+	/* printf ("sending command %s to child %d\n", command, child->pid); */
 	
 	/* send command */
 	bytes_written = strlen (command);
@@ -219,7 +219,7 @@ axl_bool send_command (const char * command, childState * child, char * reply, i
 		return axl_false;
 	}
 
-	/* printf ("INFO: reading reply to command..\n"); */
+	/* printf ("reading reply to command..\n"); */
 
 	/* now wait for reply */
 	bytes_written = ext_dnsd_readline (child->fds[0], reply, reply_size);
@@ -229,13 +229,13 @@ axl_bool send_command (const char * command, childState * child, char * reply, i
 		return axl_false;
 	} /* end if */
 
-	/* printf ("INFO: data received '%s' (size: %d)\n", reply, bytes_written); */
+	/* printf ("data received '%s' (size: %d)\n", reply, bytes_written); */
 
 	/* trim content and recalculate */
 	axl_stream_trim (reply);
 	bytes_written = strlen (reply);
 
-	/* printf ("INFO: bytes received %d\n", bytes_written); */
+	/* printf ("bytes received %d\n", bytes_written); */
 	return bytes_written;
 }
 
@@ -380,7 +380,7 @@ void on_received  (extDnsCtx     * ctx,
 		return;
 	} /* end if */
 
-	syslog (LOG_INFO, "INFO: received message from %s:%d, query type: %s %s %s..\n", 
+	syslog (LOG_INFO, "received message from %s:%d, query type: %s %s %s..\n", 
 		source_address, source_port, 
 		ext_dns_message_get_qtype_to_str (ctx, message->questions[0].qtype),
 		ext_dns_message_get_qclass_to_str (ctx, message->questions[0].qclass),
@@ -408,21 +408,21 @@ void on_received  (extDnsCtx     * ctx,
 	
 	/* get reply */
 	if (axl_cmp (reply_buffer, "DISCARD")) {
-		syslog (LOG_INFO, "INFO: child requested to DISCARD request..\n");
+		syslog (LOG_INFO, "child requested to DISCARD request..\n");
 		return;
 	} else if (axl_cmp (reply_buffer, "UNKNOWN")) {
-		syslog (LOG_INFO, "INFO: child requested to send UNKNOWN code reply..\n");
+		syslog (LOG_INFO, "child requested to send UNKNOWN code reply..\n");
 
 		/* build the unknown reply */
 		reply = ext_dns_message_build_unknown_reply (ctx, message);
 	} else if (axl_cmp (reply_buffer, "REJECT")) {
-		syslog (LOG_INFO, "INFO: child requested to REJECT request..\n");
+		syslog (LOG_INFO, "child requested to REJECT request..\n");
 		
 		/* build the reject reply */
 		reply = ext_dns_message_build_unknown_reply (ctx, message);
 
 	} else if (axl_cmp (reply_buffer, "FORWARD")) {
-		/* syslog (LOG_INFO, "INFO: child requested to continue and resolve request as usual using forward dns server..\n"); */
+		/* syslog (LOG_INFO, "child requested to continue and resolve request as usual using forward dns server..\n"); */
 	} else if (axl_memcmp (reply_buffer, "REPLY ", 6)) {
 		/* parse reply received */
 		reply = ext_dnsd_handle_reply (ctx, message, reply_buffer);
@@ -454,6 +454,20 @@ void on_received  (extDnsCtx     * ctx,
 	if (! result) {
 		syslog (LOG_ERR, "ERROR: failed to send query to master server..\n");
 	}
+
+	return;
+}
+
+void     on_bad_request (extDnsCtx     * ctx,
+			 extDnsSession * session,
+			 const char    * source_address,
+			 int             source_port,
+			 const char    * buffer,
+			 int             buffer_size,
+			 const char    * reason,
+			 axlPointer      data)
+{
+	syslog (LOG_ERR, "BAD REQUEST from %s:%d, reason: %s\n", source_address, source_port, reason);
 
 	return;
 }
@@ -544,7 +558,7 @@ void load_configuration_file (void)
 		exit (-1);
 	}
 	
-	syslog (LOG_INFO, "INFO: configuration from %s loaded ok\n", path);
+	syslog (LOG_INFO, "configuration from %s loaded ok\n", path);
 
 	return;
 }
@@ -605,7 +619,7 @@ void start_listeners (void)
 	
 		/* configure on received handler */
 		ext_dns_session_set_on_message (listener, on_received, NULL);
-		/*		ext_dns_session_sed_on_badrequest (listener, on_badrequest, NULL); */
+		ext_dns_session_set_on_badrequest (listener, on_bad_request, NULL);
 		
 
 		/* next node declaration */
@@ -718,7 +732,7 @@ void start_child_applications (void)
 		/* create and get child pid */
 		children[iterator].pid = ext_dns_create_child (children[iterator].fds, child_resolver);
 
-		/* printf ("INFO: child created with pid %d, fds [%d, %d]\n", childs[iterator].pid, childs[iterator].fds[0], childs[iterator].fds[1]); */
+		/* printf ("child created with pid %d, fds [%d, %d]\n", childs[iterator].pid, childs[iterator].fds[0], childs[iterator].fds[1]); */
 
 		if (children[iterator].pid < 0) {
 			printf ("ERROR: failed to create child process from child resolver '%s', error was errno=%d\n", child_resolver, errno);

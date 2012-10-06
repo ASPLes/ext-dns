@@ -1563,8 +1563,10 @@ int             ext_dns_message_build_query (extDnsCtx * ctx, const char * qname
 
 	/* build header */
 	_header = axl_new (extDnsHeader, 1);
-	if (header == NULL)
+	if (_header == NULL) {
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Failed to allocate memory for the header, unable to send message..\n");
 		return -1;
+	}
 
 	/* clear buffer received */
 	memset (buffer, 0, 512);
