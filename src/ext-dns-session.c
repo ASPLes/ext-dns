@@ -628,6 +628,11 @@ void              ext_dns_session_shutdown   (extDnsSession * session)
  * is called every time a new message is received over the provided
  * session.
  *
+ * Note this handler is only called when a well-formed DNS message is
+ * received. Otherwise, badrequest is considered, optionally notified
+ * through \ref ext_dns_session_set_on_badrequest, and finally
+ * discarded.
+ *
  * @param session The session that is configured to received messages
  * on the provided handler.
  *
@@ -650,6 +655,44 @@ void              ext_dns_session_set_on_message (extDnsSession             * se
 	/* set on message */
 	session->on_message      = on_dns_message;
 	session->on_message_data = data;
+
+	return;
+}
+
+/** 
+ * @brief Allows to setup a handler which is called every time a bad
+ * request is received. 
+ * 
+ * Because DNS messages are parsed and checked before being notified
+ * to user level handler, those messages that aren't considered
+ * properly formated are discarded, thus, the user level doesn't have
+ * to deal with them.
+ *
+ * However, it may be required by user level to get notifcation about
+ * those messages so especial actions could be taken (like blocking
+ * traffic or doing some stats).
+ *
+ * @param session The session that is going to be configured with a
+ * bad request received handler.
+ *
+ * @param on_badrequest The handler to be called upon reception of a
+ * bad request.
+ *
+ * @para data A pointer to user defined data that will be passed info
+ * the handler.
+ *
+ */
+void              ext_dns_session_set_on_badrequest (extDnsSession         * session, 
+						     extDnsOnBadRequest      on_bad_request, 
+						     axlPointer              data)
+{
+	/* check pointer received */
+	if (session == NULL || on_bad_request == NULL)
+		return;
+
+	/* set on message */
+	session->on_bad_request      = on_bad_request;
+	session->on_bad_request_data = data;
 
 	return;
 }
@@ -861,7 +904,7 @@ void               ext_dns_session_unref                  (extDnsSession * sessi
 	/* decrease reference counting */
 	session->ref_count--;
 
-	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "-------> %d decreased session id=%d (%p) reference count to %d decreased by %s\n", 
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "%d decreased session id=%d (%p) reference count to %d decreased by %s\n", 
 		ext_dns_getpid (),
 		session->id, session,
 		session->ref_count, who ? who : "??");  
@@ -1940,6 +1983,43 @@ extDnsSession * ext_dns_session_new_empty_from_session (extDnsCtx          * ctx
 	} /* end if */
 
 	return session;	
+}
+
+void               __ext_dns_session_notify_bad_request (extDnsCtx      * ctx,
+							 extDnsSession  * session,
+							 const char     * source_address,
+							 int              source_port,
+							 const char     * buffer,
+							 int              buffer_size,
+							 const char     * reason,
+							 ...)
+{
+	va_list     args;
+	char      * _msg;
+
+	/* prepare message */
+	va_start (args, reason);
+	_msg = axl_strdup_printfv (reason, args);
+	va_end (args);
+
+	ext_dns_log (EXT_DNS_LEVEL_WARNING, _msg);
+
+	/* check incoming data received */
+	if (session == NULL || session->on_bad_request == NULL) {
+		axl_free (_msg);
+		return;
+	}
+
+	/* call on handler defined */
+	session->on_bad_request (ctx, session, source_address, source_port, buffer, buffer_size, _msg, session->on_bad_request_data);
+
+	/* log and release message */
+
+	axl_free (_msg);
+
+	
+	
+	return;
 }
 
 

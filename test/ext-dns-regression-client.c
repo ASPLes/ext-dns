@@ -62,8 +62,14 @@ void queue_reply (extDnsCtx     * ctx,
 	return;
 }
 
-axl_bool check_answer (extDnsResourceRecord * rr, const char * name, extDnsType type, extDnsClass class, const char * name_content)
+axl_bool check_answer (extDnsCtx * ctx, extDnsResourceRecord * rr, const char * name, extDnsType type, extDnsClass class, const char * name_content)
 {
+	if (rr == NULL) {
+		printf ("ERROR: received null resource record value while checking '%s', type %s, class %s..\n", 
+			name, ext_dns_message_get_qtype_to_str (ctx, type), ext_dns_message_get_qclass_to_str (ctx, class));
+		return axl_false;
+	}
+
 	if (! axl_cmp (rr->name, name)) {
 		printf ("ERROR: expected to find %s but found: %s\n", name, rr->name);
 		return axl_false;
@@ -624,13 +630,13 @@ axl_bool test_06 (void) {
 	iterator = 0;
 	while (iterator < 3) {
 		if (axl_cmp (message->answers[iterator].name_content, "ns1.cuentadns.com"))
-			if (! found1 && check_answer (&message->answers[iterator], "aspl.es", extDnsTypeNS, extDnsClassIN, "ns1.cuentadns.com")) 
+			if (! found1 && check_answer (ctx, &message->answers[iterator], "aspl.es", extDnsTypeNS, extDnsClassIN, "ns1.cuentadns.com")) 
 				found1 = axl_true;
 		if (axl_cmp (message->answers[iterator].name_content, "ns2.cuentadns.com"))
-			if (! found2 && check_answer (&message->answers[iterator], "aspl.es", extDnsTypeNS, extDnsClassIN, "ns2.cuentadns.com"))
+			if (! found2 && check_answer (ctx, &message->answers[iterator], "aspl.es", extDnsTypeNS, extDnsClassIN, "ns2.cuentadns.com"))
 				found2 = axl_true;
 		if (axl_cmp (message->answers[iterator].name_content, "ns3.cuentadns.com"))
-			if (! found3 && check_answer (&message->answers[iterator], "aspl.es", extDnsTypeNS, extDnsClassIN, "ns3.cuentadns.com"))
+			if (! found3 && check_answer (ctx, &message->answers[iterator], "aspl.es", extDnsTypeNS, extDnsClassIN, "ns3.cuentadns.com"))
 				found3 = axl_true;
 		iterator++;
 	}
@@ -692,7 +698,7 @@ axl_bool test_07 (void) {
 		return axl_false;
 
 	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content);  */
-	if (! check_answer (&message->answers[0], "aspl.es", extDnsTypeTXT, extDnsClassIN, "v=spf1 a mx mx:mx1.registrarmail.net ip4:212.170.101.196 mx:mail.aspl.es mx:mail2.aspl.es -all"))
+	if (! check_answer (ctx, &message->answers[0], "aspl.es", extDnsTypeTXT, extDnsClassIN, "v=spf1 a mx mx:mx1.registrarmail.net ip4:212.170.101.196 mx:mail.aspl.es mx:mail2.aspl.es -all"))
 		return axl_false;
 
 	/* release message */
@@ -746,7 +752,7 @@ axl_bool test_08 (void) {
 		return axl_false;
 
 	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content);   */
- 	if (! check_answer (&message->answers[0], "aspl.es", extDnsTypeSOA, extDnsClassIN, NULL))
+ 	if (! check_answer (ctx, &message->answers[0], "aspl.es", extDnsTypeSOA, extDnsClassIN, NULL))
 		return axl_false;
 
 	/* check opcode */
@@ -846,7 +852,7 @@ axl_bool test_09 (void) {
 		return axl_false;
 
 	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content);    */
- 	if (! check_answer (&message->answers[0], "69.237.140.89.in-addr.arpa", extDnsTypePTR, extDnsClassIN, "smtp-01.aspl.es"))
+ 	if (! check_answer (ctx, &message->answers[0], "69.237.140.89.in-addr.arpa", extDnsTypePTR, extDnsClassIN, "smtp-01.aspl.es"))
 		return axl_false;
 
 	/* release message */
@@ -895,7 +901,7 @@ axl_bool test_10 (void) {
 			    /* is query */ axl_false, 
 			    /* ans count */ 0, 
 			    /* query count */ 1,
-			    /* authority count */ 1,
+			    /* authority count */ 0,
 			    /* additional count */ 0))
 		return axl_false;
 
@@ -907,8 +913,8 @@ axl_bool test_10 (void) {
 	} /* end if */
 
 	/* printf ("Message size: %d\n", message->message_size); */
-	if (message->message_size != 108 && message->message_size != 94) {
-		printf ("ERROR: expected a message size reply of 108 or 94 but found %d\n", 
+	if (message->message_size != 108 && message->message_size != 94 && message->message_size != 33) {
+		printf ("ERROR: expected a message size reply of 108, 94 or 33 but found %d\n", 
 			message->message_size);
 		return axl_false;
 	} /* end if */
@@ -964,7 +970,7 @@ axl_bool test_11 (void) {
 		return axl_false;
 
 	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content);     */
-	if (! check_answer (&message->answers[0], "_sip._udp.voztele.com", extDnsTypeSRV, extDnsClassIN, NULL))
+	if (! check_answer (ctx, &message->answers[0], "_sip._udp.voztele.com", extDnsTypeSRV, extDnsClassIN, NULL))
 		return axl_false; 
 
 	/* printf ("values: %s %d %d %s\n", message->authorities[0].name, message->authorities[0].type, 
@@ -1136,12 +1142,12 @@ axl_bool test_13 (void) {
 			    /* is query */ axl_false, 
 			    /* ans count */ 0, 
 			    /* query count */ 1,
-			    /* authority count */ 1,
+			    /* authority count */ 0,
 			    /* additional count */ 0))
 		return axl_false;
 
-	if (! check_answer (&message->authorities[0], ".", extDnsTypeSOA, extDnsClassIN, NULL))
-		return axl_false; 
+	/*	if (! check_answer (ctx, &message->authorities[0], ".", extDnsTypeSOA, extDnsClassIN, NULL))
+		return axl_false;  */
 
 	if (message->header->rcode != extDnsResponseNameError ) {
 		printf ("ERROR: expected to find error code %d but found %d\n", message->header->rcode, extDnsResponseNameError);
@@ -1149,8 +1155,8 @@ axl_bool test_13 (void) {
 	} /* end if */
 
 	/* printf ("Message size: %d\n", message->message_size); */
-	if (message->message_size != 115) {
-		printf ("ERROR: expected a message size reply of 115 or 70 but found %d\n", 
+	if (message->message_size != 115 && message->message_size != 170 && message->message_size != 40) {
+		printf ("ERROR: expected a message size reply of 115, 70 or 40 but found %d\n", 
 			message->message_size);
 		return axl_false;
 	} /* end if */
@@ -1441,7 +1447,7 @@ axl_bool test_17 (void) {
 	/* check header */
 	if (! check_header (message, 
 			    /* is query */ axl_false, 
-			    /* ans count */ 12, 
+			    /* ans count */ 9, 
 			    /* query count */ 1,
 			    /* authority count */ 0,
 			    /* additional count */ 0))
@@ -1500,6 +1506,66 @@ axl_bool test_18 (void) {
 		return axl_false;
 	}
 
+	/* terminate process */
+	ext_dns_exit_ctx (ctx, axl_true);
+
+	return axl_true; /* return ok */
+}
+
+axl_bool test_19 (void) {
+
+	extDnsCtx        * ctx;
+	char               buffer[512];
+	int                iterator;
+
+	if (! axl_cmp (dns_server, "localhost")) {
+		printf ("WARNING: skip asking to %s for this test..because we would need the server rewrite rewrite.asplhosting.com\n", dns_server);
+		return axl_true;
+	}
+
+	/* create context object */
+	ctx = ext_dns_ctx_new ();
+	if (ctx == NULL) {
+		printf ("ERROR: failed to allocate ctx object..\n");
+		return axl_false;
+	}
+
+	/* init context */
+	if (! ext_dns_init_ctx (ctx)) {
+		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
+		return axl_false;
+	}
+
+	
+	/* now send header with no content */
+	iterator = 0;
+	while (iterator < 512) {
+		if (ext_dns_session_send_udp (ctx, (const char *) buffer, iterator, dns_server, dns_server_port, NULL, NULL) != iterator) {
+			printf ("ERROR: failed to send content to regression test server (content length=%d)\n", iterator);
+			return axl_false;
+		} /* end if */
+
+		/* next position */
+		iterator++;
+	} /* end while */
+
+	/* now send a header with content */
+	buffer[5] = 17;
+	buffer[7] = 9;
+	buffer[9] = 8;
+	buffer[11] = 21;
+
+	iterator = 0;
+	while (iterator < 512) {
+		if (ext_dns_session_send_udp (ctx, (const char *) buffer, iterator, dns_server, dns_server_port, NULL, NULL) != iterator) {
+			printf ("ERROR: failed to send content to regression test server (content length=%d)\n", iterator);
+			return axl_false;
+		} /* end if */
+
+		/* next position */
+		iterator++;
+	} /* end while */
+	
 	/* terminate process */
 	ext_dns_exit_ctx (ctx, axl_true);
 
@@ -1672,6 +1738,9 @@ int main (int argc, char ** argv) {
 		if (check_and_run_test (run_test_name, "test_18"))
 			run_test (test_18, "Test 18", "handling longer query names", -1, -1);
 
+		if (check_and_run_test (run_test_name, "test_19"))
+			run_test (test_19, "Test 19", "testing malformed messages..", -1, -1);
+
 		goto finish;
 	}
 
@@ -1711,6 +1780,14 @@ int main (int argc, char ** argv) {
 	run_test (test_17, "Test 17", "handling queries with multiple results ", -1, -1);
 
 	run_test (test_18, "Test 18", "handling longer query names", -1, -1);
+
+	/*** test mal formed messages ***/
+	run_test (test_19, "Test 19", "testing malformed messages..", -1, -1);
+
+	/* test sending a query with several queries but only placing one.. */
+	
+	/* test sending q query where the replies should have several
+	   but only were found a few */
 
 finish:
 

@@ -74,6 +74,10 @@ void              ext_dns_session_set_on_message (extDnsSession            * ses
 						  extDnsOnMessageReceived    on_dns_message, 
 						  axlPointer                 data);
 
+void              ext_dns_session_set_on_badrequest (extDnsSession         * session, 
+						     extDnsOnBadRequest      on_badrequest, 
+						     axlPointer              data);
+
 void              ext_dns_session_set_data (extDnsSession * session,
 					    const char    * key,
 					    axlDestroyFunc  key_destroy,
@@ -159,5 +163,14 @@ void                __ext_dns_session_shutdown_and_record_error (extDnsSession  
 								 extDnsStatus       status,
 								 const char       * message,
 								 ...);
+
+void               __ext_dns_session_notify_bad_request (extDnsCtx      * ctx,
+							 extDnsSession  * session,
+							 const char     * source_address,
+							 int              source_port,
+							 const char     * buffer,
+							 int              buffer_size,
+							 const char     * reason,
+							 ...);
 
 #endif /* __EXT_DNS_SESSION_H__ */

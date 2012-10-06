@@ -37,6 +37,7 @@
  */
 #include <ext-dns.h>
 #include <ext-dns-private.h>
+#include <ctype.h>
 
 /** 
  * @internal Nice random generation code taken from:
@@ -108,13 +109,30 @@ extDnsHeader * ext_dns_message_parse_header (extDnsCtx * ctx, const char * buf, 
 	return header;
 }
 
-char * ext_dns_message_get_label (extDnsCtx * ctx, const char * buffer)
+char * ext_dns_message_get_label (extDnsCtx * ctx, const char * buffer, int buffer_size)
 {
 	char * label;
 	int    bytes_to_read = (char)(buffer[0]) & 0x3f;
+	int    iterator;
 
 	if (bytes_to_read == 0 || bytes_to_read > 63)
 		return NULL;
+
+	if (bytes_to_read > buffer_size) {
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Requested to remove %d bytes to get the label from a smaller buffer %d",
+			     bytes_to_read, buffer_size);
+		return NULL;
+	}
+
+	/* check values from the buffer */
+	iterator = 1;
+	while (iterator < bytes_to_read) {
+		if (! isalnum (buffer[iterator]) && buffer[iterator] != '-' && buffer[iterator] != '_') {
+			ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Found non ascii value in label (%d, '%c')", (int)buffer[iterator], (char)buffer[iterator]);
+			return NULL;
+		}
+		iterator++;
+	}
 	
 	label = axl_new (char, bytes_to_read + 1);
 
@@ -133,8 +151,15 @@ char * ext_dns_message_get_resource_name (extDnsCtx * ctx, const char * buffer, 
 	int        iterator      = (* _iterator);
 	axl_bool   is_label      = axl_false;
 	
+	if (iterator >= buf_size) {
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Starting to read a resource name on an exhausted buffer (buf_size=%d, iteartor=%d)..",
+			     buf_size, iterator);
+		return NULL;
+	}
+
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Starting to get resource name at iterator=%d, buf_size=%d, buffer[iterator]='%d'",
 		     iterator, buf_size, buffer[iterator]);
+		
 
 	/* get basic base where root "." is found */
 	if (buffer[iterator] == 0) 
@@ -152,17 +177,12 @@ char * ext_dns_message_get_resource_name (extDnsCtx * ctx, const char * buffer, 
 			}*/ /* end if */
 			
 			/* found offset label, process it jumping into that position */
-			offset = (int)(buffer[iterator] & 0x3f) << 8 | (int)buffer[iterator + 1];
+			offset = ((int)(buffer[iterator] & 0x003f) << 8) | ((int)buffer[iterator + 1] & 0x00ff);
 			ext_dns_log (EXT_DNS_LEVEL_DEBUG, "  Found label compression offset=%d, iterator=%d (until now, name is: %s)", offset, iterator, resource_name ? resource_name : "");
 			
 			if (offset < 12 || offset > buf_size) {
 				ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Received a request to process a label compression that is outside the message");
 				axl_free (resource_name);
-
-				/* set is label found */
-				if (_is_label)
-					(* _is_label) = is_label;
-
 				return NULL;
 			}
 			
@@ -171,6 +191,10 @@ char * ext_dns_message_get_resource_name (extDnsCtx * ctx, const char * buffer, 
 			
 			/* ok, now call the function again to process the label at the position pointed */
 			label = ext_dns_message_get_resource_name (ctx, buffer, buf_size, &offset, NULL);
+			if (! label) {
+				axl_free (resource_name);
+				return NULL;
+			}
 
 			ext_dns_log (EXT_DNS_LEVEL_DEBUG, "  Label found at the label compression call: %s", label ? label : "");
 
@@ -178,7 +202,11 @@ char * ext_dns_message_get_resource_name (extDnsCtx * ctx, const char * buffer, 
 
 		} else {
 			/* get label */
-			label = ext_dns_message_get_label (ctx, buffer + iterator);
+			label = ext_dns_message_get_label (ctx, buffer + iterator, buf_size - iterator);
+			if (! label) {
+				axl_free (resource_name);
+				return NULL;
+			}
 
 			/* get length */
 			iterator += strlen (label) + 1;
@@ -483,9 +511,14 @@ extDnsMessage * ext_dns_message_parse_message (extDnsCtx * ctx, extDnsHeader * h
 			iterator += strlen (message->questions[count].qname) + 2;
 		else
 		iterator += 2;*/
+		if ((iterator + 4) > buf_size || (strlen (message->questions[count].qname) == 0)) {
+			ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Found incomplete message in buffer (%d >= %d) or qname is is empty (%d)", 
+				     iterator + 4, buf_size,
+				     strlen (message->questions[count].qname));
+			return ext_dns_message_release_and_return (message);
+		}
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Resource name: '%s' (iterator=%d, buffer size=%d)", message->questions[count].qname, iterator, buf_size); 
 
-		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Resource name: '%s' (iterator=%d)", message->questions[count].qname, iterator); 
-		
 		/* get qtype */
 		message->questions[count].qtype  = ext_dns_get_16bit (buf + iterator);
 		iterator += 2;
@@ -1133,8 +1166,11 @@ int             ext_dns_message_to_buffer (extDnsCtx * ctx, extDnsMessage * mess
 
 		/* dump resource record */
 		result = __ext_dns_message_write_resource_record (ctx, &message->answers[count], buffer, buffer_size, position);
-		if (result == -1)
+		if (result == -1) {
+			/* recodify number of anwers in the buffer to it match the number */
+			ext_dns_set_16bit (count, buffer + 6);
 			break;
+		}
 		position = result;
 
 		/* next count */ 
@@ -1147,8 +1183,11 @@ int             ext_dns_message_to_buffer (extDnsCtx * ctx, extDnsMessage * mess
 
 		/* dump resource record */
 		result = __ext_dns_message_write_resource_record (ctx, &message->authorities[count], buffer, buffer_size, position);
-		if (result == -1)
+		if (result == -1) {
+			/* recodify number of anwers in the buffer to it match the number */
+			ext_dns_set_16bit (count, buffer + 8);
 			break;
+		}
 		position = result;
 
 		/* next count */ 
@@ -1161,8 +1200,11 @@ int             ext_dns_message_to_buffer (extDnsCtx * ctx, extDnsMessage * mess
 
 		/* dump resource record */
 		result = __ext_dns_message_write_resource_record (ctx, &message->additionals[count], buffer, buffer_size, position);
-		if (result == -1)
+		if (result == -1) {
+			/* recodify number of anwers in the buffer to it match the number */
+			ext_dns_set_16bit (count, buffer + 10);
 			break;
+		}
 		position = result;
 
 		/* next count */ 
@@ -1235,9 +1277,6 @@ axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type
 
 	/* configure on received message */
 	ext_dns_session_set_on_message (listener, on_message, data);
-
-	/* configure close listener on reply */
-	listener->close_on_message = axl_true;
 
 	/* set header to be used to check reply received */
 	listener->expected_header = header;
@@ -1690,7 +1729,7 @@ const char *      ext_dns_message_get_qtype_to_str (extDnsCtx * ctx, extDnsType 
 
 	/* unrecognized type */
 	ext_dns_log (EXT_DNS_LEVEL_WARNING, "Unsupported qtype received: %d", type);
-	return NULL;
+	return "UNKNOWN";
 }
 
 /** 
@@ -1744,6 +1783,6 @@ const char *     ext_dns_message_get_qclass_to_str (extDnsCtx * ctx, extDnsClass
 
 	/* unrecognized class */
 	ext_dns_log (EXT_DNS_LEVEL_WARNING, "Unsupported class received: %d", class);
-	return NULL;
+	return "UNKNOWN";
 }
 
