@@ -192,6 +192,20 @@ void on_received  (extDnsCtx     * ctx,
 	return;
 }
 
+void     on_bad_request (extDnsCtx     * ctx,
+			 extDnsSession * session,
+			 const char    * source_address,
+			 int             source_port,
+			 const char    * buffer,
+			 int             buffer_size,
+			 const char    * reason,
+			 axlPointer      data)
+{
+	printf ("BAD REQUEST from %s:%d, reason: %s\n", source_address, source_port, reason);
+
+	return;
+}
+
 #ifdef AXL_OS_UNIX
 void __block_test (int value) 
 {
@@ -267,6 +281,7 @@ int main (int argc, char ** argv) {
 
 	/* configure on received handler */
 	ext_dns_session_set_on_message (listener, on_received, NULL);
+	ext_dns_session_set_on_badrequest (listener, on_bad_request, NULL);
 
 	/* wait and process requests */
 	ext_dns_ctx_wait (ctx);
