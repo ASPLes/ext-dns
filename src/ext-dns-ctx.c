@@ -73,6 +73,17 @@ extDnsCtx * ext_dns_ctx_new (void) {
 	/* init hostname hash */
 	ext_dns_mutex_create (&ctx->hostname_mutex);
 	ctx->hostname_hash = axl_hash_new (axl_hash_string, axl_hash_equal_string);
+	if (ctx->hostname_hash == NULL) {
+		ext_dns_ctx_unref (&ctx);
+		return NULL;
+	}
+
+	/* blacklist hash */
+	ctx->blacklist     = axl_hash_new (axl_hash_string, axl_hash_equal_string);
+	if (ctx->blacklist == NULL) {
+		ext_dns_ctx_unref (&ctx);
+		return NULL;
+	}
 
 	/* return context created */
 	return ctx;
@@ -241,6 +252,10 @@ void        ext_dns_ctx_free2 (extDnsCtx * ctx, const char * who)
 	axl_hash_free (ctx->data);
 	ctx->data = NULL;
 
+	/* clear blacklist hash */
+	axl_hash_free (ctx->blacklist);
+	ctx->blacklist = NULL;
+
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "finishing extDnsCtx %p", ctx);
 
 	/* release log mutex */
@@ -354,6 +369,197 @@ axlPointer  ext_dns_ctx_get_data (extDnsCtx       * ctx,
 	ext_dns_mutex_unlock (&ctx->data_mutex);
 
 	return data;
+}
+
+typedef struct _extDnsBlackList {
+	/** the blacklisted ip **/
+	char      * source_address;
+	/** it is a permanent black list **/
+	axl_bool    is_permanent;
+	/** how many secons to black list **/
+	int         seconds;
+	/** how many black list requests were received. **/
+	int         count;
+	/** when it was black listed **/
+	int         stamp;
+} extDnsBlackList;
+
+/** 
+ * @brief Allows to check if the provided source address is already
+ * blacklisted on the provided context.
+ *
+ * @param ctx The context where the source address is being checked to
+ * be blacklisted or not.
+ *
+ * @param source_address The source to be checked to be blacklisted.
+ *
+ * @parma refresh_record In the case the source address is
+ * blacklisted, axl_true to refresh the black list stamp (so it is
+ * renewed with the query) or axl_false to just query current
+ * database.
+ *
+ * @return axl_true if the IP was blacklisted (\ref using \ref
+ * ext_dns_ctx_black_list) otherwise axl_false is returned.
+ */
+axl_bool    ext_dns_ctx_is_black_listed           (extDnsCtx       * ctx,
+						   const char      * source_address,
+						   axl_bool          refresh_record)
+{
+	extDnsBlackList  * black;
+
+	if (ctx == NULL || source_address == NULL)
+		return axl_false;
+
+	/* fast check */
+	if (axl_hash_items (ctx->blacklist) == 0)
+		return axl_false;
+
+	ext_dns_mutex_lock (&ctx->data_mutex);
+
+	/* get current black list */
+	black = axl_hash_get (ctx->blacklist, (axlPointer) source_address);
+
+	if (black && refresh_record)
+		black->stamp = time (NULL);
+
+	ext_dns_mutex_unlock (&ctx->data_mutex);
+
+	/* return whether the record was found or not */
+	return black != NULL;
+
+}
+
+void __ext_dns_ctx_free_blacklist (extDnsBlackList * black)
+{
+	axl_free (black->source_address);
+	axl_free (black);
+	return;
+}       
+
+axl_bool __ext_dns_blacklist_cleanup (extDnsCtx  * ctx, 
+				      axlPointer   user_data,
+				      axlPointer   user_data2)
+{
+	axlHashCursor   * cursor;
+	extDnsBlackList * black;
+	int               stamp;
+
+	if (axl_hash_items (ctx->blacklist) == 0) 
+		return axl_false; /* never remove the handler */
+
+	ext_dns_mutex_lock (&ctx->data_mutex);
+
+	cursor = axl_hash_cursor_new (ctx->blacklist);
+	stamp  = time (NULL);
+
+	/* init cursor */
+	axl_hash_cursor_first (cursor);
+	while (axl_hash_cursor_has_item (cursor)) {
+
+		/* get the message */
+		black   = axl_hash_cursor_get_value (cursor);
+		if (black->is_permanent)
+			continue;
+
+		/* check the item to be removed (stamp expired) */
+		if ((black->stamp + black->seconds) < stamp) {
+			ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Removing blacklist for %s", black->source_address);
+			axl_hash_cursor_remove (cursor);
+			continue;
+		} /* end if */
+
+		/* next item */
+		axl_hash_cursor_next (cursor);
+	} /* end while */
+	ext_dns_mutex_unlock (&ctx->data_mutex);
+
+	axl_hash_cursor_free (cursor);
+
+	return axl_false; /* never remove the handler */
+}
+
+/** 
+ * @brief Allows to black list the provided source_address, causing
+ * the extDNS engine to drop all requests receveived from that source.
+ *
+ * @param ctx The context where the black list will be installed.
+ *
+ * @param source_address The IP address that will be blacklisted.
+ *
+ * @param is_permanent If it is set to axl_true, the black list will
+ * be applied in a permanent manner as long as the context is
+ * running. If axl_false is provided, a temporal blacklist is
+ * installed, which will be automatically removed after provided
+ * seconds (next parameter).
+ *
+ * @param seconds In the case the black list isn't permanent, how many
+ * seconds to block.
+ *
+ * NOTE: In general, unless required, it is a good practise to
+ * blacklist in a temporal manner. This way your blacklist memory
+ * doesn't grow forever and you can start serving again those hosts
+ * that were blacklisted (maybe there was a problem that is now
+ * solved).
+ */
+void        ext_dns_ctx_black_list                (extDnsCtx       * ctx, 
+						   const char      * source_address,
+						   axl_bool          is_permanent,
+						   int               seconds)
+{
+	extDnsBlackList * black;
+
+	if (ctx == NULL || source_address == NULL)
+		return;
+
+	ext_dns_mutex_lock (&ctx->data_mutex);
+
+	/* get current black list */
+	black = axl_hash_get (ctx->blacklist, (axlPointer) source_address);
+	if (black) {
+		/* update blacklist count */
+		black->count++;
+
+		/* update stamp */
+		black->stamp = time (NULL);
+
+		ext_dns_mutex_lock (&ctx->data_mutex);
+		return;
+	} /* end if */
+
+	/* no black list, install one */
+	black = axl_new (extDnsBlackList, 1);
+	if (black == NULL) {
+		/* failed to allocate memory */
+		ext_dns_mutex_lock (&ctx->data_mutex);
+		return;
+	} /* end if */
+
+	/* get source address */
+	black->source_address = axl_strdup (source_address);
+	if (black->source_address == NULL) {
+		axl_free (black);
+
+		/* failed to allocate memory */
+		ext_dns_mutex_lock (&ctx->data_mutex);
+		return;
+	} /* end if */
+
+	black->is_permanent = is_permanent;
+	black->seconds      = seconds;
+	black->stamp        = time (NULL);
+
+	axl_hash_insert_full (ctx->blacklist,
+			      black->source_address, NULL,
+			      black, (axlDestroyFunc) __ext_dns_ctx_free_blacklist);
+
+	/* check to start event to remove black lists */
+	if (ctx->black_list_event_id == 0 && ! is_permanent) {
+		ctx->black_list_event_id = ext_dns_thread_pool_new_event (ctx, 1 * 1000000, __ext_dns_blacklist_cleanup, ctx, NULL);
+	}
+
+	ext_dns_mutex_unlock (&ctx->data_mutex);
+
+	return;
 }
 
 

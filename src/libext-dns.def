@@ -20,6 +20,11 @@ ext_dns_async_queue_unlock
 ext_dns_async_queue_unlocked_push
 ext_dns_async_queue_unref
 ext_dns_async_queue_waiters
+ext_dns_cache_finish
+ext_dns_cache_get
+ext_dns_cache_get_by_query
+ext_dns_cache_init
+ext_dns_cache_store
 ext_dns_color_log_enable
 ext_dns_color_log_is_enabled
 ext_dns_cond_broadcast
@@ -30,9 +35,11 @@ ext_dns_cond_timedwait
 ext_dns_cond_wait
 ext_dns_conf_get
 ext_dns_conf_set
+ext_dns_ctx_black_list
 ext_dns_ctx_free
 ext_dns_ctx_free2
 ext_dns_ctx_get_data
+ext_dns_ctx_is_black_listed
 ext_dns_ctx_new
 ext_dns_ctx_ref
 ext_dns_ctx_ref2
@@ -106,6 +113,7 @@ ext_dns_message_get_qclass_to_str
 ext_dns_message_get_qtype
 ext_dns_message_get_qtype_to_str
 ext_dns_message_get_resource_name
+ext_dns_message_is_answer_valid
 ext_dns_message_is_name_error
 ext_dns_message_is_query
 ext_dns_message_is_reject
@@ -120,6 +128,7 @@ ext_dns_message_ref
 ext_dns_message_release_and_return
 ext_dns_message_to_buffer
 ext_dns_message_unref
+ext_dns_message_write_header_id
 ext_dns_mutex_create
 ext_dns_mutex_destroy
 ext_dns_mutex_lock

@@ -87,7 +87,9 @@ struct _extDnsCtx {
 
 	/** hash reference **/
 	axlHash         * data;
+	axlHash         * blacklist;
 	extDnsMutex       data_mutex;
+	int               black_list_event_id;
 
 	/*** ext-dns reader module ***/
 	extDnsAsyncQueue        * reader_queue;

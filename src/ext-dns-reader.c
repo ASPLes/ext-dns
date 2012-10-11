@@ -236,6 +236,14 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 	source_address = ext_dns_support_inet_ntoa (ctx, &remote_addr);
 	source_port    = ntohs (remote_addr.sin_port);
 
+	/* check if source_address is blacklisted */
+	if (ext_dns_ctx_is_black_listed (ctx, source_address, axl_true)) {
+		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Received BLACKLISTED DNS message over session id=%d (size: %d), from: %s:%d", 
+			     ext_dns_session_get_id (session), bytes_read, source_address, source_port);
+		axl_free (source_address);
+		return;
+	} /* end if */
+
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Received DNS message over session id=%d (size: %d), from: %s:%d", 
 		     ext_dns_session_get_id (session), bytes_read, source_address, source_port);
 
