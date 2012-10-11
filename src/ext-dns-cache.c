@@ -172,13 +172,24 @@ void            ext_dns_cache_init (extDnsCtx * ctx, int max_cache_size)
 extDnsMessage * ext_dns_cache_get (extDnsCtx * ctx, extDnsClass qclass, extDnsType qtype, const char * query)
 {
 	extDnsMessage * msg;
+	char          * key;
+
 	if (ctx == NULL || query == NULL) {
 		return NULL;
 	}
 
+	/* build key name */
+	key = axl_strdup_printf ("%s%d%d", query, qtype, qclass);
+	if (key == NULL) {
+		ext_dns_mutex_unlock (&ctx->cache_mutex);
+		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Unable to store item, printf_buffer failed to build key");
+		return NULL;;
+	} /* end if */
+
 	ext_dns_mutex_lock (&ctx->cache_mutex);
-	msg = axl_hash_get (ctx->cache, (axlPointer) query);
+	msg = axl_hash_get (ctx->cache, key);
 	if (msg == NULL) {
+		axl_free (key);
 		/* no message found at this moment */
 		ext_dns_mutex_unlock (&ctx->cache_mutex);
 		return NULL;
@@ -187,7 +198,8 @@ extDnsMessage * ext_dns_cache_get (extDnsCtx * ctx, extDnsClass qclass, extDnsTy
 	/* check if the message is valid */
 	if (! ext_dns_message_is_answer_valid (ctx, msg)) {
 		/* delete this message from the cache */
-		axl_hash_remove (ctx->cache, (axlPointer) query);
+		axl_hash_remove (ctx->cache, key);
+		axl_free (key);
 
 		/* no message found at this moment */
 		ext_dns_mutex_unlock (&ctx->cache_mutex);
@@ -202,6 +214,9 @@ extDnsMessage * ext_dns_cache_get (extDnsCtx * ctx, extDnsClass qclass, extDnsTy
 
 	/* no message found at this moment */
 	ext_dns_mutex_unlock (&ctx->cache_mutex);
+
+	/* release memory */
+	axl_free (key);
 
 	return msg;
 }
@@ -250,6 +265,8 @@ extDnsMessage * ext_dns_cache_get_by_query (extDnsCtx * ctx, extDnsMessage * msg
  */
 void            ext_dns_cache_store (extDnsCtx * ctx, extDnsMessage * msg)
 {
+	char * key;
+
 	if (ctx == NULL || msg == NULL || ctx->cache == NULL) {
 		return;
 	}
@@ -276,6 +293,14 @@ void            ext_dns_cache_store (extDnsCtx * ctx, extDnsMessage * msg)
 		return;
 	} /* end if */
 
+	/* build key name */
+	key = axl_strdup_printf ("%s%d%d", msg->questions[0].qname, msg->questions[0].qtype, msg->questions[0].qclass);
+	if (key == NULL) {
+		ext_dns_mutex_unlock (&ctx->cache_mutex);
+		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Unable to store item, printf_buffer failed to build key");
+		return;
+	} /* end if */
+
 	/* try to acquire a reference */
 	if (! ext_dns_message_ref (msg)) {
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Failed to store message into cache, unable to acquire a reference");
@@ -283,8 +308,9 @@ void            ext_dns_cache_store (extDnsCtx * ctx, extDnsMessage * msg)
 		return;
 	}
 
+
 	/* store, unlock and return */
-	axl_hash_insert_full (ctx->cache, msg->questions[0].qname, NULL, msg, (axlDestroyFunc) ext_dns_message_unref);
+	axl_hash_insert_full (ctx->cache, key, axl_free, msg, (axlDestroyFunc) ext_dns_message_unref);
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "CACHE-STORE: handling now %d items", axl_hash_items (ctx->cache));
 	ext_dns_mutex_unlock (&ctx->cache_mutex);
 

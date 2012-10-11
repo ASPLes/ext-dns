@@ -214,6 +214,7 @@ void     on_bad_request (extDnsCtx     * ctx,
 			 axlPointer      data)
 {
 	printf ("BAD REQUEST from %s:%d, reason: %s\n", source_address, source_port, reason);
+	ext_dns_ctx_black_list (ctx, source_address, axl_false, 3);
 
 	return;
 }

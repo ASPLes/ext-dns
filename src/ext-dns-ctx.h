@@ -69,6 +69,15 @@ void        ext_dns_ctx_set_data_full             (extDnsCtx       * ctx,
 axlPointer  ext_dns_ctx_get_data                  (extDnsCtx       * ctx,
 						   const char      * key);
 
+axl_bool    ext_dns_ctx_is_black_listed           (extDnsCtx       * ctx,
+						   const char      * source_address,
+						   axl_bool          refresh_record);
+
+void        ext_dns_ctx_black_list                (extDnsCtx       * ctx, 
+						   const char      * source_address,
+						   axl_bool          is_permanent,
+						   int               seconds);
+
 void        ext_dns_ctx_wait                      (extDnsCtx * ctx);
 
 void        ext_dns_ctx_unlock                    (extDnsCtx * ctx);

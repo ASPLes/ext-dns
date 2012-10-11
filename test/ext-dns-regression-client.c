@@ -1613,9 +1613,106 @@ axl_bool test_20 (void) {
 		/* next iterator */
 		iterator++;
 	} /* end while */
+
+	/* wait a bit */
+	printf ("Test 20: waiting for server to remove blacklist for next test (5 seconds)..\n");
+	sleep (5);
+	fflush (stdout);
 	
 	/* terminate process */
 	ext_dns_exit_ctx (ctx, axl_true);
+
+	return axl_true; /* return ok */
+}
+
+axl_bool test_21 (void) {
+
+	extDnsCtx        * ctx;
+	int                iterator;
+	extDnsAsyncQueue * queue;
+	extDnsMessage    * message;
+
+	/* create context object */
+	ctx = ext_dns_ctx_new ();
+	if (ctx == NULL) {
+		printf ("ERROR: failed to allocate ctx object..\n");
+		return axl_false;
+	}
+
+	/* init context */
+	if (! ext_dns_init_ctx (ctx)) {
+		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
+		return axl_false;
+	}
+
+	/* run query and check results */
+	queue = ext_dns_async_queue_new ();
+
+	iterator = 0;
+	while (iterator < 10) {
+		ext_dns_message_query (ctx, "a", "in", "www.google.com", dns_server, dns_server_port, queue_reply, queue);
+
+		/* get reply (timeout in 3seconds) */
+		message = ext_dns_async_queue_timedpop (queue, 3000000);
+		if (message == NULL) {
+			printf ("ERROR: expected to find message reply but found NULL reference (A www.google.com)..\n");
+			return axl_false;
+		}
+		
+		/* check header */
+		if (! check_header (message, 
+				    /* is query */ axl_false, 
+				    /* ans count */ 5, 
+				    /* query count */ 1,
+				    /* authority count */ 0,
+				    /* additional count */ 0))
+			return axl_false;
+		
+		if (message->answers[0].type != extDnsTypeA) {
+			printf ("ERROR: Expected to receive an A (%d) type in the answer but got %d\n",
+				message->answers[0].type, extDnsTypeA);
+			return axl_false;
+		} /*  end if */
+
+		/* release message */
+		ext_dns_message_unref (message);
+
+		/* now do the same query but to other registry */
+		ext_dns_message_query (ctx, "aaaa", "in", "www.google.com", dns_server, dns_server_port, queue_reply, queue);
+
+		/* get reply (timeout in 3seconds) */
+		message = ext_dns_async_queue_timedpop (queue, 3000000);
+		if (message == NULL) {
+			printf ("ERROR: expected to find message reply but found NULL reference (AAAA www.google.com)..\n");
+			return axl_false;
+		}
+		
+		/* check header */
+		if (! check_header (message, 
+				    /* is query */ axl_false, 
+				    /* ans count */ 1, 
+				    /* query count */ 1,
+				    /* authority count */ 0,
+				    /* additional count */ 0))
+			return axl_false;
+		
+		if (message->answers[0].type != extDnsTypeAAAA) {
+			printf ("ERROR: Expected to receive an AAAA (%d) type in the answer but got %d\n",
+				message->answers[0].type, extDnsTypeAAAA);
+			return axl_false;
+		} /*  end if */
+
+		/* release message */
+		ext_dns_message_unref (message);
+
+		/* next iterator */
+		iterator++;
+	} /* end while */
+	
+	/* terminate process */
+	ext_dns_exit_ctx (ctx, axl_true);
+
+	ext_dns_async_queue_unref (queue);
 
 	return axl_true; /* return ok */
 }
@@ -1700,7 +1797,7 @@ int main (int argc, char ** argv) {
 	printf ("** extDns Regression tests: version=%s\n**\n",
 		VERSION);
 	printf ("** To gather information about memory consumed (and leaks) use:\n**\n");
-	printf ("**     >> libtool --mode=execute valgrind --leak-check=yes --error-limit=no ./exn-dns-regression-client\n**\n");
+	printf ("**     >> libtool --mode=execute valgrind --leak-check=yes --error-limit=no ./ext-dns-regression-client\n**\n");
 	printf ("** Additional settings:\n");
 	printf ("**\n");
 	printf ("**     >> ./ext-dns-regression-client --[run-test=NAME] [dns-server [dns-port]] \n");
@@ -1792,6 +1889,9 @@ int main (int argc, char ** argv) {
 		if (check_and_run_test (run_test_name, "test_20"))
 			run_test (test_20, "Test 20", "testing malformed messages (2)..", -1, -1);
 
+		if (check_and_run_test (run_test_name, "test_21"))
+			run_test (test_21, "Test 21", "testing cache (objects with the name name, different type)..", -1, -1);
+
 		goto finish;
 	}
 
@@ -1837,6 +1937,8 @@ int main (int argc, char ** argv) {
 
 	/* test sending a query with several queries but only placing one.. */
 	run_test (test_20, "Test 20", "testing malformed messages (2)..", -1, -1);
+
+	run_test (test_21, "Test 21", "testing cache (objects with the name name, different type)..", -1, -1);
 	
 	/* test sending q query where the replies should have several
 	   but only were found a few */
