@@ -239,6 +239,17 @@ axl_bool send_command (const char * command, childState * child, char * reply, i
 	return bytes_written;
 }
 
+void handle_reply_complete_cname (extDnsCtx     * ctx,
+				  extDnsSession * session,
+				  const char    * source_address,
+				  int             source_port,
+				  extDnsMessage * message,
+				  axlPointer      data)
+{
+	
+	return;
+}
+
 void handle_reply (extDnsCtx     * ctx,
 		   extDnsSession * session,
 		   const char    * source_address,
@@ -310,12 +321,18 @@ return_result:
 }
 
 
-extDnsMessage * ext_dnsd_handle_reply (extDnsCtx * ctx, extDnsMessage * query, const char * reply_buffer)
+extDnsMessage * ext_dnsd_handle_reply (extDnsCtx     * ctx, 
+				       extDnsMessage * query, 
+				       const char    * reply_buffer,
+				       extDnsSession * session,
+				       const char    * source_address,
+				       int             source_port)
 {
 	int              ttl;
 	char          ** items = axl_split (reply_buffer, 1, " ");
 	extDnsMessage  * reply = NULL;
 	const char     * value;
+	extDnsMessage  * aux;
 	
 	/* check result */
 	if (items == NULL)
@@ -355,6 +372,20 @@ extDnsMessage * ext_dnsd_handle_reply (extDnsCtx * ctx, extDnsMessage * query, c
 
 		/* build reply */
 		reply = ext_dns_message_build_cname_reply (ctx, query, value, ttl);
+		if (reply) {
+			/* because we are going to reply a CNAME, we need to
+			 * add the IP that resolves that request. Check if the
+			 * cache have that value */
+			syslog (LOG_INFO, "Caching in cache for %s", value);
+			aux   = ext_dns_cache_get (ctx, extDnsClassIN, extDnsTypeA, value);
+			if (aux == NULL) {
+				/* found that the value A isn't found in the
+				 * case, we have to ask for it */
+				ext_dns_message_query_int (ctx, extDnsClassIN, extDnsTypeA, value,
+							   server, server_port, handle_reply_complete_cname, reply);
+				return INT_TO_PTR (2); /* report that we are asking to complete the request */
+			} /* end if */
+		} /* end if */
 	}
 
 	axl_freev (items);
@@ -428,10 +459,16 @@ void on_received  (extDnsCtx     * ctx,
 		/* syslog (LOG_INFO, "child requested to continue and resolve request as usual using forward dns server..\n"); */
 	} else if (axl_memcmp (reply_buffer, "REPLY ", 6)) {
 		/* parse reply received */
-		reply = ext_dnsd_handle_reply (ctx, message, reply_buffer);
+		reply = ext_dnsd_handle_reply (ctx, message, reply_buffer, session, source_address, source_port);
 	} else {
 		syslog (LOG_INFO, "ERROR: unrecognized command reply found from child: %s..\n", reply_buffer);
+		return; /* do not handle the request in this case */
 	}
+
+	/* check if handlers requested to return because they are
+	 * completing pending requests */
+	if (PTR_TO_INT(reply) == 2) 
+		return;
 
 	if (reply) {
 		/* store reply in the cache */
