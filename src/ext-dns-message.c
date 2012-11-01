@@ -908,6 +908,46 @@ axl_bool        ext_dns_message_add_answer (extDnsCtx * ctx, extDnsMessage * mes
 	return axl_true;
 }
 
+/** 
+ * @brief Allows to add all answers inside extension message into the
+ * first message (second argument).
+ *
+ * @param ctx The context where the operation will take place.
+ *
+ * @param message The message that will be updated with all answers found in extension.
+ *
+ * @param extension The source message where all answers will be
+ * copied into message.
+ *
+ * @return axl_true in the case all answers where copied, otherwise
+ * axl_false is returned. The function also returns axl_false in the
+ * case some parameter is NULL.
+ */
+axl_bool        ext_dns_message_add_answer_from_msg (extDnsCtx * ctx, extDnsMessage * message, extDnsMessage * extension)
+{
+	int iterator = 0;
+
+	if (ctx == NULL || message == NULL || extension == NULL)
+		return axl_false;
+
+	while (iterator < extension->header->answer_count) {
+		/* add answer */
+		if (! ext_dns_message_add_answer (ctx, message, 
+						  extension->answers[iterator].type, 
+						  extension->answers[iterator].class, 
+						  extension->answers[iterator].name, 
+						  extension->answers[iterator].ttl, 
+						  extension->answers[iterator].name_content))
+			return axl_false;
+
+		/* next position */
+		iterator++;
+	}
+
+	/* added answers */
+	return axl_true;
+}
+
 int __ext_dns_message_get_resource_size (extDnsResourceRecord * rr)
 {
 	int result = 2 + 2 + 4 + strlen (rr->name) + 2; /* type, class, ttl, name encoded */
