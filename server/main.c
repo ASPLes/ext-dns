@@ -72,6 +72,7 @@ typedef struct _HandleReplyData {
 	char          * source_address;
 	int             source_port;
 	extDnsSession * master_listener;
+	extDnsMessage * reply;
 } HandleReplyData;
 
 typedef struct _childState {
@@ -239,6 +240,37 @@ axl_bool send_command (const char * command, childState * child, char * reply, i
 	return bytes_written;
 }
 
+axl_bool ext_dnsd_send_reply (extDnsCtx * ctx, extDnsSession * session, const char * source_address, int source_port, extDnsMessage * reply, axl_bool release_message)
+{
+	char     buffer[512];
+	int      bytes_written;
+	axl_bool result = axl_false;
+
+	/* build buffer reply */
+	bytes_written = ext_dns_message_to_buffer (ctx, reply, buffer, 512);
+	if (bytes_written <= 0) {
+		syslog (LOG_ERR, "ERROR: failed to dump message into the buffer, unable to reply to resolver..\n");
+		goto return_result;
+	}
+
+	/* send reply */
+	if (ext_dns_session_send_udp_s (ctx, session, buffer, bytes_written, source_address, source_port) != bytes_written) {
+		syslog (LOG_ERR, "ERROR: failed to send %d bytes as reply, different amount of bytes where written\n", bytes_written);
+		goto return_result;
+	} /* end if */
+
+	/* reached this point we were able to send the message */
+	result = axl_true;
+
+return_result:
+	
+	/* release reply */
+	if (release_message)
+		ext_dns_message_unref (reply);
+	
+	return axl_true;
+}
+
 void handle_reply_complete_cname (extDnsCtx     * ctx,
 				  extDnsSession * session,
 				  const char    * source_address,
@@ -246,6 +278,24 @@ void handle_reply_complete_cname (extDnsCtx     * ctx,
 				  extDnsMessage * message,
 				  axlPointer      data)
 {
+	HandleReplyData * handle_reply = (HandleReplyData *) data;
+
+	/* add the message content into the reply */
+	if (! ext_dns_message_add_answer_from_msg (ctx, handle_reply->reply, message)) {
+		handle_reply_data_free (data);
+		return;
+	}
+
+	/* send reply */
+	if (! ext_dnsd_send_reply (ctx, handle_reply->master_listener, handle_reply->source_address, handle_reply->source_port, handle_reply->reply, axl_true)) {
+		handle_reply_data_free (data);
+		return;
+	}
+
+	/* store reply in the cache */
+	ext_dns_cache_store (ctx, handle_reply->reply);
+
+	handle_reply_data_free (data);
 	
 	return;
 }
@@ -289,38 +339,6 @@ void handle_reply (extDnsCtx     * ctx,
 	return;
 }
 
-axl_bool ext_dnsd_send_reply (extDnsCtx * ctx, extDnsSession * session, const char * source_address, int source_port, extDnsMessage * reply, axl_bool release_message)
-{
-	char     buffer[512];
-	int      bytes_written;
-	axl_bool result = axl_false;
-
-	/* build buffer reply */
-	bytes_written = ext_dns_message_to_buffer (ctx, reply, buffer, 512);
-	if (bytes_written <= 0) {
-		syslog (LOG_ERR, "ERROR: failed to dump message into the buffer, unable to reply to resolver..\n");
-		goto return_result;
-	}
-
-	/* send reply */
-	if (ext_dns_session_send_udp_s (ctx, session, buffer, bytes_written, source_address, source_port) != bytes_written) {
-		syslog (LOG_ERR, "ERROR: failed to send %d bytes as reply, different amount of bytes where written\n", bytes_written);
-		goto return_result;
-	} /* end if */
-
-	/* reached this point we were able to send the message */
-	result = axl_true;
-
-return_result:
-	
-	/* release reply */
-	if (release_message)
-		ext_dns_message_unref (reply);
-	
-	return axl_true;
-}
-
-
 extDnsMessage * ext_dnsd_handle_reply (extDnsCtx     * ctx, 
 				       extDnsMessage * query, 
 				       const char    * reply_buffer,
@@ -328,11 +346,12 @@ extDnsMessage * ext_dnsd_handle_reply (extDnsCtx     * ctx,
 				       const char    * source_address,
 				       int             source_port)
 {
-	int              ttl;
-	char          ** items = axl_split (reply_buffer, 1, " ");
-	extDnsMessage  * reply = NULL;
-	const char     * value;
-	extDnsMessage  * aux;
+	int               ttl;
+	char           ** items = axl_split (reply_buffer, 1, " ");
+	extDnsMessage   * reply = NULL;
+	const char      * value;
+	extDnsMessage   * aux;
+	HandleReplyData * handle_reply;
 	
 	/* check result */
 	if (items == NULL)
@@ -372,19 +391,35 @@ extDnsMessage * ext_dnsd_handle_reply (extDnsCtx     * ctx,
 
 		/* build reply */
 		reply = ext_dns_message_build_cname_reply (ctx, query, value, ttl);
-		if (reply) {
-			/* because we are going to reply a CNAME, we need to
-			 * add the IP that resolves that request. Check if the
-			 * cache have that value */
-			syslog (LOG_INFO, "Caching in cache for %s", value);
-			aux   = ext_dns_cache_get (ctx, extDnsClassIN, extDnsTypeA, value);
-			if (aux == NULL) {
-				/* found that the value A isn't found in the
-				 * case, we have to ask for it */
-				ext_dns_message_query_int (ctx, extDnsClassIN, extDnsTypeA, value,
-							   server, server_port, handle_reply_complete_cname, reply);
-				return INT_TO_PTR (2); /* report that we are asking to complete the request */
+		if (reply == NULL) {
+			syslog (LOG_INFO, "Failed to build cname reply with name=%s ttl=%d", value, ttl);
+			return INT_TO_PTR (2); /* report to do anything */
+		}
+
+		/* because we are going to reply a CNAME, we need to
+		 * add the IP that resolves that request. Check if the
+		 * cache have that value */
+		syslog (LOG_INFO, "Caching in cache for %s", value);
+		aux   = ext_dns_cache_get (ctx, extDnsClassIN, extDnsTypeA, value);
+		if (aux == NULL) {
+			/* build reply data */
+			handle_reply                  = axl_new (HandleReplyData, 1);
+			if (handle_reply == NULL) {
+				/* release reply */
+				ext_dns_message_unref (reply);
+				return INT_TO_PTR (2); /* report failure */
 			} /* end if */
+
+			handle_reply->source_address  = axl_strdup (source_address);
+			handle_reply->source_port     = source_port;
+			handle_reply->master_listener = session;
+			handle_reply->reply           = reply;
+
+			/* found that the value A isn't found in the
+			 * case, we have to ask for it */
+			ext_dns_message_query_int (ctx, extDnsClassIN, extDnsTypeA, value,
+						   server, server_port, handle_reply_complete_cname, handle_reply);
+			return INT_TO_PTR (2); /* report that we are asking to complete the request */
 		} /* end if */
 	}
 
@@ -466,7 +501,7 @@ void on_received  (extDnsCtx     * ctx,
 	}
 
 	/* check if handlers requested to return because they are
-	 * completing pending requests */
+	 * completing pending requests or because a feailure was found */
 	if (PTR_TO_INT(reply) == 2) 
 		return;
 
