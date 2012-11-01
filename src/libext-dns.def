@@ -101,6 +101,7 @@ ext_dns_log_get_handler
 ext_dns_log_is_enabled
 ext_dns_log_set_handler
 ext_dns_log_set_prepare_log
+ext_dns_message_add_answer
 ext_dns_message_build_cname_reply
 ext_dns_message_build_ipv4_reply
 ext_dns_message_build_query
