@@ -819,6 +819,95 @@ extDnsMessage * ext_dns_message_build_cname_reply (extDnsCtx * ctx, extDnsMessag
 	return reply;	
 }
 
+/** 
+ * @brief Allows to add an additional answer record to the provided
+ * message.
+ *
+ * The message must be a reply (\ref ext_dns_message_is_query). 
+ *
+ * @param ctx The context where the message to buffer will take place.
+ * @param message The reply to be updated with the provided values.
+ *
+ * @param type The answer record type.
+ *
+ * @param name The answer record name.
+ *
+ * @param ttl The record ttl value.
+ *
+ * @param content The record content to be configured.
+ *
+ * @return axl_true if the answer was added to the reply, otherwise,
+ * axl_false is returned. The function also returns axl_false when the
+ * value provided doesn't match the type. For example, if extDnsTypeA
+ * is provided, content must have a valid IPv4 value.
+ */
+axl_bool        ext_dns_message_add_answer (extDnsCtx * ctx, extDnsMessage * message, extDnsType type, extDnsClass class, const char * name, int ttl, const char * content)
+{
+	axlPointer              ptr;
+	extDnsResourceRecord  * rr;
+	char                 ** items;
+
+	if (ctx == NULL || message == NULL || name == NULL || content == NULL)
+		return axl_false;
+	
+	/* prechecks before doing anything */
+	if (type == extDnsTypeA) {
+		if (! ext_dns_support_is_ipv4 (content))
+			return axl_false;
+	} /* end if */
+
+	/* realloc value */
+	ptr = axl_realloc (message->answers, sizeof (extDnsResourceRecord) * (message->header->answer_count + 1));
+	if (ptr == NULL)
+		return axl_false;
+
+	/* update references */
+	message->answers = ptr;
+	message->header->answer_count++;
+	
+	/* set values */
+	rr = &(message->answers[message->header->answer_count - 1]);
+	rr->name         = axl_strdup (name);
+	rr->name_content = axl_strdup (content);
+	rr->class        = class;
+	rr->type         = type;
+	rr->ttl          = ttl;
+
+	/* init values */
+	rr->mname = NULL;
+	rr->contact_address = NULL;
+	rr->target = NULL;
+
+	if (type == extDnsTypeA) {
+		/* encode ip */
+		rr->rdlength = 4;
+		rr->rdata    = axl_new (char, 4);
+		if (rr->rdata == NULL) {
+			/* remove this answer from the header because
+			 * the data isn't complete */
+			message->header->answer_count--;
+			return axl_false;
+		} /* end if */
+
+		/* parse ip value */
+		items = axl_split (content, 1, ".");
+		if (items == NULL) {
+			/* remove this answer from the header because
+			 * the data isn't complete */
+			message->header->answer_count--;
+			return axl_false;
+		} /* end if */
+
+		rr->rdata[0] = atoi (items[0]);
+		rr->rdata[1] = atoi (items[1]);
+		rr->rdata[2] = atoi (items[2]);
+		rr->rdata[3] = atoi (items[3]);
+		axl_freev (items);
+	} /* end if */
+	
+	return axl_true;
+}
+
 int __ext_dns_message_get_resource_size (extDnsResourceRecord * rr)
 {
 	int result = 2 + 2 + 4 + strlen (rr->name) + 2; /* type, class, ttl, name encoded */

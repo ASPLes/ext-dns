@@ -52,6 +52,8 @@ extDnsMessage * ext_dns_message_build_ipv4_reply (extDnsCtx * ctx, extDnsMessage
 
 extDnsMessage * ext_dns_message_build_cname_reply (extDnsCtx * ctx, extDnsMessage * message, const char * name, int ttl);
 
+axl_bool        ext_dns_message_add_answer (extDnsCtx * ctx, extDnsMessage * message, extDnsType type, extDnsClass class, const char * name, int ttl, const char * content);
+
 axl_bool        ext_dns_message_is_query (extDnsMessage * message);
 
 axl_bool        ext_dns_message_is_reject (extDnsMessage * message);

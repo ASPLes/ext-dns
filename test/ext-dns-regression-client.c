@@ -453,6 +453,91 @@ axl_bool test_04 (void) {
 	return axl_true; /* return ok */
 }
 
+axl_bool test_04a (void) {
+
+	extDnsCtx        * ctx;
+	extDnsMessage    * message;
+	extDnsAsyncQueue * queue;
+
+	if (! axl_cmp (dns_server, "localhost")) {
+		printf ("WARNING: skip asking to %s for this test..because we would need the server to forge record cname.asplhosting.com\n", dns_server);
+		return axl_true;
+	}
+
+	/* create context object */
+	ctx = ext_dns_ctx_new ();
+	if (ctx == NULL) {
+		printf ("ERROR: failed to allocate ctx object..\n");
+		return axl_false;
+	}
+
+	/* init context */
+	if (! ext_dns_init_ctx (ctx)) {
+		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
+		return axl_false;
+	}
+
+	/* run query and check results */
+	queue = ext_dns_async_queue_new ();
+	ext_dns_message_query (ctx, "a", "in", "cname.asplhosting.com", dns_server, dns_server_port, queue_reply, queue);
+
+	/* get reply (timeout in 3seconds) */
+	message = ext_dns_async_queue_timedpop (queue, 3000000);
+	if (message == NULL) {
+		printf ("ERROR: expected to find message reply but found NULL reference..\n");
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->is_query) {
+		printf ("ERROR: expected not to find a query (QR == 0) type message\n");
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->answer_count != 3) {
+		printf ("ERROR: expected to find a 3 answer but found: %d\n", message->header->answer_count);
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->query_count != 1) {
+		printf ("ERROR: expected to find a 1 query but found: %d\n", message->header->query_count);
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->additional_count != 0) {
+		printf ("ERROR: expected to find a 1 query but found: %d\n", message->header->additional_count);
+		return axl_false;
+	}
+
+	/* check message values */
+	if (message->header->authority_count != 0) {
+		printf ("ERROR: expected to find a 1 query but found: %d\n", message->header->authority_count);
+		return axl_false;
+	}
+
+	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content); */
+	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content);  */
+	if (! check_answer (ctx, &message->answers[0], "cname.asplhosting.com", extDnsTypeCNAME, extDnsClassIN, "cname.aspl.es"))
+		return axl_false;
+	if (! check_answer (ctx, &message->answers[1], "cname.aspl.es", extDnsTypeA, extDnsClassIN, "182.192.10.20"))
+		return axl_false;
+	if (! check_answer (ctx, &message->answers[2], "cname.aspl.es", extDnsTypeA, extDnsClassIN, "182.192.10.21"))
+		return axl_false;
+
+	/* release message */
+	ext_dns_message_unref (message);
+
+	ext_dns_async_queue_unref (queue);
+
+	/* terminate process */
+	ext_dns_exit_ctx (ctx, axl_true);
+
+	return axl_true; /* return ok */
+}
+
 axl_bool test_05 (void) {
 	extDnsCtx        * ctx;
 	extDnsMessage    * message;
@@ -1804,7 +1889,7 @@ int main (int argc, char ** argv) {
 	printf ("**        by default dns-server=localhost dns-port=53\n");
 	printf ("**\n");
 	printf ("**       Providing --run-test=NAME will run only the provided regression test.\n");
-	printf ("**       Test available: test_01, test_02, test_03, test_04, test_05\n");
+	printf ("**       Test available: test_01, test_02, test_03, test_04, test_04a, test_05\n");
 	printf ("**                       test_06, test_07, test_08, test_09, test_10\n");
 	printf ("**                       test_11, test_12\n");
 	printf ("**\n");
@@ -1840,6 +1925,9 @@ int main (int argc, char ** argv) {
 
 		if (check_and_run_test (run_test_name, "test_04"))
 			run_test (test_04, "Test 04", "basic CNAME query", -1, -1);
+
+		if (check_and_run_test (run_test_name, "test_04a"))
+			run_test (test_04a, "Test 04-a", "basic CNAME query (complete reply)", -1, -1);
 
 		if (check_and_run_test (run_test_name, "test_05"))
 			run_test (test_05, "Test 05", "basic CNAME as A query", -1, -1);
@@ -1903,6 +1991,8 @@ int main (int argc, char ** argv) {
 	run_test (test_03, "Test 03", "basic MX query", -1, -1);
 
 	run_test (test_04, "Test 04", "basic CNAME query", -1, -1);
+
+	run_test (test_04a, "Test 04-a", "basic CNAME query (complete reply)", -1, -1);
 
 	run_test (test_05, "Test 05", "basic CNAME as A query", -1, -1);
 
