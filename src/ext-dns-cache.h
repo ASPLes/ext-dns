@@ -42,11 +42,11 @@
 
 void            ext_dns_cache_init (extDnsCtx * ctx, int max_cache_size);
 
-extDnsMessage * ext_dns_cache_get (extDnsCtx * ctx, extDnsClass qclass, extDnsType qtype, const char * query);
+extDnsMessage * ext_dns_cache_get (extDnsCtx * ctx, extDnsClass qclass, extDnsType qtype, const char * query, const char * source_address);
 
-extDnsMessage * ext_dns_cache_get_by_query (extDnsCtx * ctx, extDnsMessage * msg);
+extDnsMessage * ext_dns_cache_get_by_query (extDnsCtx * ctx, extDnsMessage * msg, const char * source_address);
 
-void            ext_dns_cache_store (extDnsCtx * ctx, extDnsMessage * msg);
+axl_bool        ext_dns_cache_store (extDnsCtx * ctx, extDnsMessage * msg, const char * source_address);
 
 void            ext_dns_cache_finish (extDnsCtx * ctx);
 

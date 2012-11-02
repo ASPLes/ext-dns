@@ -324,8 +324,15 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 	/* CACHE SUPPORT: check we have something in the cache */
 	if (ctx->cache && ext_dns_message_is_query (message)) {
 		/* try to find a cached reply */
-		reply = ext_dns_cache_get_by_query (ctx, message);
+		reply = ext_dns_cache_get_by_query (ctx, message, source_address);
 		if (reply) {
+
+			/* record value */
+			ext_dns_log (EXT_DNS_LEVEL_DEBUG, "CACHE-GET: using cache result to reply query to %s %s %s", 
+				     ext_dns_message_query_name (ctx, reply), 				     
+				     ext_dns_message_query_class (ctx, reply), 
+				     ext_dns_message_query_type (ctx, reply));
+
 			/* build buffer reply */
 			bytes_written = ext_dns_message_to_buffer (ctx, reply, buf, 512);
 			if (bytes_written <= 0) {
