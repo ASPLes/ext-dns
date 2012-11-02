@@ -97,8 +97,9 @@ axl_bool __ext_dns_cache_cleanup (extDnsCtx  * ctx,
  * Once enabled (using this function) the module will take care of TTL
  * handling and expire cache cleanup.
  *
- * In the case you want to flush the cache, you just have to this
- * function again.
+ * In the case you want to flush the cache, you just have to call this
+ * function again (max_cache_size is ignored that time, just pass 0 or
+ * whatever you want).
  */
 void            ext_dns_cache_init (extDnsCtx * ctx, int max_cache_size)
 {
