@@ -405,7 +405,8 @@ typedef int      (*extDnsReceiveHandler)         (extDnsSession    * session,
 
 /** 
  * @brief Defines the set of handler functions that are called to
- * notify a DNS message received on the provided session.
+ * notify a DNS message received on the provided session. This handler
+ * definition is also used by DNS cache validation.
  *
  * @param session The DNS session where the message was received.
  *

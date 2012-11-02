@@ -68,6 +68,8 @@ axl_bool        ext_dns_message_ref (extDnsMessage * message);
 
 void            ext_dns_message_unref (extDnsMessage * message);
 
+int             ext_dns_message_count (extDnsMessage * message);
+
 int             ext_dns_message_build_query (extDnsCtx * ctx, const char * qname, extDnsType qtype, extDnsClass qclass, 
 					     char * buffer, extDnsHeader ** header);
 
@@ -86,6 +88,12 @@ axl_bool        ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type, ex
 axl_bool        ext_dns_message_query_from_msg (extDnsCtx * ctx, extDnsMessage * message,
 						const char * server, int server_port,
 						extDnsOnMessageReceived on_message, axlPointer data);
+
+const char *    ext_dns_message_query_name (extDnsCtx * ctx, extDnsMessage * message);
+
+const char *    ext_dns_message_query_class (extDnsCtx * ctx, extDnsMessage * message);
+
+const char *    ext_dns_message_query_type (extDnsCtx * ctx, extDnsMessage * message);
 				
 extDnsType      ext_dns_message_get_qtype (extDnsCtx * ctx, const char * qtype);
 

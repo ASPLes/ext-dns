@@ -163,13 +163,18 @@ void            ext_dns_cache_init (extDnsCtx * ctx, int max_cache_size)
  *
  * @param query The query name 
  *
+ * @param source_address Optional source address string to
+ * particularize the cache query. This will make to find a cache value
+ * associated to the query type and the source address provided. If
+ * NULL is provided, a general value will be provided.
+ *
  * @return A reference to the message that is a valid cached reply to
  * the query or NULL if the cache doesn't have a valid value stored at
  * this time. The message reference returned is owned by the
  * caller. This means you must call \ref ext_dns_message_unref when
  * you no longer need the message.
  */
-extDnsMessage * ext_dns_cache_get (extDnsCtx * ctx, extDnsClass qclass, extDnsType qtype, const char * query)
+extDnsMessage * ext_dns_cache_get (extDnsCtx * ctx, extDnsClass qclass, extDnsType qtype, const char * query, const char * source_address)
 {
 	extDnsMessage * msg;
 	char          * key;
@@ -179,7 +184,10 @@ extDnsMessage * ext_dns_cache_get (extDnsCtx * ctx, extDnsClass qclass, extDnsTy
 	}
 
 	/* build key name */
-	key = axl_strdup_printf ("%s%d%d", query, qtype, qclass);
+	if (source_address)
+		key = axl_strdup_printf ("%s%s%d%d", query, source_address, qtype, qclass);
+	else
+		key = axl_strdup_printf ("%s%d%d", query, qtype, qclass);
 	if (key == NULL) {
 		ext_dns_mutex_unlock (&ctx->cache_mutex);
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Unable to store item, printf_buffer failed to build key");
@@ -233,8 +241,18 @@ extDnsMessage * ext_dns_cache_get (extDnsCtx * ctx, extDnsClass qclass, extDnsTy
  *
  * @param msg The message where cache query data (qtype, qclass and
  * qname) will be taken from.
+ *
+ * @param source_address Optional source address to narrow the cache
+ * query only to those values stored associated to that source
+ * address.
+ *
+ * @return A reference to the message that is a valid cached reply to
+ * the query or NULL if the cache doesn't have a valid value stored at
+ * this time. The message reference returned is owned by the
+ * caller. This means you must call \ref ext_dns_message_unref when
+ * you no longer need the message.
  */
-extDnsMessage * ext_dns_cache_get_by_query (extDnsCtx * ctx, extDnsMessage * msg)
+extDnsMessage * ext_dns_cache_get_by_query (extDnsCtx * ctx, extDnsMessage * msg, const char * source_address)
 {
 	/* check input parameters */
 	if (ctx == NULL || msg == NULL) {
@@ -245,7 +263,7 @@ extDnsMessage * ext_dns_cache_get_by_query (extDnsCtx * ctx, extDnsMessage * msg
 	}
 
 	/* get the value from the cache */
-	return ext_dns_cache_get (ctx, msg->questions[0].qclass, msg->questions[0].qtype, msg->questions[0].qname);
+	return ext_dns_cache_get (ctx, msg->questions[0].qclass, msg->questions[0].qtype, msg->questions[0].qname, source_address);
 }
 
 /** 
@@ -262,23 +280,31 @@ extDnsMessage * ext_dns_cache_get_by_query (extDnsCtx * ctx, extDnsMessage * msg
  * @param ctx The context where the cached reply will be stored.
  *
  * @param msg The message to be cached. 
+ *
+ * @param source_address Optional source address to associated the
+ * cache only to that address, so you can have different cached values
+ * according to the source address. If nothing is provided, a general
+ * cache value will be stored.
+ *
+ * @return axl_true if the item was stored in the case, otherwise
+ * axl_false is returned.
  */
-void            ext_dns_cache_store (extDnsCtx * ctx, extDnsMessage * msg)
+axl_bool            ext_dns_cache_store (extDnsCtx * ctx, extDnsMessage * msg, const char * source_address)
 {
 	char * key;
 
 	if (ctx == NULL || msg == NULL || ctx->cache == NULL) {
-		return;
+		return axl_false;
 	}
 
 	/* check to store a reply message */
 	if (msg->header == NULL || msg->header->is_query) {
-		return;
+		return axl_false;
 	} /* end if */
 
 	/* check if the message is valid to be stored */
 	if (msg->questions == NULL || msg->questions[0].qname == NULL || msg->answers == NULL) {
-		return;
+		return axl_false;
 	}
 
 	/* lock */
@@ -290,22 +316,27 @@ void            ext_dns_cache_store (extDnsCtx * ctx, extDnsMessage * msg)
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Max cache size limit reached, skipping storing item");
 
 		/*** NOTIFY max cache reached ***/
-		return;
+		return axl_false;
 	} /* end if */
 
 	/* build key name */
-	key = axl_strdup_printf ("%s%d%d", msg->questions[0].qname, msg->questions[0].qtype, msg->questions[0].qclass);
+	if (source_address)
+		key = axl_strdup_printf ("%s%s%d%d", msg->questions[0].qname, source_address, 
+					 msg->questions[0].qtype, msg->questions[0].qclass);
+	else
+		key = axl_strdup_printf ("%s%d%d", msg->questions[0].qname, 
+					 msg->questions[0].qtype, msg->questions[0].qclass);
 	if (key == NULL) {
 		ext_dns_mutex_unlock (&ctx->cache_mutex);
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Unable to store item, printf_buffer failed to build key");
-		return;
+		return axl_false;
 	} /* end if */
 
 	/* try to acquire a reference */
 	if (! ext_dns_message_ref (msg)) {
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Failed to store message into cache, unable to acquire a reference");
 		ext_dns_mutex_unlock (&ctx->cache_mutex);
-		return;
+		return axl_false;
 	}
 
 
@@ -314,9 +345,7 @@ void            ext_dns_cache_store (extDnsCtx * ctx, extDnsMessage * msg)
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "CACHE-STORE: handling now %d items", axl_hash_items (ctx->cache));
 	ext_dns_mutex_unlock (&ctx->cache_mutex);
 
-
-
-	return;
+	return axl_true;
 }
 
 /** 

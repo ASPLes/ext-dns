@@ -24,6 +24,8 @@ while True:
         if dns_class != "IN":
             # we only resolve in IN
             print "FORWARD"
+            # forward query but ask to not cache result
+            # print "FORWARD nocache"
             continue
 
         # example about letting the server to do the resolution

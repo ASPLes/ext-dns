@@ -99,7 +99,7 @@ void handle_reply (extDnsCtx     * ctx,
 		printf ("INFO: reply sent!\n");
 
 		/* store reply in the cache */
-		ext_dns_cache_store (ctx, message);
+		ext_dns_cache_store (ctx, message, source_address);
 	}
 	
 
@@ -173,7 +173,7 @@ void on_received  (extDnsCtx     * ctx,
 		}
 
 		/* store reply in the cache */
-		ext_dns_cache_store (ctx, reply);
+		ext_dns_cache_store (ctx, reply, source_address);
 
 		/* build buffer reply */
 		bytes_written = ext_dns_message_to_buffer (ctx, reply, buffer, 512);

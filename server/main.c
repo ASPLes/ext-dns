@@ -73,6 +73,7 @@ typedef struct _HandleReplyData {
 	int             source_port;
 	extDnsSession * master_listener;
 	extDnsMessage * reply;
+	axl_bool        nocache;
 } HandleReplyData;
 
 typedef struct _childState {
@@ -165,6 +166,8 @@ childState * ext_dnsd_find_free_child (char * command)
 
 void handle_reply_data_free (HandleReplyData * data)
 {
+	if (data->reply) 
+		ext_dns_message_unref (data->reply);
 	axl_free (data->source_address);
 	axl_free (data);
 	return;
@@ -286,14 +289,16 @@ void handle_reply_complete_cname (extDnsCtx     * ctx,
 		return;
 	}
 
-	/* send reply */
-	if (! ext_dnsd_send_reply (ctx, handle_reply->master_listener, handle_reply->source_address, handle_reply->source_port, handle_reply->reply, axl_true)) {
+	/* send reply, but waithout releasing reply=axl_false which is
+	 * done after the function finishes or it if fails */
+	if (! ext_dnsd_send_reply (ctx, handle_reply->master_listener, handle_reply->source_address, handle_reply->source_port, handle_reply->reply, axl_false)) {
 		handle_reply_data_free (data);
 		return;
 	}
 
 	/* store reply in the cache */
-	ext_dns_cache_store (ctx, handle_reply->reply);
+	if (! handle_reply->nocache) 
+		ext_dns_cache_store (ctx, handle_reply->reply, handle_reply->source_address);
 
 	handle_reply_data_free (data);
 	
@@ -330,7 +335,8 @@ void handle_reply (extDnsCtx     * ctx,
 		syslog (LOG_ERR, "ERROR: failed to SEND UDP entire reply, expected to write %d bytes but something different was written\n", bytes_written);
 	else {
 		/* store reply in the cache */
-		ext_dns_cache_store (ctx, message);
+		if (! reply_data->nocache) 
+			ext_dns_cache_store (ctx, message, reply_data->source_address);
 	}
 
 	/* handle_reply_data_free (reply_data); */
@@ -344,7 +350,8 @@ extDnsMessage * ext_dnsd_handle_reply (extDnsCtx     * ctx,
 				       const char    * reply_buffer,
 				       extDnsSession * session,
 				       const char    * source_address,
-				       int             source_port)
+				       int             source_port, 
+				       axl_bool        nocache)
 {
 	int               ttl;
 	char           ** items = axl_split (reply_buffer, 1, " ");
@@ -375,7 +382,8 @@ extDnsMessage * ext_dnsd_handle_reply (extDnsCtx     * ctx,
 
 		/* get ttl */
 		ttl = atoi (items[2]);
-		syslog (LOG_INFO, "Script reported to use IP %s (with ttl %d) as reply..\n", items[1] + 5, ttl);
+		if (exarg_is_defined ("debug"))
+			syslog (LOG_INFO, "Script reported to use IP %s (with ttl %d) as reply..\n", items[1] + 5, ttl);
 
 		/* build reply */
 		reply = ext_dns_message_build_ipv4_reply (ctx, query, value, ttl);
@@ -387,26 +395,30 @@ extDnsMessage * ext_dnsd_handle_reply (extDnsCtx     * ctx,
 		/* get value */
 		value = items[1] + 5;
 
-		syslog (LOG_INFO, "Script reported to use Name %s (with ttl %d) as reply..\n", value, ttl);
+		if (exarg_is_defined ("debug"))
+			syslog (LOG_INFO, "Script reported to use Name %s (with ttl %d) as reply..\n", value, ttl);
 
 		/* build reply */
 		reply = ext_dns_message_build_cname_reply (ctx, query, value, ttl);
 		if (reply == NULL) {
-			syslog (LOG_INFO, "Failed to build cname reply with name=%s ttl=%d", value, ttl);
+			syslog (LOG_ERR, "Failed to build cname reply with name=%s ttl=%d (memory allocation error)", value, ttl);
 			return INT_TO_PTR (2); /* report to do anything */
 		}
+
+		if (exarg_is_defined ("debug"))
+			syslog (LOG_INFO, "INFO: created partial cname reply  %p, references: %d", reply, ext_dns_message_count (reply));
 
 		/* because we are going to reply a CNAME, we need to
 		 * add the IP that resolves that request. Check if the
 		 * cache have that value */
-		syslog (LOG_INFO, "Caching in cache for %s", value);
-		aux   = ext_dns_cache_get (ctx, extDnsClassIN, extDnsTypeA, value);
+		aux   = ext_dns_cache_get (ctx, extDnsClassIN, extDnsTypeA, value, source_address);
 		if (aux == NULL) {
 			/* build reply data */
 			handle_reply                  = axl_new (HandleReplyData, 1);
 			if (handle_reply == NULL) {
 				/* release reply */
 				ext_dns_message_unref (reply);
+				axl_freev (items);
 				return INT_TO_PTR (2); /* report failure */
 			} /* end if */
 
@@ -414,12 +426,23 @@ extDnsMessage * ext_dnsd_handle_reply (extDnsCtx     * ctx,
 			handle_reply->source_port     = source_port;
 			handle_reply->master_listener = session;
 			handle_reply->reply           = reply;
+			handle_reply->nocache         = nocache;
 
 			/* found that the value A isn't found in the
 			 * case, we have to ask for it */
 			ext_dns_message_query_int (ctx, extDnsClassIN, extDnsTypeA, value,
 						   server, server_port, handle_reply_complete_cname, handle_reply);
+			axl_freev (items);
 			return INT_TO_PTR (2); /* report that we are asking to complete the request */
+		} else {
+			/* ok, extend reply with the provided value and reply */
+			if (exarg_is_defined ("debug")) {
+				syslog (LOG_INFO, "Reusing cache value associated to %s, to reply cname value %s",
+					ext_dns_message_query_name (ctx, aux), ext_dns_message_query_name (ctx, reply));
+			} /* end if */
+			ext_dns_message_add_answer_from_msg (ctx, reply, aux);
+			ext_dns_message_unref (aux);
+
 		} /* end if */
 	}
 
@@ -442,6 +465,7 @@ void on_received  (extDnsCtx     * ctx,
 	char              reply_buffer[1024];
 	extDnsMessage   * reply = NULL;
 	int               bytes_written;
+	axl_bool          nocache;
 
 	/* skip messages that are queries */
 	if (! ext_dns_message_is_query (message)) {
@@ -449,11 +473,14 @@ void on_received  (extDnsCtx     * ctx,
 		return;
 	} /* end if */
 
-	syslog (LOG_INFO, "received message from %s:%d, query type: %s %s %s..\n", 
-		source_address, source_port, 
-		ext_dns_message_get_qtype_to_str (ctx, message->questions[0].qtype),
-		ext_dns_message_get_qclass_to_str (ctx, message->questions[0].qclass),
-		message->questions[0].qname);
+	
+	if (exarg_is_defined ("debug")) {
+		syslog (LOG_INFO, "received message from %s:%d, query type: %s %s %s..\n", 
+			source_address, source_port, 
+			ext_dns_message_get_qtype_to_str (ctx, message->questions[0].qtype),
+			ext_dns_message_get_qclass_to_str (ctx, message->questions[0].qclass),
+			message->questions[0].qname);
+	} /* end if */
 
 	/* build query line to be resolved by child process */
 	command = axl_strdup_printf ("RESOLVE %s %s %s %s", 
@@ -474,40 +501,58 @@ void on_received  (extDnsCtx     * ctx,
 
 	/* release child */
 	ext_dnsd_release_child (child);
+
+	/* check for additional flags */
+	nocache = !(strstr (reply_buffer, "nocache") == NULL);
+	if (exarg_is_defined ("debug"))
+		syslog (LOG_INFO, "nocache indication was=%d (inside: %s)", nocache, reply_buffer);
 	
 	/* get reply */
-	if (axl_cmp (reply_buffer, "DISCARD")) {
-		syslog (LOG_INFO, "child requested to DISCARD request..\n");
+	if (axl_memcmp (reply_buffer, "DISCARD", 7)) {
+		if (exarg_is_defined ("debug"))
+			syslog (LOG_INFO, "child requested to DISCARD request..\n");
 		return;
-	} else if (axl_cmp (reply_buffer, "UNKNOWN")) {
-		syslog (LOG_INFO, "child requested to send UNKNOWN code reply..\n");
+	} else if (axl_memcmp (reply_buffer, "UNKNOWN", 7)) {
+		if (exarg_is_defined ("debug"))
+			syslog (LOG_INFO, "child requested to send UNKNOWN code reply..\n");
 
 		/* build the unknown reply */
 		reply = ext_dns_message_build_unknown_reply (ctx, message);
-	} else if (axl_cmp (reply_buffer, "REJECT")) {
-		syslog (LOG_INFO, "child requested to REJECT request..\n");
+	} else if (axl_memcmp (reply_buffer, "REJECT", 6)) {
+		if (exarg_is_defined ("debug"))
+			syslog (LOG_INFO, "child requested to REJECT request..\n");
 		
 		/* build the reject reply */
 		reply = ext_dns_message_build_unknown_reply (ctx, message);
 
-	} else if (axl_cmp (reply_buffer, "FORWARD")) {
+	} else if (axl_memcmp (reply_buffer, "FORWARD", 7)) {
 		/* syslog (LOG_INFO, "child requested to continue and resolve request as usual using forward dns server..\n"); */
 	} else if (axl_memcmp (reply_buffer, "REPLY ", 6)) {
 		/* parse reply received */
-		reply = ext_dnsd_handle_reply (ctx, message, reply_buffer, session, source_address, source_port);
+		reply = ext_dnsd_handle_reply (ctx, message, reply_buffer, session, source_address, source_port, nocache);
 	} else {
 		syslog (LOG_INFO, "ERROR: unrecognized command reply found from child: %s..\n", reply_buffer);
 		return; /* do not handle the request in this case */
 	}
+
+	if (exarg_is_defined ("debug"))
+		syslog (LOG_INFO, "INFO: after processing, handlers requested to skip further processing %p", reply);
 
 	/* check if handlers requested to return because they are
 	 * completing pending requests or because a feailure was found */
 	if (PTR_TO_INT(reply) == 2) 
 		return;
 
+	if (exarg_is_defined ("debug"))
+		syslog (LOG_INFO, "INFO: after processing command reply from child resolver, reply value is %p", reply);
+
 	if (reply) {
 		/* store reply in the cache */
-		ext_dns_cache_store (ctx, reply);
+		if (! nocache) {
+			if (exarg_is_defined ("debug"))
+				syslog (LOG_INFO, "INFO: caching value because nocache option wasn't found");
+			ext_dns_cache_store (ctx, reply, source_address);
+		}
 
 		/* found reply we've got now, send it back to the user */
 		ext_dnsd_send_reply (ctx, session, source_address, source_port, reply, axl_true);
@@ -520,6 +565,7 @@ void on_received  (extDnsCtx     * ctx,
 	data->source_address   = axl_strdup (source_address);
 	data->source_port      = source_port;
 	data->master_listener  = session;
+	data->nocache          = nocache;
 
 	/* link this data to the session to be released in the case on
 	 * received isn't called */

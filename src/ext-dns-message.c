@@ -1599,6 +1599,57 @@ axl_bool        ext_dns_message_query_from_msg (extDnsCtx * ctx, extDnsMessage *
 }
 
 /** 
+ * @brief Convenient function to get the query name being asked in the
+ * message (no matter if it is a query or reply).
+ *
+ * @param ctx The context where the operation will take place.
+ *
+ * @param The message where the query name is being asked.
+ *
+ * @return The query name value or NULL if it fails.
+ */
+const char *    ext_dns_message_query_name (extDnsCtx * ctx, extDnsMessage * message)
+{
+	if (message == NULL || message->answers == NULL)
+		return NULL;
+	return message->answers[0].name;
+}
+
+/** 
+ * @brief Convenient function to get the query class being asked in the
+ * message (no matter if it is a query or reply).
+ *
+ * @param ctx The context where the operation will take place.
+ *
+ * @param message The message where the query class is being asked.
+ *
+ * @return The query class value or NULL if it fails.
+ */
+const char *    ext_dns_message_query_class (extDnsCtx * ctx, extDnsMessage * message)
+{
+	if (message == NULL || message->answers == NULL)
+		return NULL;
+	return ext_dns_message_get_qclass_to_str (ctx, message->answers[0].class);
+}
+
+/** 
+ * @brief Convenient function to get the query type being asked in the
+ * message (no matter if it is a query or reply).
+ *
+ * @param ctx The context where the operation will take place.
+ *
+ * @param message The message where the query type is being asked.
+ *
+ * @return The query type value or NULL if it fails.
+ */
+const char *    ext_dns_message_query_type (extDnsCtx * ctx, extDnsMessage * message)
+{
+	if (message == NULL || message->answers == NULL)
+		return NULL;
+	return ext_dns_message_get_qtype_to_str (ctx, message->answers[0].type);
+}
+
+/** 
  * @brief Increases the reference to the provided message.
  *
  * @param message The DNS message to release
@@ -1731,6 +1782,20 @@ void ext_dns_message_unref (extDnsMessage * message)
 	return;
 }
 
+/** 
+ * @brief Allows to get current ref counting (for debugging purposes).
+ *
+ * @param message The message to get ref counting from.
+ *
+ * @return The reference counting value, or -1 if it fails (for
+ * example, NULL reference).
+ */
+int             ext_dns_message_count (extDnsMessage * message)
+{
+	if (message == NULL)
+		return -1;
+	return message->ref_count;
+}
 
 /** 
  * @brief Allows to build the provided query on the buffer reference.
