@@ -897,6 +897,20 @@ void child_terminated (int _signal) {
 	return;
 }
 
+void reload_configuration (int _signal) {
+
+	/* release cache */
+	syslog (LOG_INFO, "Reloading ext-dnsd server..");
+	ext_dns_cache_init (ctx, 0);
+	syslog (LOG_INFO, "Cache flushed..");
+
+	/* reload configuration (to be done) */
+
+	/* reinstall signal */
+	signal (SIGHUP, reload_configuration);
+	return;
+}
+
 int main (int argc, char ** argv) {
 
 	/* install default handling to get notification about
@@ -905,6 +919,7 @@ int main (int argc, char ** argv) {
 	signal (SIGTERM,  __terminate_ext_dns_listener);
 	signal (SIGQUIT,  __terminate_ext_dns_listener);
 	signal (SIGCHLD, child_terminated);
+	signal (SIGHUP, reload_configuration);
 #endif
 
 	/* open syslog */
