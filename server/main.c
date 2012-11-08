@@ -590,8 +590,8 @@ void     on_bad_request (extDnsCtx     * ctx,
 			 const char    * reason,
 			 axlPointer      data)
 {
-	syslog (LOG_ERR, "BAD REQUEST from %s:%d, reason: %s\n", source_address, source_port, reason);
-
+	syslog (LOG_ERR, "BAD REQUEST from %s:%d, reason: %s (blacklisting for 3 seconds)\n", source_address, source_port, reason);
+	ext_dns_ctx_black_list (ctx, source_address, axl_false, 3);
 	return;
 }
 

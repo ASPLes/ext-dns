@@ -179,6 +179,14 @@ fi
 AM_CONDITIONAL(DEFAULT_EPOLL, test "x$default_platform" = "xepoll")
 AM_CONDITIONAL(DEFAULT_POLL, test "x$default_platform" = "xpoll")
 
+dnl check for doxygen documentation
+AC_ARG_ENABLE(vortex-doc, [  --enable-ext-dns-doc       Enable building extDns documentation (doxygen required) [default=yes]], 
+	      enable_ext_dns_doc="$enableval", 
+	      enable_ext_dns_doc=yes)
+if test x$enable_ext_dns_doc = xyes ; then
+        AC_CHECK_PROG(DOXYGEN, doxygen, "yes", "no")
+fi
+AM_CONDITIONAL(ENABLE_EXT_DNS_DOC, test "x$DOXYGEN" = "xyes")
 
 dnl LibAxl library support.
 PKG_CHECK_MODULES(AXL, axl >= 0.6.4)
@@ -240,6 +248,8 @@ src/Makefile
 query/Makefile
 test/Makefile
 server/Makefile
+doc/Makefile
+doc/ext-dns.doxygen
 ])
 
 echo "------------------------------------------"

@@ -1,4 +1,4 @@
-SUBDIRS = src test query server
+SUBDIRS = src test query server doc
 EXTRA_DIST = VERSION
 # pkgconfigdir = $(libdir)/pkgconfig
 # pkgconfig_DATA = ext-dns-1.1.pc
