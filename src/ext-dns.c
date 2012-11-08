@@ -39,6 +39,15 @@
 #include <ext-dns-private.h>
 #include <signal.h>
 
+/**
+ * \defgroup ext_dns main: basic initialization and common functions
+ */
+
+/** 
+ * \addtogroup ext_dns
+ * @{
+ */
+
 /* Ugly hack to have access to vsnprintf function (secure form of
  * vsprintf where the output buffer is limited) but unfortunately is
  * not available in ANSI C. This is only required when compile ext_dns
@@ -1285,3 +1294,29 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
 
 	return strlen (buffer) + 1;
 }
+
+/** 
+ * @}
+ */
+
+/** 
+ * \mainpage ext-Dns: a framework to build DNS server solutions
+ *
+ * \section intro Introduction
+ *
+ * ext-Dns is a software solution that is composed by a core library,
+ * an extensible forward dns server and some additional tools designed
+ * create DNS server solutions.
+ *
+ * ext-Dns comes to provide a ready to use solution in the case you
+ * want to build a DNS server that takes additional actions at the
+ * resolution level. 
+ *
+ * Briefly with ext-Dns components you can:
+ *
+ * - Use libext-dns library (ANSI C) to build a custom DNS server easily with a few API calls.
+ *
+ *  - Or use ext-DnsD server, a ready to use forward dns-server, that completes its actions calling to a child process to decide what to do.
+ *
+ *
+ */
