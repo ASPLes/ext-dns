@@ -38,6 +38,15 @@
 #include <ext-dns.h>
 #include <ext-dns-private.h>
 
+/**
+ * \defgroup ext_dns_message extDns Message: API functions to handle and produce DNS requsts and replies
+ */
+
+/** 
+ * \addtogroup ext_dns_message
+ * @{
+ */
+
 /** 
  * @internal Nice random generation code taken from:
  * http://stackoverflow.com/questions/1640258/need-a-fast-random-generator-for-c
@@ -2054,3 +2063,4 @@ const char *     ext_dns_message_get_qclass_to_str (extDnsCtx * ctx, extDnsClass
 	return "UNKNOWN";
 }
 
+/* @} */
