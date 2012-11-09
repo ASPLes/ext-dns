@@ -40,11 +40,11 @@
 #include <signal.h>
 
 /**
- * \defgroup ext_dns main: basic initialization and common functions
+ * \defgroup ext_dns_main Main: basic initialization and common functions
  */
 
 /** 
- * \addtogroup ext_dns
+ * \addtogroup ext_dns_main
  * @{
  */
 
@@ -1304,19 +1304,108 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
  *
  * \section intro Introduction
  *
- * ext-Dns is a software solution that is composed by a core library,
+ * ext-Dns is a software solution, written by <a href="http://www.aspl.es">ASPL (Advanced Software Production Line, S.L.)</a>, that is composed by a core library,
  * an extensible forward dns server and some additional tools designed
- * create DNS server solutions.
+ * to create DNS server solutions that are able to do any additional
+ * operation at the resolution level (running commands, rewritting
+ * replies, gathering stats and so on), without any limit.
  *
  * ext-Dns comes to provide a ready to use solution in the case you
  * want to build a DNS server that takes additional actions at the
- * resolution level. 
+ * resolution level in an easy way, that is, its design is focused on
+ * allowing people to implement whatever they like when a request is
+ * received, freeing them from most of the details that involves handling DNS
+ * protocol.
+ *
+ * Note that, if you are looking for a DNS server that just resolves
+ * against a database and nothing else, it is better to use another
+ * DNS solutions available like: <a href="http://www.powerdns.com">PowerDNS</a> (which we really like it), <a href="http://www.bind9.net">ISC Bind</a>, <a href="http://www.maradns.org">MaraDNS</a> and many more...
+ *
+ * If you ever wanted to build a DNS server that does certain
+ * operations when it receives an incoming request, then ext-dns is
+ * for you! 
+ *
+ * \section what_can_i_do What can I do with ext-DNS framework
  *
  * Briefly with ext-Dns components you can:
  *
- * - Use libext-dns library (ANSI C) to build a custom DNS server easily with a few API calls.
+ * - Use libext-dns, an ANSI C library, to build a custom C DNS server easily with a few API calls. In this case you'll have full power over all details when handling DNS requests.
  *
- *  - Or use ext-DnsD server, a ready to use forward dns-server, that completes its actions calling to a child process to decide what to do.
+ * - Or use ext-DnsD server, a ready to use forward dns-server that uses libext-dns, that completes its actions calling to a child process to decide what to do. That child resolver can be written in any language (python, bash, perl,...). In this case, you still have access to many details, but limited to supported actions that can be performed child resolvers. 
  *
+ * \section getting_started Getting started with ext-DNS
  *
+ * See the following manuals to start using ext-DNS:
+ *
+ * - \ref ext_dns_install
+ * - \ref ext_dns_server_manual
+ * - \ref ext_dns_library_manual
+ *
+ * Additionally, here is the API reference in the case you are using libext-dns (in order of importance):
+ *
+ * Basic DNS API:
+ *
+ * - \ref ext_dns_main
+ * - \ref ext_dns_ctx
+ * - \ref ext_dns_session
+ * - \ref ext_dns_message
+ * - \ref ext_dns_cache
+ *
+ * Additional API (handlers, threadhing support, IO handling): 
+ *
+ * - \ref ext_dns_types
+ * - \ref ext_dns_handlers
+ * - \ref ext_dns_io
+ * - \ref ext_dns_reader
+ * - \ref ext_dns_thread
+ * - \ref ext_dns_thread_pool
+ *
+ * \section commercial_support Commercial support and license
+ *
+ * ext-Dns and all its components are released under the LGPL2.1
+ * license, which means you can use it for commercial and open source
+ * products, as long as you meet some requirements. Please, check <a href="http://www.gnu.org/licenses/lgpl-2.1.html">LGPL2 license for more details.</a>
+ *
+ * Limited support is provided via community mailing list (see below). In
+ * the case you want commercial support to get faster to your solution
+ * by getting exact information on how to use any of ext-Dns
+ * components, fast path resolution, please, contact at: info@aspl.es (spanish and/or
+ * english). See more details at: http://www.aspl.es/ext-dns/commercial-support
+ *
+ * \section contact Contact us
+ *
+ * You can reach us at <b>ext-Dns mailinst</b> at: <a href="http://lists.aspl.es/cgi-bin/mailman/listinfo/ext-dns">ext-dns users</a> for any question you may find.
+ *
+ * If you are interested on getting commercial support, you can also contact us at: info@aspl.es (spanish and/or english).
+ */
+
+/** 
+ * \page ext_dns_install How to install ext-DNS
+ *
+ * ext-Dns is written using ANSI C, and should compile without any
+ * dificulty in any platform with a C compiler. Currently ext-Dns
+ * depends on <a href="http://www.aspl.es/xml">Axl Library</a> for
+ * some XML functions and for the set of base core library elements
+ * like hashes, lists...
+ *
+ * Please, before continuing, check if there are available ready to
+ * use packages for your distribution.
+ *
+ * First, you must get libaxl available at your host. Please check for
+ * instructions at: http://www.aspl.es/xml
+ *
+ * Once you're done with libaxl, go to http://code.google.com/p/ext-dns/ to get latest source code. The following steps are required to compile ext-dns.tar.gz:
+ *
+ * \code
+ * >> tar xzvf ext-dns-{version}.tar.gz
+ * >> cd ext-dns-{version}
+ * >> ./configure 
+ * >> make
+ * >> make install
+ * \endcode
+ *
+ * If everything went right, with previous steps you'll make
+ * libext-dns and ext-dnsD server available at your host.
+ *
+ * Please, report any problem you may find at the mailing list: \ref contact
  */

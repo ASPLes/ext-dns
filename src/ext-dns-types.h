@@ -38,6 +38,16 @@
 #ifndef __EXT_DNS_TYPES_H__
 #define __EXT_DNS_TYPES_H__
 
+/**
+ * \defgroup ext_dns_types extDns Types: type definitions used by the library
+ */
+
+/** 
+ * \addtogroup ext_dns_message
+ * @{
+ */
+
+
 /*
  * @brief Debug levels to be used with \ref _ext_dns_log, which is used
  * through ext_dns_log macro.
@@ -356,9 +366,7 @@ typedef struct _extDnsSession extDnsSession;
  * @brief extDns Operation Status.
  * 
  * This enum is used to represent different extDns Library status,
- * especially while operating with \ref extDnsSession
- * references. Values described by this enumeration are returned by
- * \ref ext_dns_session_get_status.
+ * especially while operating with \ref extDnsSession references.
  */
 typedef enum {
 	/** 
@@ -420,10 +428,7 @@ typedef enum {
 	 */
 	extDnsSessionTimeoutError    = 9,
 	/** 
-	 * @brief Session is in transit to be closed. This is not
-	 * an error just an indication that the session is being
-	 * closed at the time the call to \ref
-	 * ext_dns_session_get_status was done.
+	 * @brief Session is in transit to be closed. 
 	 */
 	extDnsSessionCloseCalled     = 10,
 	/** 
@@ -455,8 +460,7 @@ typedef enum {
 /** 
  * @brief Allows to classify the role of the connection.
  *
- * You can get current role for a given connection using \ref
- * ext_dns_session_get_role.
+ * You can get current role for a given connection using \ref ext_dns_session_get_role.
  * 
  */
 typedef enum {
@@ -499,6 +503,9 @@ typedef enum {
 	extDnsUdpSession = 2
 } extDnsSessionType;
 
+/** 
+ * @brief Type of DNS message supported (RFC).
+ */
 typedef enum {
 	
 	/**
@@ -519,6 +526,9 @@ typedef enum {
 	extDnsSeverStatusQuery = 2
 } extDnsQueryType;
 
+/** 
+ * @brief Type of responses we can receive or send via DNS message.
+ */
 typedef enum {
 	/** 
 	 * @brief No error condition.
@@ -748,7 +758,7 @@ typedef struct _extDnsResourceRecord {
 	char         * rdata;
 } extDnsResourceRecord;
 
-typedef struct _extDnsMessage {
+struct _extDnsMessage {
 	extDnsHeader         * header;
 	extDnsQuestion       * questions;
 	extDnsResourceRecord * answers;
@@ -765,6 +775,24 @@ typedef struct _extDnsMessage {
 
 	/* when the message was created */
 	int                    stamp;
-} extDnsMessage;
+};
+
+
+/** 
+ * @brief Data type that represents a single DNS message.
+ *
+ * The \ref extDnsMessage is one of the most important API definition
+ * because is is used to create DNS messages or as a representation
+ * for messages received (via \ref extDnsOnMessageReceived handler, usually configured by \ref ext_dns_session_set_on_message or by \ref ext_dns_ctx_set_on_message).
+ *
+ * The \ref extDnsMessage may represent a query or a reply (\ref ext_dns_message_is_query), and when it represents an error reply, you can use several functions to know what is the exactly the error type (\ref ext_dns_message_is_reject , \ref ext_dns_message_is_name_error or \ref ext_dns_message_is_answer_valid). 
+ *
+ * Every \ref extDnsMessage object has a reference counting associated with it. You can use several functions to acquire references to the object via \ref ext_dns_message_ref and \ref ext_dns_message_unref. 
+ *
+ * Please, check the \ref ext_dns_message "extDnsMessage API" for more information about available options.
+ */
+typedef struct _extDnsMessage extDnsMessage;
 
 #endif /* __EXT_DNS_TYPES_H__ */
+
+/* @} */

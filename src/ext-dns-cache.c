@@ -38,6 +38,15 @@
 #include <ext-dns-cache.h>
 #include <ext-dns-private.h>
 
+/**
+ * \defgroup ext_dns_cache extDns Cache: DNS cache support
+ */
+
+/** 
+ * \addtogroup ext_dns_cache
+ * @{
+ */
+
 axl_bool __ext_dns_cache_cleanup (extDnsCtx  * ctx, 
 				  axlPointer   user_data,
 				  axlPointer   user_data2)
@@ -366,4 +375,4 @@ void            ext_dns_cache_finish (extDnsCtx * ctx)
 	return;
 }
 
-
+/* @} */

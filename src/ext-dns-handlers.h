@@ -41,6 +41,15 @@
 
 #include <ext-dns.h>
 
+/**
+ * \defgroup ext_dns_handlers Handlers : handler definitions used by ext-dns API
+ */
+
+/** 
+ * \addtogroup ext_dns_handlers
+ * @{
+ */
+
 /** 
  * @brief Handler used by extDns library to create a new thread. A custom handler
  * can be specified using \ref ext_dns_thread_set_create
@@ -291,8 +300,8 @@ typedef axl_bool (* extDnsThreadAsyncEvent)        (extDnsCtx  * ctx,
  *
  * This function is used by: 
  * 
- * - \ref vortex_log_set_handler
- * - \ref vortex_log_get_handler
+ * - \ref ext_dns_log_set_handler
+ * - \ref ext_dns_log_get_handler
  *
  * @param file The file that produced the log.
  *
@@ -335,8 +344,7 @@ typedef void (*extDnsListenerReady)           (char  * host, int  port, extDnsSt
 
 /** 
  * @brief Async notification for listener creation, similar to \ref
- * extDnsListenerReady but providing the reference for the \ref
- * extDnsConnection created (representing the listener created).
+ * extDnsListenerReady but providing the reference for the \ref extDnsSession created (representing the listener created).
  *
  * Functions using this handler:
  * - \ref ext_dns_listener_new_full
@@ -368,40 +376,6 @@ typedef void (*extDnsListenerReady)           (char  * host, int  port, extDnsSt
 typedef void (*extDnsListenerReadyFull)           (char  * host, int  port, extDnsStatus status, 
 						   char  * message, extDnsSession * connection, 
 						   axlPointer user_data);
-
-/** 
- * @brief Defines the writers handlers used to actually send data
- * through the underlaying socket descriptor.
- * 
- * This handler is used by: 
- *  - \ref vortex_connection_set_send_handler
- * 
- * @param connection extDns Session where the data will be sent.
- * @param buffer     The buffer holding data to be sent
- * @param buffer_len The buffer len.
- * 
- * @return     How many data was actually sent.
- */
-typedef int      (*extDnsSendHandler)         (extDnsSession * session,
-					       const char    * buffer,
-					       int             buffer_len);
-
-/** 
- * @brief Defines the readers handlers used to actually received data
- * from the underlying socket descriptor.
- *  
- * This handler is used by: 
- *  - \ref vortex_connection_set_receive_handler
- * 
- * @param connection The extDns connection where the data will be received.
- * @param buffer     The buffer reference used as container for data received.
- * @param buffer_len The buffer len use to know the limits of the buffer.
- * 
- * @return How many data was actually received.
- */
-typedef int      (*extDnsReceiveHandler)         (extDnsSession    * session,
-						  char             * buffer,
-						  int                buffer_len);
 
 /** 
  * @brief Defines the set of handler functions that are called to
@@ -461,3 +435,7 @@ typedef void     (*extDnsOnBadRequest) (extDnsCtx     * ctx,
 
 
 #endif /* __EXT_DNS_HANDLERS_H__ */
+
+/** 
+ * @}
+ */

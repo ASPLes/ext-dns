@@ -357,9 +357,9 @@ void     ext_dns_log_set_handler      (extDnsCtx         * ctx,
 void     ext_dns_log_set_prepare_log  (extDnsCtx         * ctx,
 				       axl_bool            prepare_string);
 
-extDnsLogHandler vortex_log_get_handler (extDnsCtx      * ctx);
+extDnsLogHandler     ext_dns_log_get_handler      (extDnsCtx * ctx);
 
-void     vortex_log_filter_level     (extDnsCtx * ctx, const char * filter_string);
+void     ext_dns_log_filter_level     (extDnsCtx * ctx, const char * filter_string);
 
 axl_bool ext_dns_log_is_enabled_acquire_mutex (extDnsCtx * ctx);
 

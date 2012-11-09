@@ -398,6 +398,7 @@ axl_bool ext_dns_message_parse_resource_record (extDnsCtx * ctx, extDnsResourceR
 
 /** 
  * @brief Allows to check if the provided \ref extDnsMessage is query (QR == 0).
+ *
  * @param message The extDnsMessage to check to be a query.
  *
  * @return axl_true if the message is a query, otherwise axl_false is
@@ -453,8 +454,9 @@ axl_bool        ext_dns_message_is_name_error (extDnsMessage * message)
 }
 
 /** 
- * @internal Allows to check if the message is valid, that is, it
- * represents a reply and has a valid response with a current ttl.
+ * @brief Allows to check if the message is valid, that is, it represents a reply and has a valid response with a current ttl.
+ *
+ * @param ctx The context where the operation will take place.
  *
  * @param message The message to be checked.
  *
@@ -790,7 +792,7 @@ extDnsMessage * ext_dns_message_build_ipv4_reply (extDnsCtx * ctx, extDnsMessage
  *
  * @param message A DNS message question that will be used to build a reply.
  *
- * @param ip A name string value what will be used to complete the
+ * @param name A name string value what will be used to complete the
  * ANSWER section of the message. Note the reply created will have IN
  * for the DNS class, and CNAME for the dns type record.
  *
@@ -838,6 +840,8 @@ extDnsMessage * ext_dns_message_build_cname_reply (extDnsCtx * ctx, extDnsMessag
  * @param message The reply to be updated with the provided values.
  *
  * @param type The answer record type.
+ *
+ * @param class The answer record class.
  *
  * @param name The answer record name.
  *
@@ -1167,6 +1171,8 @@ int __ext_dns_message_write_resource_record (extDnsCtx * ctx, extDnsResourceReco
  *
  * @param ctx The context where the message to buffer will take place.
  *
+ * @param message The DNS message to be translated into a buffer.
+ *
  * @param buffer The buffer where the content will be placed.
  *
  * @param buffer_size The buffer size. It must be 512 bytes size long.
@@ -1400,13 +1406,12 @@ int             ext_dns_message_to_buffer (extDnsCtx * ctx, extDnsMessage * mess
  * message's header provided.
  *
  * This function is especially useful when it is reused a message to
- * reply several incoming queries so using \ref
- * ext_dns_message_to_buffer is not enough because that function will
+ * reply several incoming queries so using \ref ext_dns_message_to_buffer is not enough because that function will
  * write the ID of the message used to reply but not the ID of the
  * incoming query. 
  *
  * This function is especially designed to be used in combination with
- * a result obtained \ref from ext_dns_cache_get.
+ * a result obtained from \ref ext_dns_cache_get.
  *
  * @param message The message to extract the header id from to be written into the buffer.
  *
@@ -1431,9 +1436,9 @@ void            ext_dns_message_write_header_id (extDnsMessage * message, char *
  *
  * @param ctx The context where the query will take place.
  *
- * @param type The type (A, a, MX, mx,...) that is being queried.
+ * @param _type The type (A, a, MX, mx,...) that is being queried.
  *
- * @param class The class type to query (IN, in, ..).
+ * @param _class The class type to query (IN, in, ..).
  *
  * @param name The query name for which the value is requested.
  *
@@ -1608,12 +1613,11 @@ axl_bool        ext_dns_message_query_from_msg (extDnsCtx * ctx, extDnsMessage *
 }
 
 /** 
- * @brief Convenient function to get the query name being asked in the
- * message (no matter if it is a query or reply).
+ * @brief Convenient function to get the query name being asked in the message (no matter if it is a query or reply).
  *
  * @param ctx The context where the operation will take place.
  *
- * @param The message where the query name is being asked.
+ * @param message The message where the query name is being asked.
  *
  * @return The query name value or NULL if it fails.
  */
@@ -1888,6 +1892,8 @@ int             ext_dns_message_build_query (extDnsCtx * ctx, const char * qname
 /** 
  * @brief Allows to get the extDnsType code from the qtype string.
  *
+ * @param ctx The extDnsCtx where the operation will take place.
+ *
  * @param qtype The question type that is being asked to be translated
  *
  * @return extDnsType or -1 if it fails.
@@ -1951,9 +1957,11 @@ extDnsType      ext_dns_message_get_qtype (extDnsCtx * ctx, const char * qtype)
 }
 
 /** 
- * @brief Allows to get a printable type representation from extDnsType code.
+ * @brief Allows to get a printable type representation from \ref extDnsType code.
  *
- * @param qtype The question type that is being asked to be translated
+ * @param ctx The extDnsCtx where the operation will take place.
+ *
+ * @param type The question type that is being asked to be translated
  *
  * @return A string representing the type or NULL if it fails.
  */
@@ -2012,6 +2020,8 @@ const char *      ext_dns_message_get_qtype_to_str (extDnsCtx * ctx, extDnsType 
 /** 
  * @brief Allows to get the extDnsClass code from the qclass string.
  *
+ * @param ctx The extDnsCtx where the operation will take place.
+ *
  * @param qclass The question class that is being asked to be translated
  *
  * @return extDnsClass or -1 if it fails.
@@ -2040,6 +2050,8 @@ extDnsClass     ext_dns_message_get_qclass (extDnsCtx * ctx, const char * qclass
 
 /** 
  * @brief Allows to get the a user printable string from extDnsClass code.
+ *
+ * @param ctx The extDnsCtx where the operation will take place.
  *
  * @param class The question class that is being asked to be translated
  *
