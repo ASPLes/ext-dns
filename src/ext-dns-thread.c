@@ -92,8 +92,6 @@ static unsigned __stdcall ext_dns_thread_proxy (axlPointer _data)
  * @internal Creates a new thread, executing the function provided,
  * passing the referece received to the function (user_data).
  *
- * For complete examples on how to create threads, see \ref  extDnsThreadConf documentation.
- *
  * @param thread_def A reference to the thread identifier created by
  * the function. This parameter is not optional.
  * 
@@ -299,8 +297,7 @@ extDnsThreadDestroyFunc __ext_dns_thread_destroy = ext_dns_thread_destroy_intern
  * @brief Creates a new thread, executing the function provided,
  * passing the referece received to the function (user_data).
  *
- * For complete examples on how to create threads, see \ref  extDnsThreadConf documentation.
- *
+
  * @param thread_def A reference to the thread identifier created by
  * the function. This parameter is not optional.
  *

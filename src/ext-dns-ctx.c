@@ -41,8 +41,20 @@
 #include <ext-dns-private.h>
 
 /** 
- * @brief Creates an uninitialized ext-DNS context. You must call \ref
- * ext_dns_ctx_init to start it.
+ * \defgroup ext_dns_ctx ext-DNS Context: library context handling
+ */
+
+/** 
+ * \addtogroup ext_dns_ctx
+ * @{
+ */
+
+/** 
+ * @brief Creates an uninitialized ext-DNS context. 
+ *
+ * You must call \ref ext_dns_init_ctx to start it.
+ *
+ * @return A newly created \ref extDnsCtx context or NULL if it fails.
  */
 extDnsCtx * ext_dns_ctx_new (void) {
 	extDnsCtx * ctx;
@@ -393,13 +405,12 @@ typedef struct _extDnsBlackList {
  *
  * @param source_address The source to be checked to be blacklisted.
  *
- * @parma refresh_record In the case the source address is
+ * @param refresh_record In the case the source address is
  * blacklisted, axl_true to refresh the black list stamp (so it is
  * renewed with the query) or axl_false to just query current
  * database.
  *
- * @return axl_true if the IP was blacklisted (\ref using \ref
- * ext_dns_ctx_black_list) otherwise axl_false is returned.
+ * @return axl_true if the IP was blacklisted (\ref ext_dns_ctx_black_list) otherwise axl_false is returned.
  */
 axl_bool    ext_dns_ctx_is_black_listed           (extDnsCtx       * ctx,
 						   const char      * source_address,
@@ -568,7 +579,7 @@ void        ext_dns_ctx_black_list                (extDnsCtx       * ctx,
  * finished.
  * 
  * This function should be called after creating a listener (o
- * listeners) calling to \ref ext_dns_server_new to block current
+ * listeners) calling to \ref ext_dns_listener_new to block current
  * thread.
  * 
  * This function can be avoided if the program structure can ensure
@@ -578,7 +589,7 @@ void        ext_dns_ctx_black_list                (extDnsCtx       * ctx,
  *
  * This function will be unblocked when the ext-dns servers created
  * ends or a failure have occur while creating the listener. To force
- * an unlocking, a call to \ref ext_dns_session_unlock must be done.
+ * an unlocking, a call to \ref ext_dns_ctx_unlock must be done.
  * 
  * @param ctx The context where the operation will be performed.
  */
@@ -627,7 +638,7 @@ void ext_dns_ctx_wait (extDnsCtx * ctx)
 }
 
 /** 
- * @brief Unlock the thread blocked at the \ref ext_dns_listener_wait.
+ * @brief Unlock the thread blocked at the \ref ext_dns_ctx_wait.
  * 
  * @param ctx The context where the operation will be performed.
  **/
@@ -680,7 +691,8 @@ void ext_dns_ctx_unlock (extDnsCtx * ctx)
  * @param ctx The context that is configured to received messages on
  * the provided handler.
  *
- * @param dns_message The handler where the message will be notified.
+ * @param on_dns_message The handler where the message will be
+ * notified.
  *
  * @param data A pointer to user defined data that will be passed into
  * the handler.
@@ -704,3 +716,6 @@ void              ext_dns_ctx_set_on_message (extDnsCtx                * ctx,
 }
 
 
+/** 
+ * @} 
+ */

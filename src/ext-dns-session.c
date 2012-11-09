@@ -43,6 +43,15 @@
 # include <netinet/tcp.h>
 #endif
 
+/**
+ * \defgroup ext_dns_session extDns Session: API function to start and handle DNS sessions
+ */
+
+/** 
+ * \addtogroup ext_dns_session
+ * @{
+ */
+
 
 int  __ext_dns_listener_get_port (const char  * port)
 {
@@ -279,8 +288,7 @@ axl_bool                 ext_dns_session_set_sock_tcp_nodelay   (EXT_DNS_SOCKET 
 
 /** 
  * @internal Allows to configure the socket to be used by the provided
- * session. This function is usually used in conjunction with \ref
- * ext_dns_session_new_empty.
+ * session. This function is usually used in conjunction with \ref ext_dns_listener_new_empty.
  *
  * @param conn The session to be configured with the socket
  * provided.
@@ -636,7 +644,7 @@ void              ext_dns_session_shutdown   (extDnsSession * session)
  * @param session The session that is configured to received messages
  * on the provided handler.
  *
- * @param dns_message The handler where the message will be notified.
+ * @param on_dns_message The handler where the message will be notified.
  *
  * @param data A pointer to user defined data that will be passed into
  * the handler.
@@ -675,10 +683,10 @@ void              ext_dns_session_set_on_message (extDnsSession             * se
  * @param session The session that is going to be configured with a
  * bad request received handler.
  *
- * @param on_badrequest The handler to be called upon reception of a
+ * @param on_bad_request The handler to be called upon reception of a
  * bad request.
  *
- * @para data A pointer to user defined data that will be passed info
+ * @param data A pointer to user defined data that will be passed info
  * the handler.
  *
  */
@@ -829,7 +837,7 @@ axl_bool               ext_dns_session_ref_internal                    (extDnsSe
  * profile which is layered on extDns Library. 
  *
  * This is because session handling is done through functions such
- * \ref ext_dns_session_new and \ref ext_dns_session_close (which
+ * \ref ext_dns_listener_new and \ref ext_dns_session_close (which
  * automatically handles session reference counting for you).
  *
  * However, while implementing new profiles these function becomes a
@@ -1427,6 +1435,8 @@ typedef struct _extDnsListenerData {
  *
  * @param ctx The context where the listener is started.
  *
+ * @param type Session type that is going to be created.
+ *
  * @param host Host address to allocate. It can be "127.0.0.1" to only
  * listen for localhost sessions or "0.0.0.0" to listen on any
  * address that the server has installed. It cannot be NULL.
@@ -1706,11 +1716,10 @@ extDnsSession * __ext_dns_listener_new_common  (extDnsCtx               * ctx,
  *
  * Host and port value provided to this function could be unrefered
  * once returning from this function. The function performs a local
- * copy for those values, that are deallocated at the appropriate
- * moment.
+ * copy for those values, that are deallocated at the appropriate moment.
  *
  * Keep in mind that you can actually call several times to this
- * function before calling to \ref ext_dns_listener_wait, to make your
+ * function before calling to \ref ext_dns_ctx_wait, to make your
  * process to be able to accept sessions from several ports and host
  * names at the same time.
  *
@@ -1734,6 +1743,8 @@ extDnsSession * __ext_dns_listener_new_common  (extDnsCtx               * ctx,
  *
  * @param port The port to listen on.
  *
+ * @param type The session type that is going to be created.
+ *
  * @param on_ready A optional callback to get a notification when
  * ext_dns listener is ready to accept requests.
  *
@@ -1741,11 +1752,10 @@ extDnsSession * __ext_dns_listener_new_common  (extDnsCtx               * ctx,
  * <i>on_ready</i> handler.
  *
  * @return The listener session created (represented by a \ref
- * extDnsSession reference). You must use \ref
- * ext_dns_session_is_ok to check if the server was started.
+ * extDnsSession reference). You must use \ref ext_dns_session_is_ok to check if the server was started.
  * 
  * <b>NOTE:</b> the reference returned is only owned by the ext_dns
- * engine. This is not the case of \ref ext_dns_session_new where
+ * engine. This is not the case of \ref ext_dns_listener_new where
  * the caller acquires automatically a reference to the session (as
  * well as the ext_dns engine). 
  * 
@@ -1784,26 +1794,24 @@ extDnsSession * ext_dns_listener_new (extDnsCtx           * ctx,
  *
  * @param port The port to listen on.
  *
+ * @param type The type of session to be created.
+ *
  * @param on_ready_full A optional callback to get a notification when
  * ext_dns listener is ready to accept requests.
  *
- * @param user_data A user defined pointer to be passed in to
- * <i>on_ready</i> handler.
+ * @param user_data A user defined pointer to be passed in to <i>on_ready</i> handler.
  *
  * @return The listener session created, or NULL if the optional
  * handler is provided (on_ready).
  *
- * <b>NOTE:</b> the reference returned is only owned by the ext_dns
- * engine. This is not the case of \ref ext_dns_session_new where
+ * <b>NOTE:</b> the reference returned is only owned by the extDns
+ * engine. This is not the case of \ref ext_dns_listener_new where
  * the caller acquires automatically a reference to the session (as
  * well as the ext_dns engine). 
  * 
  * In this case, if your intention is to own a reference to the
- * listener for later operations, you must call to \ref
- * ext_dns_session_ref to avoid losing the reference if the system
- * drops the session. In the same direction, you can't call to \ref
- * ext_dns_session_close if you don't own the reference returned by
- * this function.
+ * session for later operations, you must call to \ref ext_dns_session_ref to avoid losing the reference if the system
+ * drops the session. In the same direction, you can't call to \ref ext_dns_session_close if you don't own the reference returned by this function.
  * 
  */
 extDnsSession * ext_dns_listener_new_full  (extDnsCtx           * ctx,
@@ -1830,6 +1838,8 @@ extDnsSession * ext_dns_listener_new_full  (extDnsCtx           * ctx,
  *
  * @param port The port to listen to. Value defined for the port must be between 0 up to 65536.
  *
+ * @param type The session type that is going to be created.
+ *
  * @param on_ready A optional notify callback to get when ext_dns
  * listener is ready to perform replies.
  *
@@ -1840,7 +1850,7 @@ extDnsSession * ext_dns_listener_new_full  (extDnsCtx           * ctx,
  * handler is provided (on_ready).
  *
  * <b>NOTE:</b> the reference returned is only owned by the ext_dns
- * engine. This is not the case of \ref ext_dns_session_new where
+ * engine. This is not the case of \ref ext_dns_listener_new where
  * the caller acquires automatically a reference to the session (as
  * well as the ext_dns engine).
  * 
@@ -1864,11 +1874,15 @@ extDnsSession * ext_dns_listener_new2    (extDnsCtx           * ctx,
 }
 
 /** 
- * @brief Allows to create a new \ref extDns from a socket that is
+ * @brief Allows to create a new \ref extDnsSession from a socket that is
  * already connected.
  *
  * @param ctx     The context where the operation will be performed.
+ *
  * @param socket  An already connected socket.  
+ *
+ * @param type    The type of session is going to be created reusing the provided socket.
+ *
  * @param role    The role to be set to the session being created.
  * 
  * @return a newly allocated \ref extDnsSession. 
@@ -2023,5 +2037,4 @@ void               __ext_dns_session_notify_bad_request (extDnsCtx      * ctx,
 	return;
 }
 
-
-
+/* @} */
