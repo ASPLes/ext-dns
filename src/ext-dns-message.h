@@ -70,6 +70,12 @@ void            ext_dns_message_unref (extDnsMessage * message);
 
 int             ext_dns_message_count (extDnsMessage * message);
 
+axl_bool        ext_dns_message_send_udp_s (extDnsCtx      * ctx, 
+					    extDnsSession  * session,
+					    extDnsMessage  * message,
+					    const char     * address, 
+					    int              port);
+
 int             ext_dns_message_build_query (extDnsCtx * ctx, const char * qname, extDnsType qtype, extDnsClass qclass, 
 					     char * buffer, extDnsHeader ** header);
 

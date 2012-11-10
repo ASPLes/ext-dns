@@ -1747,9 +1747,9 @@ axl_bool        ext_dns_message_query_and_forward_from_msg (extDnsCtx * ctx, ext
  */
 const char *    ext_dns_message_query_name (extDnsCtx * ctx, extDnsMessage * message)
 {
-	if (message == NULL || message->answers == NULL)
+	if (message == NULL || message->questions == NULL)
 		return NULL;
-	return message->answers[0].name;
+	return message->questions[0].qname;
 }
 
 /** 
@@ -1766,7 +1766,7 @@ const char *    ext_dns_message_query_class (extDnsCtx * ctx, extDnsMessage * me
 {
 	if (message == NULL || message->answers == NULL)
 		return NULL;
-	return ext_dns_message_get_qclass_to_str (ctx, message->answers[0].class);
+	return ext_dns_message_get_qclass_to_str (ctx, message->questions[0].qclass);
 }
 
 /** 
@@ -1783,7 +1783,7 @@ const char *    ext_dns_message_query_type (extDnsCtx * ctx, extDnsMessage * mes
 {
 	if (message == NULL || message->answers == NULL)
 		return NULL;
-	return ext_dns_message_get_qtype_to_str (ctx, message->answers[0].type);
+	return ext_dns_message_get_qtype_to_str (ctx, message->questions[0].qtype);
 }
 
 /** 
@@ -1932,6 +1932,60 @@ int             ext_dns_message_count (extDnsMessage * message)
 	if (message == NULL)
 		return -1;
 	return message->ref_count;
+}
+
+/** 
+ * @brief Allows to send a DNS message represented by message to the defined destination.
+ *
+ * This is a conveniente function built on top of \ref
+ * ext_dns_session_send_udp_s which allows to send a \ref
+ * extDnsMessage directly instead of a dns message found in a buffer.
+ * 
+ * @param ctx The context where the operation will take place.
+ *
+ * @param session The session that is going to be taken as reference
+ * to make the send operation to appear coming from it (which is
+ * required by DNS RFC while sending replies using UDP).
+ *
+ * @param message The actual to be sent.
+ *
+ * @param address The address destination or name where the message will be sent.
+ *
+ * @param port The destination port
+ *
+ * @return axl_true if the message was sent, otherwise, axl_false is
+ * returned. The function also returns NULL when ctx, session,
+ * message, address or port aren't defined (NULL) or has wrong values
+ * (port <= 0).
+ *
+ */ 
+axl_bool        ext_dns_message_send_udp_s (extDnsCtx      * ctx, 
+					    extDnsSession  * session,
+					    extDnsMessage  * message,
+					    const char     * address, 
+					    int              port)
+{
+	int  bytes_written;
+	char buffer[512];
+
+	/* check input values received */
+	if (ctx == NULL || session == NULL || message == NULL || address == NULL || port <= 0)
+		return axl_false;
+
+	/* build buffer reply */
+	bytes_written = ext_dns_message_to_buffer (ctx, message, buffer, 512);
+	if (bytes_written <= 0) {
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "failed to dump message into the buffer, unable to send message to %s:%d", address, port);
+		return axl_false;
+	} /* end if */
+
+	/* send reply */
+	if (ext_dns_session_send_udp_s (ctx, session, buffer, bytes_written, address, port) != bytes_written) {
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "failed to send %d bytes as reply, different amount of bytes where written", bytes_written);
+		return axl_false;
+	} /* end if */
+
+	return axl_true;
 }
 
 /** 

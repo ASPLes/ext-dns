@@ -88,7 +88,15 @@ typedef enum {
 
 
 /** 
- * @brief A server context where all DNS sever state is stored.
+ * @brief A single library context where all state is stored.
+ *
+ * Before you can start using ext-dns API you must create an \ref
+ * extDnsCtx object by calling to \ref ext_dns_ctx_new and then
+ * initialize it by using \ref ext_dns_init_ctx.
+ *
+ * You can grab or release more references to the object by calling to \ref ext_dns_ctx_ref and \ref ext_dns_ctx_unref.
+ *
+ * In the case you are finishing clients or servers started with that context, you must call to \ref ext_dns_exit_ctx.
  */
 typedef struct _extDnsCtx extDnsCtx;
 

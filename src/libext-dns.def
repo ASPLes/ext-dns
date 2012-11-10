@@ -135,6 +135,7 @@ ext_dns_message_query_type
 ext_dns_message_rand
 ext_dns_message_ref
 ext_dns_message_release_and_return
+ext_dns_message_send_udp_s
 ext_dns_message_to_buffer
 ext_dns_message_unref
 ext_dns_message_write_header_id

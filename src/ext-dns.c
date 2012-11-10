@@ -1329,9 +1329,9 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
  *
  * Briefly with ext-Dns components you can:
  *
- * - Use \ref ext_dns_library_manual "libext-dns", an ANSI C library, to build a custom C DNS server easily with a few API calls. In this case you'll have full power over all details when handling DNS requests.
+ * - Use \ref ext_dns_library_manual "libext-dns", an ANSI C library, to build a custom C DNS server easily with a few API calls. In this case you'll have full power over all details when handling DNS requests. Also, libext-dns is the recommended way if you want to embed a DNS server into your application.
  *
- * - Or use \ref ext_dns_server_manual "ext-DnsD server", a ready to use forward dns-server that uses libext-dns, that completes its actions calling to a child process to decide what to do. That child resolver can be written in any language (python, bash, perl,...). In this case, you still have access to many details, but limited to supported actions that can be performed child resolvers. 
+ * - Or use \ref ext_dns_server_manual "ext-DnsD server", a ready to use forward dns-server that uses libext-dns, that completes its actions by calling to a child process to decide what to do. That child resolver can be written in any language (python, bash, perl,...). In this case, you still have access to many details, but limited to supported actions that can be performed child resolvers (\ref contact "contact us" if you have any idea about new \ref ext_dns_server_manual "ext-dnsd commands" that could be added).
  *
  * \section getting_started Getting started with ext-DNS
  *
@@ -1351,14 +1351,18 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
  * Limited support is provided via community mailing list (see below). In
  * the case you want commercial support to get faster to your solution
  * by getting exact information on how to use any of ext-Dns
- * components, fast path resolution, please, contact at: info@aspl.es (spanish and/or
+ * components, fast path resolution, etc, please, contact at: info@aspl.es (spanish and/or
  * english). See more details at: http://www.aspl.es/ext-dns/commercial-support
  *
  * \section contact Contact us
  *
- * You can reach us at <b>ext-Dns mailinst</b> at: <a href="http://lists.aspl.es/cgi-bin/mailman/listinfo/ext-dns">ext-dns users</a> for any question you may find.
+ * Contact us if you find bugs, patches or interesting ideas for the
+ * project, or in the case you find any problem while using
+ * ext-Dns. You can reach us at <b>ext-Dns mailinst</b> at: <a
+ * href="http://lists.aspl.es/cgi-bin/mailman/listinfo/ext-dns">ext-dns
+ * users</a>.
  *
- * If you are interested on getting commercial support, you can also contact us at: info@aspl.es (spanish and/or english).
+ * If you are interested in getting commercial support, you can also contact us at: info@aspl.es (spanish and/or english).
  */
 
 /** 
@@ -1507,12 +1511,23 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
  * \endcode
  * 
  * \section ext_dnsd_python_child_resolver A python child resolver skeleton
+ *
+ * Full source code for this child resolver can be found at: https://dolphin.aspl.es/svn/publico/ext-dns/server/child-resolver-skel.py
  * 
  * \include child-resolver-skel.py
  */
 
 /** 
  * \page ext_dns_library_manual Libext-dns library manual 
+ *
+ * \section ext_dns_library_manual Index
+ *
+ * <b>Section 1: common API</b>
+ *  - \ref ext_dns_library_intro
+ *
+ * <b>Section 2: writing a DNS server</b>
+ *  - \ref ext_dns_library_starting_a_listener
+ *  - \ref ext_dns_listener_on_received_example
  *
  * \section ext_dns_library_intro Basic concepts before start
  *
@@ -1526,12 +1541,54 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
  * - \ref extDnsSession : this object represents a single DNS session which may be a listener started by you to receive incoming requests, but it also may represent the other peer when a DNS request or reply is received (via \ref extDnsOnMessageReceived).
  * - \ref extDnsMessage : this object represents a message received or a reply you are building to send to a dns client.
  *
- * There are more modules, \ref ext_dns_types "types" and \ref ext_dns_handlers "handlers" to consider while using libext-dns but these are the most important. Let's the rest of the API step by step.
+ * There are more modules, \ref ext_dns_types "types" and \ref ext_dns_handlers "handlers" to consider while using libext-dns but these are the most important. Let's see the rest of the API step by step.
  *
- * \section ext_dns_library_starting_a_listener How to start the library and a listener
+ * \section ext_dns_library_starting_a_listener How to create a simple DNS listener
  *
+ * In this section, we'll describe how to write a basic DNS
+ * listener using libext-dns. Full example can be found at: https://dolphin.aspl.es/svn/publico/ext-dns/test/ext-dns-simple-listener.c
+ *
+ * Let's start. No matter if you are writing a client or a listener,
+ * you must create and initialize a \ref extDnsCtx context. Here is
+ * how it is done.
+ *
+ * \snippet ext-dns-simple-listener.c Init ctx
  * 
+ * Now you have started a context, you can start listeners or doing
+ * requests to other DNS servers. In this case, we are creating a
+ * listener, so, we use the following code to start a DNS server on
+ * the local 53 port by doing:
  *
+ * \snippet ext-dns-simple-listener.c Starting a listener
+ *
+ * Now, we've got to configure a handler to get a notification every
+ * time a DNS request is received so we can do interesting things with
+ * it. Here is how to do it:
+ *
+ * \snippet ext-dns-simple-listener.c Setting on received handler
+ *
+ * We will see the content of the on received handler a few steps
+ * below. For now, we have to place the code that will ensure our
+ * listener doesn't finishes and also the code that finishes the
+ * context (and all listeners and clients in play) once we signal the
+ * context to finish. 
+ *
+ * Keep in mind this code isn't necessary if you are embeding
+ * libext-dns library into an application that has its own waiting
+ * loop. That is, calling to \ref ext_dns_ctx_wait will block the
+ * calling thread until the server is signaled to unlock due to a call
+ * to \ref ext_dns_ctx_unlock. In any case, this is the waiting plus
+ * finalization code:
+ *
+ * \snippet ext-dns-simple-listener.c Wait and finish
+ *
+ * \section ext_dns_listener_on_received_example An example of a \ref extDnsOnMessageReceived handler
+ *
+ * Now, for the on received handler, you must configure a handler that
+ * has the following signature. Look also at the example to see how
+ * some replies or actions are handled:
+ *
+ * \snippet ext-dns-simple-listener.c On received handler
  * 
  * 
  */
