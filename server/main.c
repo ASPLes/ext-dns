@@ -305,46 +305,6 @@ void handle_reply_complete_cname (extDnsCtx     * ctx,
 	return;
 }
 
-void handle_reply (extDnsCtx     * ctx,
-		   extDnsSession * session,
-		   const char    * source_address,
-		   int             source_port,
-		   extDnsMessage * message,
-		   axlPointer      data)
-{
-	char              buffer[512];
-	int               bytes_written;
-	HandleReplyData * reply_data = data;
-
-	/* ok, rewrite reply id to match the one sent by the client */
-	message->header->id = reply_data->id;
-
-	/* get the reply into a buffer */
-	bytes_written = ext_dns_message_to_buffer (ctx, message, buffer, 512);
-	if (bytes_written == -1) {
-		/* handle_reply_data_free (reply_data); */
-		/* not required to release data here because this is
-		 * done by the engine when the session is finished */
-
-		syslog (LOG_ERR, "ERROR: failed to build buffer representation for reply received..\n");
-		return;
-	}
-
-	/* relay reply to the regression client */
-	if (ext_dns_session_send_udp_s (ctx, reply_data->master_listener, buffer, bytes_written, reply_data->source_address, reply_data->source_port) != bytes_written) 
-		syslog (LOG_ERR, "ERROR: failed to SEND UDP entire reply, expected to write %d bytes but something different was written\n", bytes_written);
-	else {
-		/* store reply in the cache */
-		if (! reply_data->nocache) 
-			ext_dns_cache_store (ctx, message, reply_data->source_address);
-	}
-
-	/* handle_reply_data_free (reply_data); */
-	/* not required to release data here because this is done by
-	 * the engine when the session is finished */
-	return;
-}
-
 extDnsMessage * ext_dnsd_handle_reply (extDnsCtx     * ctx, 
 				       extDnsMessage * query, 
 				       const char    * reply_buffer,
@@ -450,6 +410,31 @@ extDnsMessage * ext_dnsd_handle_reply (extDnsCtx     * ctx,
 	return reply;
 }
 
+/** 
+ * @internal Allows to get the first integer found in a string.
+ */
+int ext_dnsd_server_get_int (const char * reply_buffer)
+{
+	int iterator = 0;
+
+	while (reply_buffer[iterator]) {
+		if (reply_buffer[iterator] == '0' ||
+		    reply_buffer[iterator] == '1' ||
+		    reply_buffer[iterator] == '2' ||
+		    reply_buffer[iterator] == '3' ||
+		    reply_buffer[iterator] == '4' ||
+		    reply_buffer[iterator] == '5' ||
+		    reply_buffer[iterator] == '6' ||
+		    reply_buffer[iterator] == '7' ||
+		    reply_buffer[iterator] == '8' ||
+		    reply_buffer[iterator] == '9')
+			return atoi (reply_buffer + iterator);
+
+		/* next position */
+		iterator++;
+	} /* end if */
+	return 0;
+}
 
 void on_received  (extDnsCtx     * ctx,
 		   extDnsSession * session,
@@ -459,13 +444,13 @@ void on_received  (extDnsCtx     * ctx,
 		   axlPointer      _data)
 {
 	axl_bool          result;
-	HandleReplyData * data;
 	char            * command;
 	childState      * child;
 	char              reply_buffer[1024];
 	extDnsMessage   * reply = NULL;
 	int               bytes_written;
 	axl_bool          nocache;
+	axl_bool          permanent;
 
 	/* skip messages that are queries */
 	if (! ext_dns_message_is_query (message)) {
@@ -510,20 +495,32 @@ void on_received  (extDnsCtx     * ctx,
 	/* get reply */
 	if (axl_memcmp (reply_buffer, "DISCARD", 7)) {
 		if (exarg_is_defined ("debug"))
-			syslog (LOG_INFO, "child requested to DISCARD request..\n");
+			syslog (LOG_INFO, "child requested to DISCARD request..");
 		return;
 	} else if (axl_memcmp (reply_buffer, "UNKNOWN", 7)) {
 		if (exarg_is_defined ("debug"))
-			syslog (LOG_INFO, "child requested to send UNKNOWN code reply..\n");
+			syslog (LOG_INFO, "child requested to send UNKNOWN code reply..");
 
 		/* build the unknown reply */
 		reply = ext_dns_message_build_unknown_reply (ctx, message);
 	} else if (axl_memcmp (reply_buffer, "REJECT", 6)) {
 		if (exarg_is_defined ("debug"))
-			syslog (LOG_INFO, "child requested to REJECT request..\n");
+			syslog (LOG_INFO, "child requested to REJECT request..");
 		
 		/* build the reject reply */
 		reply = ext_dns_message_build_unknown_reply (ctx, message);
+	} else if (axl_memcmp (reply_buffer, "BLACKLIST", 9)) {
+		if (exarg_is_defined ("debug"))
+			syslog (LOG_INFO, "child requested to BLACKLIST %s..", source_address);
+		
+		/* notify we have to skip replying to this peer. */
+		reply = INT_TO_PTR (2);
+
+		/* get permanent status */
+		permanent = !(strstr (reply_buffer, "permanent") == NULL);
+
+		/* call to blacklist */
+		ext_dns_ctx_black_list (ctx, source_address, permanent, ext_dnsd_server_get_int (reply_buffer));
 
 	} else if (axl_memcmp (reply_buffer, "FORWARD", 7)) {
 		/* syslog (LOG_INFO, "child requested to continue and resolve request as usual using forward dns server..\n"); */
@@ -559,20 +556,8 @@ void on_received  (extDnsCtx     * ctx,
 		return;
 	} /* end if */
 
-	/* build state data */
-	data                   = axl_new (HandleReplyData, 1);
-	data->id               = message->header->id;
-	data->source_address   = axl_strdup (source_address);
-	data->source_port      = source_port;
-	data->master_listener  = session;
-	data->nocache          = nocache;
-
-	/* link this data to the session to be released in the case on
-	 * received isn't called */
-	ext_dns_session_set_data (session, axl_strdup_printf ("%p", data), axl_free, data, (axlDestroyFunc) handle_reply_data_free); 
-	
 	/* send query */
-	result = ext_dns_message_query_from_msg (ctx, message, server, server_port, handle_reply, data);
+	result = ext_dns_message_query_and_forward_from_msg (ctx, message, server, server_port, source_address, source_port, session, nocache);
 
 	if (! result) {
 		syslog (LOG_ERR, "ERROR: failed to send query to master server..\n");

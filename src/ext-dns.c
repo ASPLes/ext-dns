@@ -1329,9 +1329,9 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
  *
  * Briefly with ext-Dns components you can:
  *
- * - Use libext-dns, an ANSI C library, to build a custom C DNS server easily with a few API calls. In this case you'll have full power over all details when handling DNS requests.
+ * - Use \ref ext_dns_library_manual "libext-dns", an ANSI C library, to build a custom C DNS server easily with a few API calls. In this case you'll have full power over all details when handling DNS requests.
  *
- * - Or use ext-DnsD server, a ready to use forward dns-server that uses libext-dns, that completes its actions calling to a child process to decide what to do. That child resolver can be written in any language (python, bash, perl,...). In this case, you still have access to many details, but limited to supported actions that can be performed child resolvers. 
+ * - Or use \ref ext_dns_server_manual "ext-DnsD server", a ready to use forward dns-server that uses libext-dns, that completes its actions calling to a child process to decide what to do. That child resolver can be written in any language (python, bash, perl,...). In this case, you still have access to many details, but limited to supported actions that can be performed child resolvers. 
  *
  * \section getting_started Getting started with ext-DNS
  *
@@ -1340,25 +1340,7 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
  * - \ref ext_dns_install
  * - \ref ext_dns_server_manual
  * - \ref ext_dns_library_manual
- *
- * Additionally, here is the API reference in the case you are using libext-dns (in order of importance):
- *
- * Basic DNS API:
- *
- * - \ref ext_dns_main
- * - \ref ext_dns_ctx
- * - \ref ext_dns_session
- * - \ref ext_dns_message
- * - \ref ext_dns_cache
- *
- * Additional API (handlers, threadhing support, IO handling): 
- *
- * - \ref ext_dns_types
- * - \ref ext_dns_handlers
- * - \ref ext_dns_io
- * - \ref ext_dns_reader
- * - \ref ext_dns_thread
- * - \ref ext_dns_thread_pool
+ * - \ref ext_dns_library_full_api
  *
  * \section commercial_support Commercial support and license
  *
@@ -1408,4 +1390,172 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
  * libext-dns and ext-dnsD server available at your host.
  *
  * Please, report any problem you may find at the mailing list: \ref contact
+ */
+
+/** 
+ * \page ext_dns_server_manual ext-DnsD administrator manual
+ *
+ * \section intro_ext_dnsd ext-DnsD Introduction: how it works, basic description
+ *
+ * ext-DnsD works as a caching forward dns server for a network,
+ * passing all requests to child process, called resolvers, to know
+ * how to handle them. The basic working diagram is show as follow:
+ * 
+ * \code
+ *
+ *  +------------+    (1) request dns     +------------+  (4) ask external      +---------------------+
+ *  | dns client |   -------------->      |  ext-DnsD  | -------------------->  | external dns server |
+ *  +------------+     resolution         +------------+   server to resolv     +---------------------+
+ *                                            |   ^
+ *                           (2) ask child    |   | (3) child resolver signals
+ *                           how to handle    |   |     how to handle request: reject,
+ *                                 request    |   |     discard, rewrite or forward
+ *                                            v   |
+ *                                      +-------------------+
+ *                                      |    child resolver |
+ *                                      +-------------------+
+ * \endcode
+ * 
+ * As the diagrama shows, the server implements all DNS protocol
+ * required to handle incoming requests, asking the child what to do
+ * on each case, to then reply to the dns client with the value
+ * request either because it was reject, rewritten or the particular
+ * value reported by the external server.
+ *
+ * This diagram doesn't reflect other details like how ext-DnsD caches
+ * or how it handle bad requests (blacklisting dns clients), but it
+ * shows the basic concept to understand how a child resolver works.
+ *
+ * \section ext_dns_server_configuration ext-DnsD server configuration
+ *
+ * By default, ext-DnsD configuration is found at /etc/ext-dnsd.conf,
+ * but can also be located under a different location using --config
+ * flag (-c short option). That configuration has the following form:
+ *
+ * \htmlinclude ext-dns.example.conf.xml
+ *
+ * As we see, ext-DnsD configuration is pretty straightforward. It's
+ * got a sections to declare what is the DNS server we will use to
+ * forward request (as requested by child resolvers), the location of
+ * the child resolver script, how many childs to create and other easy
+ * to see settings.
+ *
+ * \section ext_dnsd_writing_a_child_resolver How to write a ext-Dnsd child resolver
+ * 
+ * A child resolver must be essentially a loop that receives on the
+ * standard input a single line when the ext-DnsD wants to ask
+ * something, and in turn the child resolver reports one or more
+ * lines. 
+ *
+ * Child resolver receives (note the use of \\n to signify the carry return):
+ *
+ * \code
+ *    INIT\n 
+ *
+ *       When ext-dnsd starts a child resolver, it sends a INIT\n
+ *       command so the can start internal databases and in turn, the
+ *       child must return OK\n
+ *
+ *    RESOLVE [source_ip] [record_name] [record_type] [record_class]\n
+ *
+ *       When a child resolver receives this command, the ext-dns is asking to resolve
+ *       this request. The command includes from where the request is comming and
+ *       what kind of DNS query it is. Some examples about this command are:
+ *
+ *            - RESOLVE 127.0.0.1 www.google.com A IN\n
+ *            - RESOLVE 127.0.0.1 google.com MX IN\n
+ *
+ *       To this command, the child must reply with some of this options:
+ *
+ *            - FORWARD\n               : make the ext-dnsd to resolver the request with the 
+ *                                        external dns server, passing the result directly to the
+ *                                        dns client requesting this data.
+ *
+ *            - DISCARD\n               : silently ignore the request
+ *
+ *            - REJECT\n                : send a reject reply (Rcode = 5, refused)
+ *
+ *            - UNKNOWN\n               : send a reply as if it were unknown the value requested
+ *
+ *            - BLACKLIST [permanent] [seconds] \n  
+ *
+ *                                      : silently ignore the request, and blacklists the dns client during
+ *                                        the provided amount of seconds. During that period all requests from
+ *                                        that source will be silently ignored.
+ *
+ *                                        Here are some examples:
+ *                                        - BLACKLIST 3
+ *                                        - BLACKLIST permanent
+ *
+ *            - REPLY ipv4:[value] [ttl] [nocache] 
+ *            - REPLY name:[value] [ttl] [nocache] 
+ *                                      : in this case the reply is directly handled by the child resolver
+ *                                        providing a cname as reply to the request (in the case name: is used)
+ *                                        or a particular ipv4 value if ipv4: is used. 
+ *
+ *                                        The reply also includes what's the ttl to be used and optionally, an
+ *                                        indication about caching the result reported. In the case nocache string
+ *                                        is provided, ext-DnsD won't cache the value. 
+ *
+ *                                        Here are some examples:
+ *
+ *                                        - REPLY ipv4:127.0.0.1 3600 nocache
+ *                                        - REPLY ipv4:127.0.0.1 3600
+ *                                        - REPLY name:www.aspl.es 3600 
+ *                                        - REPLY name:www.google.com 3600 nocache
+ *
+ * \endcode
+ * 
+ * \section ext_dnsd_python_child_resolver A python child resolver skeleton
+ * 
+ * \include child-resolver-skel.py
+ */
+
+/** 
+ * \page ext_dns_library_manual Libext-dns library manual 
+ *
+ * \section ext_dns_library_intro Basic concepts before start
+ *
+ * Libext-dns has a easy to use API, where some objects are used to
+ * start a DNS listener, and over those listeners, you configure a set
+ * of handlers that are called to notify various events that happens
+ * when a request is received. Here are the list of main objects that
+ * you must use:
+ *
+ * - \ref extDnsCtx : this is the context where all state is stored. The library is stateless and supports starting several independent context where listeners and messages shares threads and other subsystems.
+ * - \ref extDnsSession : this object represents a single DNS session which may be a listener started by you to receive incoming requests, but it also may represent the other peer when a DNS request or reply is received (via \ref extDnsOnMessageReceived).
+ * - \ref extDnsMessage : this object represents a message received or a reply you are building to send to a dns client.
+ *
+ * There are more modules, \ref ext_dns_types "types" and \ref ext_dns_handlers "handlers" to consider while using libext-dns but these are the most important. Let's the rest of the API step by step.
+ *
+ * \section ext_dns_library_starting_a_listener How to start the library and a listener
+ *
+ * 
+ *
+ * 
+ * 
+ */
+
+/** 
+ * \page ext_dns_library_full_api Libext-dns API reference
+ *
+ * Here is the API reference in the case you are using libext-dns (in order of importance):
+ *
+ * <b>Basic DNS API:</b>
+ *
+ * - \ref ext_dns_main
+ * - \ref ext_dns_ctx
+ * - \ref ext_dns_session
+ * - \ref ext_dns_message
+ * - \ref ext_dns_cache
+ *
+ * <b>Additional API (handlers, threadhing support, IO handling): </b>
+ *
+ * - \ref ext_dns_types
+ * - \ref ext_dns_handlers
+ * - \ref ext_dns_io
+ * - \ref ext_dns_reader
+ * - \ref ext_dns_thread
+ * - \ref ext_dns_thread_pool
+ *
  */

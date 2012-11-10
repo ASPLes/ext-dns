@@ -785,11 +785,11 @@ struct _extDnsMessage {
  * because is is used to create DNS messages or as a representation
  * for messages received (via \ref extDnsOnMessageReceived handler, usually configured by \ref ext_dns_session_set_on_message or by \ref ext_dns_ctx_set_on_message).
  *
- * The \ref extDnsMessage may represent a query or a reply (\ref ext_dns_message_is_query), and when it represents an error reply, you can use several functions to know what is the exactly the error type (\ref ext_dns_message_is_reject , \ref ext_dns_message_is_name_error or \ref ext_dns_message_is_answer_valid). 
+ * The \ref extDnsMessage may represent a query or a reply (\ref ext_dns_message_is_query), and when it represents an error reply, you can use several functions to know what is the exact error type (\ref ext_dns_message_is_reject , \ref ext_dns_message_is_name_error or \ref ext_dns_message_is_answer_valid). 
  *
- * Every \ref extDnsMessage object has a reference counting associated with it. You can use several functions to acquire references to the object via \ref ext_dns_message_ref and \ref ext_dns_message_unref. 
+ * Every \ref extDnsMessage object has a reference counting associated with it. You can use the following functions to acquire references to the object via \ref ext_dns_message_ref and \ref ext_dns_message_unref to release them.
  *
- * Please, check the \ref ext_dns_message "extDnsMessage API" for more information about available options.
+ * Please, check the \ref ext_dns_message "extDnsMessage API" for more information about available options and \ref ext_dns_library_manual "libext-dns manual".
  */
 typedef struct _extDnsMessage extDnsMessage;
 
