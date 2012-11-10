@@ -46,68 +46,6 @@
 const char * server = "8.8.8.8";
 int          server_port = 53;
 
-typedef struct _HandleReplyData {
-	int             id;
-	char          * source_address;
-	int             source_port;
-	extDnsSession * master_listener;
-} HandleReplyData;
-
-void handle_reply_data_free (HandleReplyData * data)
-{
-	axl_free (data->source_address);
-	axl_free (data);
-	return;
-}
-
-void handle_reply (extDnsCtx     * ctx,
-		   extDnsSession * session,
-		   const char    * source_address,
-		   int             source_port,
-		   extDnsMessage * message,
-		   axlPointer      data)
-{
-	char              buffer[512];
-	int               bytes_written;
-	HandleReplyData * reply_data = data;
-
-	if (message->answers) {
-		printf ("REPLY: received reply from %s:%d, values: %s %d %d %s\n", 
-			server, server_port,
-			message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content); 
-	} else {
-		printf ("REPLY: received reply from %s:%d\n", server, server_port);
-	}
-
-	/* ok, rewrite reply id to match the one sent by the client */
-	message->header->id = reply_data->id;
-
-	/* get the reply into a buffer */
-	bytes_written = ext_dns_message_to_buffer (ctx, message, buffer, 512);
-	if (bytes_written == -1) {
-		handle_reply_data_free (reply_data);
-
-		printf ("ERROR: failed to build buffer representation for reply received..\n");
-		return;
-	}
-	printf ("REPLY: build buffer reply in %d bytes\n", bytes_written);
-
-	/* relay reply to the regression client */
-	if (ext_dns_session_send_udp_s (ctx, reply_data->master_listener, buffer, bytes_written, reply_data->source_address, reply_data->source_port) != bytes_written) 
-		printf ("ERROR: failed to SEND UDP entire reply, expected to write %d bytes but something different was written\n", bytes_written);
-	else {
-		printf ("INFO: reply sent!\n");
-
-		/* store reply in the cache */
-		ext_dns_cache_store (ctx, message, source_address);
-	}
-	
-
-	/* release data */
-	handle_reply_data_free (reply_data);
-	return;
-}
-
 void on_received  (extDnsCtx     * ctx,
 		   extDnsSession * session,
 		   const char    * source_address,
@@ -116,7 +54,6 @@ void on_received  (extDnsCtx     * ctx,
 		   axlPointer      _data)
 {
 	axl_bool          result;
-	HandleReplyData * data;
 	extDnsMessage   * reply;
 	char              buffer[512];
 	int               bytes_written;
@@ -203,17 +140,9 @@ void on_received  (extDnsCtx     * ctx,
 
 		return;
 	}
-		
 
-	/* build state data */
-	data                   = axl_new (HandleReplyData, 1);
-	data->id               = message->header->id;
-	data->source_address   = axl_strdup (source_address);
-	data->source_port      = source_port;
-	data->master_listener  = session;
-	
-	/* send query */
-	result = ext_dns_message_query_from_msg (ctx, message, server, server_port, handle_reply, data);
+	/* send query and forward reply */
+	result = ext_dns_message_query_and_forward_from_msg (ctx, message, server, server_port, source_address, source_port, session, axl_true);
 
 	if (! result) 
 		printf ("ERROR: failed to send query to master server..\n");

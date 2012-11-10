@@ -1612,6 +1612,130 @@ axl_bool        ext_dns_message_query_from_msg (extDnsCtx * ctx, extDnsMessage *
 					  on_message, data);
 }
 
+typedef struct _extDnsHandleReplyData {
+	int             id;
+	char          * source_address;
+	int             source_port;
+	extDnsSession * master_listener;
+} extDnsHandleReplyData;
+
+void ext_dns_message_handle_reply_data_free (extDnsHandleReplyData * data)
+{
+	axl_free (data->source_address);
+	axl_free (data);
+	return;
+}
+
+void ext_dns_message_handle_reply (extDnsCtx     * ctx,
+				   extDnsSession * session,
+				   const char    * source_address,
+				   int             source_port,
+				   extDnsMessage * message,
+				   axlPointer      data)
+{
+	char                    buffer[512];
+	int                     bytes_written;
+	extDnsHandleReplyData * reply_data = data;
+
+	/* ok, rewrite reply id to match the one sent by the client */
+	message->header->id = reply_data->id;
+
+	/* get the reply into a buffer */
+	bytes_written = ext_dns_message_to_buffer (ctx, message, buffer, 512);
+	if (bytes_written == -1) {
+		ext_dns_message_handle_reply_data_free (reply_data);
+
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "ERROR: failed to build buffer representation for reply received..");
+		return;
+	}
+
+	/* relay reply to the regression client */
+	if (ext_dns_session_send_udp_s (ctx, reply_data->master_listener, buffer, bytes_written, reply_data->source_address, reply_data->source_port) != bytes_written) 
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "ERROR: failed to SEND UDP entire reply, expected to write %d bytes but something different was written", bytes_written);
+	else {
+		/* store reply in the cache */
+		ext_dns_cache_store (ctx, message, source_address);
+	} /* end if */
+
+	/* release data */
+	ext_dns_message_handle_reply_data_free (reply_data);
+	return;
+}
+
+/** 
+ * @brief Convenient function that allows doing a query and forward the reply received.
+ *
+ * This function allows to launch a DNS query, taking the exact query
+ * to do from ANSWER section inside message, doing that query to
+ * server:server_port and in the case a right reply is received, the
+ * reply is relayed to the requesting address which is
+ * reply_to_address:reply_to_port.
+ *
+ * Additionally, the reply will be sent as comming from the address
+ * bind by the provided \ref extDnsSession (reply_from).
+ *
+ * In the case you are using \ref ext_dns_cache "the DNS cache", you
+ * can also signal the function to cache the reply (it will call \ref
+ * ext_dns_cache_store for you).
+ *
+ * Here is an examle:
+ *
+ * \code
+ * // let's suppose you've received a query represented by message, and you
+ * // want to forward the query to google's public DNS and then relay the reply
+ * // to the asking peer. Note also you usually receive the source address of 
+ * // the incoming request. That would be done like follows
+
+ * if (! ext_dns_message_query_and_forward_from_msg (ctx, message, "8.8.8.8", 53, 
+ *                                                   // reply to the following direction
+ *                                                   source_address, source_port,
+ *                                                   // listener points to the master listener
+ *                                                   // (extDnsSession) that received the query
+ *                                                   listener, 
+ *                                                   // we want to cache the reply
+ *                                                   axl_true)) {
+ *      printf ("ERROR: failed to send query..\n");
+ *      // ...do some handling handling... 
+ * }
+ * \endcode
+ *
+ * @param ctx The context where the operation will take place.
+ * @param message The message from where the query will be take
+ *
+ * @param server The external DNS server address that will receive the request.
+ * @param server_port The external DNS server port.
+ *
+ * @param reply_to_address Once the reply is received, that will be relayed to this direction.
+ * @param reply_to_port The port to reply the reply.
+ *
+ * @param reply_from The session that will be used as reference to make the reply forwarded to appear as coming from it.
+ * 
+ * @param cache_reply If it is required to cache the reply received.
+ *
+ * @return The function returns axl_true in the case the request was sent. Otherwise axl_false is returned. The function will also return axl_false in the case message, server, reply_to_address or reply_from is NULL.
+ */
+axl_bool        ext_dns_message_query_and_forward_from_msg (extDnsCtx * ctx, extDnsMessage * message,
+							    const char * server, int server_port,
+							    const char * reply_to_address, int reply_to_port,
+							    extDnsSession * reply_from, axl_bool cache_reply)
+{
+	extDnsHandleReplyData * data;
+
+	/* check input parameters */
+	if (message == NULL || server == NULL || reply_to_address == NULL || reply_from == NULL)
+		return axl_false;
+
+	/* build state data */
+	data                   = axl_new (extDnsHandleReplyData, 1);
+	data->id               = message->header->id;
+	data->source_address   = axl_strdup (reply_to_address);
+	data->source_port      = reply_to_port;
+	data->master_listener  = reply_from;
+	
+	/* send query */
+	return ext_dns_message_query_from_msg (ctx, message, server, server_port, ext_dns_message_handle_reply, data);
+}
+
 /** 
  * @brief Convenient function to get the query name being asked in the message (no matter if it is a query or reply).
  *

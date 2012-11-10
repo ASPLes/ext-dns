@@ -89,6 +89,11 @@ axl_bool        ext_dns_message_query_from_msg (extDnsCtx * ctx, extDnsMessage *
 						const char * server, int server_port,
 						extDnsOnMessageReceived on_message, axlPointer data);
 
+axl_bool        ext_dns_message_query_and_forward_from_msg (extDnsCtx * ctx, extDnsMessage * message,
+							    const char * server, int server_port,
+							    const char * reply_to_address, int reply_to_port,
+							    extDnsSession * reply_from, axl_bool cache_reply);
+
 const char *    ext_dns_message_query_name (extDnsCtx * ctx, extDnsMessage * message);
 
 const char *    ext_dns_message_query_class (extDnsCtx * ctx, extDnsMessage * message);
