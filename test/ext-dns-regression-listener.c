@@ -119,11 +119,6 @@ void on_received  (extDnsCtx     * ctx,
 			return;
 		}
 
-		/* update the Id in the buffer to match the incomming
-		 * message (to ensure even a cached response) will
-		 * have the right Id value in the reply  */
-		ext_dns_message_write_header_id (message, buffer);
-
 		printf ("INFO: buffer build from message was: %d bytes\n", bytes_written);
 
 		/* send reply */

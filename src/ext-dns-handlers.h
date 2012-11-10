@@ -388,7 +388,7 @@ typedef void (*extDnsListenerReadyFull)           (char  * host, int  port, extD
  *
  * @param source_port The source port where the message comes from.
  *
- * @param message The DNS message received.
+ * @param message The DNS message received. Note that you must not release this reference (by calling to \ref ext_dns_message_unref). This is done automatically by the library once the handler finishes. In the case you want to have a reference to the message after the handler finishes, then acquire them by calling to \ref ext_dns_message_ref. Note that every reference acquired must be released via \ref ext_dns_message_unref
  *
  * @param data A user defined pointer that was configured along with
  * the handler.
