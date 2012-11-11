@@ -44,6 +44,9 @@ Copyright (C) 2012  Advanced Software Production Line, S.L.\n"
 If you have question, bugs to report, patches, you can reach us\n\
 at <ext-dns@lists.aspl.es>."
 
+/* import gnu source declarations */
+#define _GNU_SOURCE
+
 #include <ext-dns.h>
 
 #include <syslog.h>
@@ -56,8 +59,6 @@ at <ext-dns@lists.aspl.es>."
 #include <exarg.h>
 #include <sys/wait.h>
 
-
-
 axl_bool verbose = axl_false;
 
 axlDoc     * config = NULL;
@@ -66,6 +67,11 @@ const char * path = "/etc/ext-dnsd.conf";
 /* server we rely request to */
 const char * server = "8.8.8.8";
 int          server_port = 53;
+
+/* hash to provide results from /etc/hosts */
+axlHash    * etchosts = NULL;
+axlHash    * etchosts_ipv6 = NULL;
+extDnsMutex  etchosts_mutex;
 
 typedef struct _HandleReplyData {
 	int             id;
@@ -436,6 +442,38 @@ int ext_dnsd_server_get_int (const char * reply_buffer)
 	return 0;
 }
 
+/** 
+ * @internal Function that checks if we are able to resolve the
+ * provided query via values found inside local /etc/hosts.
+ */
+extDnsMessage * ext_dns_resolve_via_etc_hosts (extDnsCtx * ctx, extDnsMessage * message) {
+	const char * value;
+
+	/* get type and class */
+	const char * type  = ext_dns_message_query_type (ctx, message);
+	const char * class = ext_dns_message_query_class (ctx, message);
+
+	if (axl_cmp (class, "IN")) {
+		if (axl_cmp (type, "A")) { 
+
+			/* ok, found a IN A request, try to resolve via /etc/hosts */
+			ext_dns_mutex_lock (&etchosts_mutex);
+			value = (const char *) axl_hash_get (etchosts, (axlPointer) ext_dns_message_query_name (ctx, message));
+			ext_dns_mutex_unlock (&etchosts_mutex);
+
+			if (value) {
+				/* build reply (low ttl) */
+				return ext_dns_message_build_ipv4_reply (ctx, message, value, 5);
+			} /* end if */
+			
+		} else if (axl_cmp (type, "AAAA")) {
+			/* ok, found a IN AAAA request, try to resolve via /etc/hosts */
+		}
+	}
+
+	return NULL;
+}
+
 void on_received  (extDnsCtx     * ctx,
 		   extDnsSession * session,
 		   const char    * source_address,
@@ -524,6 +562,10 @@ void on_received  (extDnsCtx     * ctx,
 
 	} else if (axl_memcmp (reply_buffer, "FORWARD", 7)) {
 		/* syslog (LOG_INFO, "child requested to continue and resolve request as usual using forward dns server..\n"); */
+
+		/* check if we can resolve via /etc/hosts */
+		reply = ext_dns_resolve_via_etc_hosts (ctx, message);
+
 	} else if (axl_memcmp (reply_buffer, "REPLY ", 6)) {
 		/* parse reply received */
 		reply = ext_dnsd_handle_reply (ctx, message, reply_buffer, session, source_address, source_port, nocache);
@@ -882,12 +924,133 @@ void child_terminated (int _signal) {
 	return;
 }
 
+void clear_etc_hosts (void) {
+	axlHash * temp;
+
+	temp = etchosts;
+
+	/* lock, change and unlock */
+	ext_dns_mutex_lock (&etchosts_mutex);
+	etchosts = NULL;
+	ext_dns_mutex_unlock (&etchosts_mutex);
+	
+	axl_hash_free (etchosts);
+	return;
+}
+
+void start_etc_hosts_resolution (void) {
+	axlNode  * node;
+	char     * line = NULL;
+	size_t     len  = 0;
+	FILE     * fp;
+	ssize_t    read;
+	char    ** items;
+	int        iterator;
+
+	/* hashes built */
+	axlHash  * temp1;
+	axlHash  * temp2;
+
+	/* old hashes */
+	axlHash  * old1;
+	axlHash  * old2;
+
+
+	/* get current node configuration */
+	node = axl_doc_get (config, "/ext-dns-server/resolve-from-etc-hosts");
+	if (node == NULL) {
+		clear_etc_hosts ();
+		return ;
+	} /* end if */
+
+	if (! HAS_ATTR_VALUE (node, "value", "yes")) {
+		clear_etc_hosts ();
+		return ;
+	} /* end if */
+
+	fp = fopen("/etc/hosts", "r");
+	if (fp == NULL) {
+		return;
+	} /* end if */
+
+	/* create temporal hashes */
+	temp1 = axl_hash_new (axl_hash_string, axl_hash_equal_string);
+	temp2 = axl_hash_new (axl_hash_string, axl_hash_equal_string);
+
+	/* ok, load the new etc/hosts */
+	while ((read = getline (&line, &len, fp)) != -1) {
+		/* clear and check for empty lines */
+		axl_stream_trim (line);
+		if (line == NULL || strlen (line) == 0)
+			continue;
+		
+		/* skip comments */
+		if (line[0] == '#')
+			continue;
+
+		/* prepare the line */
+		iterator = 0;
+		while (line[iterator]) {
+			if (line[iterator] == '\t' || line[iterator] == '\r')
+				line[iterator] = ' ';
+			iterator++;
+		} /* end while */
+
+		/* process line */
+		items = axl_split (line, 1, " ");
+		axl_stream_clean_split (items);
+		if (items[0] == NULL || items[1] == NULL) {
+			axl_freev (items);
+			continue;
+		} /* end if */
+
+		iterator = 1;
+		while (items[iterator]) {
+			ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Found resolution %s -> %s", items[iterator], items[0]);
+			
+			/* check if this is a ipv4 or ipv6 value */
+			if (!(strstr (items[0], ":") == NULL)) 
+				axl_hash_insert_full (temp2, axl_strdup (items[iterator]), axl_free, axl_strdup(items[0]), axl_free);
+			else
+				axl_hash_insert_full (temp1, axl_strdup (items[iterator]), axl_free, axl_strdup (items[0]), axl_free);
+
+			iterator++;
+		} /* end if */
+
+		/* clear first position */
+		axl_freev (items);
+	}
+
+	/* release and close */
+	if (line)
+		free (line);
+	fclose (fp);
+
+	/* now set new values */
+	ext_dns_mutex_lock (&etchosts_mutex);
+	old1 = etchosts;
+	etchosts = temp1;
+
+	old2 = etchosts_ipv6;
+	etchosts_ipv6 = temp2;
+	ext_dns_mutex_unlock (&etchosts_mutex);
+
+	/* release old values */
+	axl_hash_free (old1);
+	axl_hash_free (old2);
+
+	return;
+}
+
 void reload_configuration (int _signal) {
 
 	/* release cache */
 	syslog (LOG_INFO, "Reloading ext-dnsd server..");
 	ext_dns_cache_init (ctx, 0);
 	syslog (LOG_INFO, "Cache flushed..");
+
+	/* reload /etc/hosts resolution */
+	start_etc_hosts_resolution ();
 
 	/* reload configuration (to be done) */
 
@@ -939,6 +1102,10 @@ int main (int argc, char ** argv) {
 	/* init cache */
 	ext_dns_cache_init (ctx, 1000);
 
+	/* check and start /etc/hosts resolution */
+	ext_dns_mutex_create (&etchosts_mutex);
+	start_etc_hosts_resolution ();
+
 	/* start listener declarations */
 	start_listeners ();
 
@@ -960,6 +1127,11 @@ int main (int argc, char ** argv) {
 
 	/* finalize childs */
 	ext_dnsd_finish_childs ();
+
+	/* release hashes */
+	ext_dns_mutex_destroy (&etchosts_mutex);
+	axl_hash_free (etchosts_ipv6);
+	axl_hash_free (etchosts);
 	
 	return 0;
 }

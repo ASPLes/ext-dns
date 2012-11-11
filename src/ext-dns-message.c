@@ -1764,7 +1764,7 @@ const char *    ext_dns_message_query_name (extDnsCtx * ctx, extDnsMessage * mes
  */
 const char *    ext_dns_message_query_class (extDnsCtx * ctx, extDnsMessage * message)
 {
-	if (message == NULL || message->answers == NULL)
+	if (message == NULL || message->questions == NULL)
 		return NULL;
 	return ext_dns_message_get_qclass_to_str (ctx, message->questions[0].qclass);
 }
@@ -1781,7 +1781,7 @@ const char *    ext_dns_message_query_class (extDnsCtx * ctx, extDnsMessage * me
  */
 const char *    ext_dns_message_query_type (extDnsCtx * ctx, extDnsMessage * message)
 {
-	if (message == NULL || message->answers == NULL)
+	if (message == NULL || message->questions == NULL)
 		return NULL;
 	return ext_dns_message_get_qtype_to_str (ctx, message->questions[0].qtype);
 }
