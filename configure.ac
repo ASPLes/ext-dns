@@ -244,6 +244,7 @@ AC_SUBST(ADDITIONAL_LIBS)
 
 AC_OUTPUT([
 Makefile
+ext-dns.pc
 src/Makefile
 query/Makefile
 test/Makefile
