@@ -2,7 +2,9 @@ if ENABLE_EXT_DNS_LOG
 INCLUDE_EXT_DNS_LOG=-DENABLE_EXT_DNS_LOG
 endif
 
-EXTRA_DIST = ext-dns.example.conf
+etcdir = $(sysconfdir)/ext-dnsd/
+etc_DATA = ext-dns.example.conf
+EXTRA_DIST = $(etc_DATA)
 
 bin_PROGRAMS = ext-dnsd
 
