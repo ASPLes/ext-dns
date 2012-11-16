@@ -1,5 +1,5 @@
 usr/bin/ext-dnsd
-etc/ext-dns.example.conf
+etc/ext-dnsd/ext-dns.example.conf
 
 
 

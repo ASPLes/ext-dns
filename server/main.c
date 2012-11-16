@@ -62,7 +62,7 @@ at <ext-dns@lists.aspl.es>."
 axl_bool verbose = axl_false;
 
 axlDoc     * config = NULL;
-const char * path = "/etc/ext-dnsd.conf";
+const char * path = "/etc/ext-dnsd/ext-dns.conf";
 
 /* server we rely request to */
 const char * server = "8.8.8.8";
