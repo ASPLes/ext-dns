@@ -32,3 +32,6 @@ build_doc: prepare_xmls
 
 prepare_xmls:
 	axl-knife -i ../server/ext-dns.example.conf -o ext-dns.example.conf.xml -e -p fragment
+
+all: build_doc
+
