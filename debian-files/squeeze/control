@@ -30,3 +30,11 @@ Description: ready to use forward dns server built on top libext-dns
   ext-dnsd is a forward DNS server that can be used to control and
   track which DNS requests are allowed.
 
+Package: ext-dns-doc
+Section: libs
+Architecture: any
+Depends: libext-dns (>= ${Source-Version})
+Description: ext-Dns core library manual and API reference
+  This package includes ext-Dns core library manual, API reference
+  and ext-dnsd manual.
+
