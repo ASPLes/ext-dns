@@ -60,6 +60,7 @@ at <ext-dns@lists.aspl.es>."
 #include <sys/wait.h>
 
 axl_bool verbose = axl_false;
+axl_bool forward_all_requests = axl_true;
 
 axlDoc     * config = NULL;
 const char * path = "/etc/ext-dnsd/ext-dns.conf";
@@ -487,7 +488,7 @@ void on_received  (extDnsCtx     * ctx,
 	char              reply_buffer[1024];
 	extDnsMessage   * reply = NULL;
 	int               bytes_written;
-	axl_bool          nocache;
+	axl_bool          nocache = axl_false;
 	axl_bool          permanent;
 
 	/* skip messages that are queries */
@@ -503,6 +504,12 @@ void on_received  (extDnsCtx     * ctx,
 			ext_dns_message_get_qtype_to_str (ctx, message->questions[0].qtype),
 			ext_dns_message_get_qclass_to_str (ctx, message->questions[0].qclass),
 			message->questions[0].qname);
+	} /* end if */
+
+	/* check for forward all requests */
+	if (forward_all_requests) {
+		goto forward_request;
+		return;
 	} /* end if */
 
 	/* build query line to be resolved by child process */
@@ -597,6 +604,8 @@ void on_received  (extDnsCtx     * ctx,
 		ext_dnsd_send_reply (ctx, session, source_address, source_port, reply, axl_true);
 		return;
 	} /* end if */
+
+ forward_request:
 
 	/* send query */
 	result = ext_dns_message_query_and_forward_from_msg (ctx, message, server, server_port, source_address, source_port, session, nocache);
@@ -838,22 +847,28 @@ void start_child_applications (void)
 	/* find first listener node */
 	node = axl_doc_get (config, "/ext-dns-server/child-resolver");
 	if (node == NULL) {
-		printf ("ERROR: unable to find any listen declaration at configuration file %s, unable to start any listener..\n", path);
-		exit (-1);
+		syslog (LOG_INFO, "no <child-resolver> config was found, enable forward for all requests");
+		return;
+		/* printf ("ERROR: unable to find any listen declaration at configuration file %s, unable to start any listener..\n", path);
+		   exit (-1); */
 	} /* end if */
 
 	/* get child resolver */
 	child_resolver = ATTR_VALUE (node, "value");
 	if (child_resolver == NULL || strlen (child_resolver) == 0) {
-		printf ("ERROR: child resolver application wasn't found defined (it is empty or NULL)\n");
-		exit (-1);
+		syslog (LOG_INFO, "no <child-resolver> value config was found, enable forward for all requests");
+		return;
+		/* printf ("ERROR: child resolver application wasn't found defined (it is empty or NULL)\n");
+		   exit (-1); */
 	}
 
 	/* find first listener node */
 	node = axl_doc_get (config, "/ext-dns-server/child-number");
 	if (node == NULL) {
-		printf ("ERROR: unable to find any listen declaration at configuration file %s, unable to start any listener..\n", path);
-		exit (-1);
+		syslog (LOG_INFO, "no <child-resolver> config was found, enable forward for all requests");
+		return;
+		/* printf ("ERROR: unable to find any listen declaration at configuration file %s, unable to start any listener..\n", path);
+		   exit (-1); */
 	} /* end if */
 
 	if (! ATTR_VALUE (node, "value") || strlen (ATTR_VALUE (node, "value")) == 0) {
@@ -906,6 +921,10 @@ void start_child_applications (void)
 		/* next iterator */
 		iterator++;
 	} /* end while */
+
+	/* do not forward directly all requests, but first ask child
+	   resolvers */
+	forward_all_requests = axl_false;
 
 	return;
 	
