@@ -63,7 +63,7 @@ axl_bool verbose = axl_false;
 axl_bool forward_all_requests = axl_true;
 
 axlDoc     * config = NULL;
-const char * path = "/etc/ext-dnsd/ext-dns.conf";
+const char * path = "/etc/ext-dns/ext-dns.conf";
 const char * __pidfile = "/var/run/ext-dnsd.pid";
 
 /* server we rely request to */
