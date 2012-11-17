@@ -63,12 +63,14 @@ install: build
 # install documentation
 #	cd doc/; $(MAKE) DESTDIR=$(CURDIR)/debian/tmp install-doc; cd ..
 	test -d $(CURDIR)/debian/tmp/etc || mkdir $(CURDIR)/debian/tmp/etc
+	test -d $(CURDIR)/debian/tmp/etc/ext-dns || mkdir $(CURDIR)/debian/tmp/etc/ext-dns
+	test -d $(CURDIR)/debian/tmp/etc/init.d || mkdir $(CURDIR)/debian/tmp/etc/init.d
 	test -d $(CURDIR)/debian/tmp/usr/share || mkdir $(CURDIR)/debian/tmp/usr/share
 	test -d $(CURDIR)/debian/tmp/usr/share/doc || mkdir $(CURDIR)/debian/tmp/usr/share/doc
 	test -d $(CURDIR)/debian/tmp/usr/share/doc/ext-dns || mkdir $(CURDIR)/debian/tmp/usr/share/doc/ext-dns
 	rsync -avz doc/html $(CURDIR)/debian/tmp/usr/share/doc/ext-dns/manual
 # prepare default configuration
-	cp $(CURDIR)/debian/tmp/etc/ext-dns/ext-dnsd.example.conf $(CURDIR)/debian/tmp/etc/ext-dns/ext-dnsd.conf 
+	sed 's@/home/acinom/core-admin/app-builder/apps/internet_access_manager/iam-resolver.py@@g' $(CURDIR)/server/ext-dns.example.conf > $(CURDIR)/debian/tmp/etc/ext-dns/ext-dns.conf 
 # copy initial init.d
 	cp $(CURDIR)/doc/ext-dnsd-init.d $(CURDIR)/debian/tmp/etc/init.d/ext-dnsd
 

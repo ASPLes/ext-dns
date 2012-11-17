@@ -1,5 +1,5 @@
 usr/bin/ext-dnsd
-etc/ext-dnsd/ext-dns.conf
+etc/ext-dns/ext-dns.conf
 etc/init.d/ext-dnsd
 
 
