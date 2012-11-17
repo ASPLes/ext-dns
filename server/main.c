@@ -1134,6 +1134,32 @@ void reload_configuration (int _signal) {
 	return;
 }
 
+void setup_thread_num (void) {
+	axlNode    * node;
+	const char * number_str;
+	int          number;
+
+	/* find first listener node */
+	node = axl_doc_get (config, "/ext-dns-server/child-number");
+	if (node == NULL)
+		return;
+	number_str = ATTR_VALUE (node, "value");
+	if (number_str == NULL || strlen (number_str) == 0) {
+		syslog (LOG_INFO, "no <child-number> value config was found, defaulting to 5");
+		return;
+		/* printf ("ERROR: child resolver application wasn't found defined (it is empty or NULL)\n");
+		   exit (-1); */
+	}
+	
+	number = atoi (number_str);
+	if (number <= 0)
+		return;
+
+	/* setup this number of threads */
+	ext_dns_thread_pool_set_num (number);
+	return;
+} /* end if */
+
 int main (int argc, char ** argv) {
 
 	/* install default handling to get notification about
@@ -1176,6 +1202,9 @@ int main (int argc, char ** argv) {
 		ext_dns_log2_enable (ctx, axl_true);
 		ext_dns_color_log_enable (ctx, axl_true);
 	}
+
+	/* setup threads for childs */
+	setup_thread_num ();
 
 	/* init context */
 	if (! ext_dns_init_ctx (ctx)) {
