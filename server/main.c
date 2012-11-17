@@ -64,6 +64,7 @@ axl_bool forward_all_requests = axl_true;
 
 axlDoc     * config = NULL;
 const char * path = "/etc/ext-dnsd/ext-dns.conf";
+const char * __pidfile = "/var/run/ext-dnsd.pid";
 
 /* server we rely request to */
 const char * server = "8.8.8.8";
@@ -658,6 +659,59 @@ void __terminate_ext_dns_listener (int value)
 	return;
 }
 
+/**
+ * @internal Implementation to detach turbulence from console.
+ */
+void ext_dnsd_detach_process (void)
+{
+	pid_t   pid;
+	/* fork */
+	pid = fork ();
+	switch (pid) {
+	case -1:
+		syslog (LOG_ERR, "unable to detach process, failed to executing child process");
+		exit (-1);
+	case 0:
+		/* running inside the child process */
+		syslog (LOG_INFO, "running child created in detached mode");
+		return;
+	default:
+		/* child process created (parent code) */
+		break;
+	} /* end switch */
+
+	/* terminate current process */
+	syslog (LOG_INFO, "finishing parent process (created child: %d, parent: %d)..", pid, getpid ());
+	exit (0);
+	return;
+}
+
+/**
+ * @internal Places current process identifier into the file provided
+ * by the user.
+ */
+void ext_dnsd_place_pidfile (void)
+{
+	FILE * pid_file = NULL;
+	int    pid      = getpid ();
+	char   buffer[20];
+	int    size;
+
+	/* open pid file or create it to place the pid file */
+	pid_file = fopen (__pidfile, "w");
+	if (pid_file == NULL) {
+		printf ("ERROR: Unable to open pid file at: %s", __pidfile);
+		exit (-1);
+	} /* end if */
+	
+	/* stringfy pid */
+	size = axl_stream_printf_buffer (buffer, 20, NULL, "%d", pid);
+	syslog (LOG_INFO, "signaling PID %d at %s", pid, __pidfile);
+	fwrite (buffer, size, 1, pid_file);
+	fclose (pid_file);
+	return;
+}
+
 void install_arguments (int argc, char ** argv) {
 
 	/* install headers for help */
@@ -675,6 +729,8 @@ void install_arguments (int argc, char ** argv) {
 			   "Enable ext-dns debug output.");
 	exarg_install_arg ("config", "c", EXARG_STRING, 
 			   "Path to the server configuration file.");
+	exarg_install_arg ("detach", NULL, EXARG_NONE,
+			   "Makes ext-dnsd to detach from console, starting in background.");
 
 	/* call to parse arguments */
 	exarg_parse (argc, argv);
@@ -1094,6 +1150,15 @@ int main (int argc, char ** argv) {
 
 	/* install arguments */
 	install_arguments (argc, argv);	
+
+	/* check detach operation */
+	if (exarg_is_defined ("detach")) {
+		ext_dnsd_detach_process ();
+		/* caller do not follow */
+	} /* end if */
+
+	/* place pid file */
+	ext_dnsd_place_pidfile ();
 
 	/* parse configuration file */
 	load_configuration_file ();
