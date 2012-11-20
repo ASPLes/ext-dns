@@ -1,0 +1,9 @@
+usr/bin/ext-dnsd
+etc/ext-dns/ext-dns.conf
+etc/init.d/ext-dnsd
+
+
+
+
+
+
