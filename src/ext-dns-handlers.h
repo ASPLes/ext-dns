@@ -382,13 +382,13 @@ typedef void (*extDnsListenerReadyFull)           (char  * host, int  port, extD
  * notify a DNS message received on the provided session. This handler
  * definition is also used by DNS cache validation.
  *
- * @param session The DNS session where the message was received.
+ * @param session The DNS session where the message was received. NOTE this parameter may be NULL in the case of a failure during the creation of the listener that will receive the reply (in case of queries).
  *
  * @param source_address The source address where the message comes from.
  *
  * @param source_port The source port where the message comes from.
  *
- * @param message The DNS message received. Note that you must not release this reference (by calling to \ref ext_dns_message_unref). This is done automatically by the library once the handler finishes. In the case you want to have a reference to the message after the handler finishes, then acquire them by calling to \ref ext_dns_message_ref. Note that every reference acquired must be released via \ref ext_dns_message_unref
+ * @param message The DNS message received. Note that you must not release this reference (by calling to \ref ext_dns_message_unref). This is done automatically by the library once the handler finishes. In the case you want to have a reference to the message after the handler finishes, then acquire them by calling to \ref ext_dns_message_ref. Note that every reference acquired must be released via \ref ext_dns_message_unref. NOTE that this parameter may be NULL in the case of a failure is found during the query process.
  *
  * @param data A user defined pointer that was configured along with
  * the handler.
