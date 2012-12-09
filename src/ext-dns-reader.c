@@ -125,6 +125,21 @@ axlPointer __ext_dns_reader_on_message_received (extDnsOnMessageReceivedData * d
 		_data       = ctx->on_message_data;
 	}
 
+#if ! defined (__EXT_DNS_DISABLE_DEBUG_CODE)
+	/* enable failure simulation, replies to this name will never
+	   reach triggering timeout. The following is forcing an error
+	   on purpose that is used by reg test 23 to ensure we detect,
+	   discard and notify timeouts */
+	if (! ext_dns_message_is_query (message) && 
+	    axl_cmp (message->questions[0].qname, "49fkfker3rfed-timeout.aspl.es")) {
+		/* release pending resources */
+		axl_free (source_address);
+		ext_dns_message_unref (message);
+
+		return NULL;
+	} /* end if */
+#endif
+
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Received DNS message on session id %d", session->id);
 
 	/* check expected header */
@@ -154,8 +169,14 @@ axlPointer __ext_dns_reader_on_message_received (extDnsOnMessageReceivedData * d
 	} /* end if */
 
 	/* close the listener if indicated so */
-	if (session->close_on_reply)  
+	if (session->close_on_reply) {
+		/* remove this session from the pending hash (if it is
+		   found) */
+		_ext_dns_session_remove_from_pending_hash (ctx, session);
+
+		/* close session */
 		ext_dns_session_close (session);
+	}
 
 	/* call to release message */
 	ext_dns_message_unref (message);
