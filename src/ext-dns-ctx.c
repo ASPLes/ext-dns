@@ -281,6 +281,10 @@ void        ext_dns_ctx_free2 (extDnsCtx * ctx, const char * who)
 	axl_hash_free (ctx->hostname_hash);
 	ext_dns_mutex_destroy (&ctx->hostname_mutex);
 
+	/* release pending hash */
+	axl_hash_cursor_free (ctx->pending_cursor);
+	axl_hash_free (ctx->pending_hash);
+
 	/* call to finish cache (if it was initialized) */
 	ext_dns_cache_finish (ctx);
 

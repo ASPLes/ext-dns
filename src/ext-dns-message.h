@@ -114,4 +114,8 @@ extDnsClass     ext_dns_message_get_qclass (extDnsCtx * ctx, const char * qclass
 
 const char *    ext_dns_message_get_qclass_to_str (extDnsCtx * ctx, extDnsClass class);
 
+
+/*** private api ***/
+void _ext_dns_message_notify_failure (extDnsCtx * ctx, extDnsSession * listener, const char * source_address, int source_port);
+
 #endif /* __EXT_DNS_MESSAGE_H__ */

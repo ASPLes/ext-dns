@@ -50,7 +50,7 @@
 
 /* call notify on the on received handler that a
    failure was found */
-void ext_dns_message_notify_failure (extDnsCtx * ctx, extDnsSession * listener, const char * source_address, int source_port)
+void _ext_dns_message_notify_failure (extDnsCtx * ctx, extDnsSession * listener, const char * source_address, int source_port)
 {
 	/* unable to notify nothing, without session, no handler to call to */
 	if (listener == NULL)
@@ -1496,7 +1496,7 @@ axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type
 	if (bytes_written <= 0) {
 		/* call notify on the on received handler that a
 		   failure was found */
-		ext_dns_message_notify_failure (ctx, NULL, NULL, 0);
+		_ext_dns_message_notify_failure (ctx, NULL, NULL, 0);
 
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "ERROR: failed to build query message, buffer reported was %d size\n", bytes_written);
 		return axl_false;
@@ -1508,7 +1508,7 @@ axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type
 
 		/* call notify on the on received handler that a
 		   failure was found */
-		ext_dns_message_notify_failure (ctx, NULL, NULL, 0);
+		_ext_dns_message_notify_failure (ctx, NULL, NULL, 0);
 
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "ERROR: failed to start listener to receive the reply");
 		return axl_false; 
@@ -1523,24 +1523,29 @@ axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type
 	/* set header to be used to check reply received */
 	listener->expected_header = header;
 
+	/* record here pending to close listener */
+	_ext_dns_session_record_pending_reply (ctx, listener);
+
 #if ! defined (__EXT_DNS_DISABLE_DEBUG_CODE)
 	/* enable failure simulation, every query to the following name will fail */
 	if (axl_cmp (name, "49fkfker3rfed.aspl.es")) 
 		sent_status = axl_false;
 	else
 #endif
-
 	/* send and grab sent status */
 	sent_status = ext_dns_session_send_udp_s (ctx, listener, buffer, bytes_written, server, 53) == bytes_written;
 
 	/* send message */
 	if (! sent_status) {
+		/* remove from tracking */
+		_ext_dns_session_remove_from_pending_hash (ctx, listener);
+
 		/* log error found */
 		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "ERROR: failed to send UDP message, written different number of bytes than expected. Replying to client with unknown code.");
 
 		/* call notify on the on received handler that a
 		   failure was found */
-		ext_dns_message_notify_failure (ctx, listener, NULL, 0);
+		_ext_dns_message_notify_failure (ctx, listener, NULL, 0);
 
 		ext_dns_session_close (listener);
 		return axl_false;

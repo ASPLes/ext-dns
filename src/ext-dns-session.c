@@ -2037,4 +2037,105 @@ void               __ext_dns_session_notify_bad_request (extDnsCtx      * ctx,
 	return;
 }
 
+axl_bool _ext_dns_session_track_pending_replies (extDnsCtx * ctx,
+						 axlPointer  user_data,
+						 axlPointer  user_data2)
+{
+	int             stamp;
+	extDnsSession * session;
+	int             session_stamp;
+
+	if (axl_hash_items (ctx->pending_hash) == 0)
+		return axl_false; /* nothing to check, don't stop checking */
+
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Tracking %d pending replies to see if they timed out", axl_hash_items (ctx->pending_hash));
+
+	/* get current stamp */
+	stamp = time (NULL);
+
+	/* lock mutex */
+	ext_dns_mutex_lock (&ctx->ref_mutex);
+	
+	/* init pending cursor if it wasn't */
+	if (! ctx->pending_cursor)
+		ctx->pending_cursor = axl_hash_cursor_new (ctx->pending_hash);
+
+	/* check all items current installed */
+	axl_hash_cursor_first (ctx->pending_cursor);
+	while (axl_hash_cursor_has_item (ctx->pending_cursor)) {
+
+		/* get session and stamp */
+		session       = axl_hash_cursor_get_key (ctx->pending_cursor);
+		session_stamp = PTR_TO_INT (axl_hash_cursor_get_value (ctx->pending_cursor));
+
+		if ((session_stamp + 3) < stamp) {
+			ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Found query session <%p> timed out after %d seconds, notifying failure", session, stamp - session_stamp);
+
+			/* close listener */
+			ext_dns_session_close (session);			
+
+			/* call notify on the on received handler that a
+			   failure was found */
+			_ext_dns_message_notify_failure (ctx, session, NULL, 0);
+
+			/* remove from pending hash */
+			axl_hash_cursor_remove (ctx->pending_cursor);
+			continue;
+		} /* end if */
+
+		/* next cursor */
+		axl_hash_cursor_next (ctx->pending_cursor);
+	}
+	
+
+	/* unlock */
+	ext_dns_mutex_unlock (&ctx->ref_mutex);
+
+	return axl_false; /* do not remove the event */
+}
+
+void _ext_dns_session_record_pending_reply (extDnsCtx * ctx, extDnsSession * session)
+{
+	/* lock mutex */
+	ext_dns_mutex_lock (&ctx->ref_mutex);
+
+	/* init pending hash (it if wasn't) */
+	if (ctx->pending_hash == NULL) {
+		/* init hash */
+		ctx->pending_hash = axl_hash_new (axl_hash_int, axl_hash_equal_int);
+
+		/* init tracking event */
+		ext_dns_thread_pool_new_event (ctx, 1000000, _ext_dns_session_track_pending_replies, NULL, NULL);
+	}
+
+	/* insert into the hash current stamp and the session */
+	axl_hash_insert (ctx->pending_hash, session, INT_TO_PTR (time (NULL)));
+
+	/* unlock */
+	ext_dns_mutex_unlock (&ctx->ref_mutex);
+	
+	return;
+}
+
+/** 
+ * @internal Function used to check if a session is in the waiting
+ * reply hash to remove it.
+ */
+void _ext_dns_session_remove_from_pending_hash (extDnsCtx * ctx, extDnsSession * session)
+{
+	if (ctx == NULL || session == NULL)
+		return;
+
+	/* lock mutex */
+	ext_dns_mutex_lock (&ctx->ref_mutex);
+
+	/* remove */
+	axl_hash_remove (ctx->pending_hash, session);
+
+	/* unlock */
+	ext_dns_mutex_unlock (&ctx->ref_mutex);
+
+	return;
+}
+
 /* @} */

@@ -150,6 +150,10 @@ struct _extDnsCtx {
 	extDnsMutex          cache_mutex;
 	int                  max_cache_size;
 	axlHashCursor      * cache_cursor;
+
+	/*** track of pending replies ***/
+	axlHash            * pending_hash;
+	axlHashCursor      * pending_cursor;
 };
 
 struct _extDnsSession {

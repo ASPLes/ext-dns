@@ -173,4 +173,8 @@ void               __ext_dns_session_notify_bad_request (extDnsCtx      * ctx,
 							 const char     * reason,
 							 ...);
 
+void _ext_dns_session_record_pending_reply (extDnsCtx * ctx, extDnsSession * session);
+
+void _ext_dns_session_remove_from_pending_hash (extDnsCtx * ctx, extDnsSession * session);
+
 #endif /* __EXT_DNS_SESSION_H__ */

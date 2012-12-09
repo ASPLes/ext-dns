@@ -2,6 +2,10 @@ EXPORTS
 _ext_dns_log
 _ext_dns_log2
 _ext_dns_log_common
+_ext_dns_message_notify_failure
+_ext_dns_session_record_pending_reply
+_ext_dns_session_remove_from_pending_hash
+_ext_dns_session_track_pending_replies
 ext_dns_async_queue_foreach
 ext_dns_async_queue_items
 ext_dns_async_queue_length
