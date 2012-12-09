@@ -1802,6 +1802,46 @@ axl_bool test_21 (void) {
 	return axl_true; /* return ok */
 }
 
+axl_bool test_22 (void) {
+	extDnsCtx        * ctx;
+	extDnsMessage    * message;
+	extDnsAsyncQueue * queue;
+
+	/* create context object */
+	ctx = ext_dns_ctx_new ();
+	if (ctx == NULL) {
+		printf ("ERROR: failed to allocate ctx object..\n");
+		return axl_false;
+	}
+
+	/* init context */
+	if (! ext_dns_init_ctx (ctx)) {
+		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
+		return axl_false;
+	}
+
+	/* run query and check results */
+	queue = ext_dns_async_queue_new ();
+	ext_dns_message_query (ctx, "a", "in", "49fkfker3rfed.aspl.es", dns_server, dns_server_port, queue_reply, queue);
+
+	/* get reply (timeout in 3seconds) */
+	message = ext_dns_async_queue_timedpop (queue, 3000000);
+	if (message != NULL) {
+		printf ("ERROR: expected to find NULL message reply but found reference defined..\n");
+		return axl_false;
+	}
+
+
+	/* release queue */
+	ext_dns_async_queue_unref (queue);
+
+	/* terminate process */
+	ext_dns_exit_ctx (ctx, axl_true);
+	
+
+	return axl_true;
+}
+
 
 typedef axl_bool  (*extDnsRegressionTest) (void);
 
@@ -1980,6 +2020,9 @@ int main (int argc, char ** argv) {
 		if (check_and_run_test (run_test_name, "test_21"))
 			run_test (test_21, "Test 21", "testing cache (objects with the name name, different type)..", -1, -1);
 
+		if (check_and_run_test (run_test_name, "test_22"))
+			run_test (test_22, "Test 22", "testing requests that fails", -1, -1);
+
 		goto finish;
 	}
 
@@ -2029,6 +2072,8 @@ int main (int argc, char ** argv) {
 	run_test (test_20, "Test 20", "testing malformed messages (2)..", -1, -1);
 
 	run_test (test_21, "Test 21", "testing cache (objects with the name name, different type)..", -1, -1);
+
+	run_test (test_22, "Test 22", "testing requests that fails", -1, -1);
 	
 	/* test sending q query where the replies should have several
 	   but only were found a few */

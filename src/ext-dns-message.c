@@ -47,6 +47,23 @@
  * @{
  */
 
+
+/* call notify on the on received handler that a
+   failure was found */
+void ext_dns_message_notify_failure (extDnsCtx * ctx, extDnsSession * listener, const char * source_address, int source_port)
+{
+	/* unable to notify nothing, without session, no handler to call to */
+	if (listener == NULL)
+		return;
+
+	if (! listener->on_message)
+		return;
+
+	/* call to notify on message */
+	listener->on_message (ctx, listener, source_address, source_port, NULL, listener->on_message_data);
+	return;
+}
+
 /** 
  * @internal Nice random generation code taken from:
  * http://stackoverflow.com/questions/1640258/need-a-fast-random-generator-for-c
@@ -1467,6 +1484,7 @@ axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type
 	extDnsSession      * listener;
 	int                  bytes_written;
 	extDnsHeader       * header;
+	axl_bool             sent_status;
 
 	if (_type == -1) 
 		return axl_false;
@@ -1476,6 +1494,10 @@ axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type
 	/* build the query */
 	bytes_written = ext_dns_message_build_query (ctx, name, _type, _class, buffer, &header);
 	if (bytes_written <= 0) {
+		/* call notify on the on received handler that a
+		   failure was found */
+		ext_dns_message_notify_failure (ctx, NULL, NULL, 0);
+
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "ERROR: failed to build query message, buffer reported was %d size\n", bytes_written);
 		return axl_false;
 	} /* end if */
@@ -1483,6 +1505,11 @@ axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type
 	/* create listener */
 	listener = ext_dns_listener_new2 (ctx, "0.0.0.0", 0, extDnsUdpSession, NULL, NULL);
 	if (! ext_dns_session_is_ok (listener, axl_false)) {
+
+		/* call notify on the on received handler that a
+		   failure was found */
+		ext_dns_message_notify_failure (ctx, NULL, NULL, 0);
+
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "ERROR: failed to start listener to receive the reply");
 		return axl_false; 
 	}
@@ -1496,10 +1523,26 @@ axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type
 	/* set header to be used to check reply received */
 	listener->expected_header = header;
 
+#if ! defined (__EXT_DNS_DISABLE_DEBUG_CODE)
+	/* enable failure simulation, every query to the following name will fail */
+	if (axl_cmp (name, "49fkfker3rfed.aspl.es")) 
+		sent_status = axl_false;
+	else
+#endif
+
+	/* send and grab sent status */
+	sent_status = ext_dns_session_send_udp_s (ctx, listener, buffer, bytes_written, server, 53) == bytes_written;
+
 	/* send message */
-	if (ext_dns_session_send_udp_s (ctx, listener, buffer, bytes_written, server, 53) != bytes_written) {
+	if (! sent_status) {
+		/* log error found */
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "ERROR: failed to send UDP message, written different number of bytes than expected. Replying to client with unknown code.");
+
+		/* call notify on the on received handler that a
+		   failure was found */
+		ext_dns_message_notify_failure (ctx, listener, NULL, 0);
+
 		ext_dns_session_close (listener);
-		ext_dns_log (EXT_DNS_LEVEL_WARNING, "ERROR: failed to message..");
 		return axl_false;
 	} /* end if */
 
@@ -1617,10 +1660,17 @@ typedef struct _extDnsHandleReplyData {
 	char          * source_address;
 	int             source_port;
 	extDnsSession * master_listener;
+
+	/* origianl query question */
+	extDnsMessage * message;
 } extDnsHandleReplyData;
 
 void ext_dns_message_handle_reply_data_free (extDnsHandleReplyData * data)
 {
+	/* release query question */
+	if (data->message)
+		ext_dns_message_unref (data->message);
+
 	axl_free (data->source_address);
 	axl_free (data);
 	return;
@@ -1636,13 +1686,30 @@ void ext_dns_message_handle_reply (extDnsCtx     * ctx,
 	char                    buffer[512];
 	int                     bytes_written;
 	extDnsHandleReplyData * reply_data = data;
+	axl_bool                should_release_message = axl_false;
+
+	/* check if message or session are null */
+	if (message == NULL) {
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Received NULL reference for message. See previous error. Replying unknown error");
+
+		/* build unknown server reply */
+		message = ext_dns_message_build_unknown_reply (ctx, reply_data->message);
+
+		/* set we have to release this reference before finish */
+		should_release_message = axl_true;
+	} /* end if */
 
 	/* ok, rewrite reply id to match the one sent by the client */
 	message->header->id = reply_data->id;
 
 	/* get the reply into a buffer */
 	bytes_written = ext_dns_message_to_buffer (ctx, message, buffer, 512);
+
 	if (bytes_written == -1) {
+		/* release message before continue */
+		if (should_release_message)
+			ext_dns_message_unref (message);
+
 		ext_dns_message_handle_reply_data_free (reply_data);
 
 		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "ERROR: failed to build buffer representation for reply received..");
@@ -1659,6 +1726,11 @@ void ext_dns_message_handle_reply (extDnsCtx     * ctx,
 
 	/* release data */
 	ext_dns_message_handle_reply_data_free (reply_data);
+
+	/* release message before continue */
+	if (should_release_message)
+		ext_dns_message_unref (message);
+
 	return;
 }
 
@@ -1712,7 +1784,11 @@ void ext_dns_message_handle_reply (extDnsCtx     * ctx,
  * 
  * @param cache_reply If it is required to cache the reply received.
  *
- * @return The function returns axl_true in the case the request was sent. Otherwise axl_false is returned. The function will also return axl_false in the case message, server, reply_to_address or reply_from is NULL.
+ * @return The function returns axl_true in the case the request was
+ * sent. Otherwise axl_false is returned. The function will also
+ * return axl_false in the case message, server, reply_to_address or
+ * reply_from is NULL.
+ *
  */
 axl_bool        ext_dns_message_query_and_forward_from_msg (extDnsCtx * ctx, extDnsMessage * message,
 							    const char * server, int server_port,
@@ -1725,12 +1801,23 @@ axl_bool        ext_dns_message_query_and_forward_from_msg (extDnsCtx * ctx, ext
 	if (message == NULL || server == NULL || reply_to_address == NULL || reply_from == NULL)
 		return axl_false;
 
+	/* acquire reference before continue */
+	if (! ext_dns_message_ref (message))
+		return axl_false;
+
 	/* build state data */
 	data                   = axl_new (extDnsHandleReplyData, 1);
+	if (data == NULL) {
+		ext_dns_message_unref (message);
+		return axl_false;
+	} /* end if */
+
 	data->id               = message->header->id;
 	data->source_address   = axl_strdup (reply_to_address);
 	data->source_port      = reply_to_port;
 	data->master_listener  = reply_from;
+	/* set message reference */
+	data->message          = message;
 	
 	/* send query */
 	return ext_dns_message_query_from_msg (ctx, message, server, server_port, ext_dns_message_handle_reply, data);
@@ -2062,6 +2149,10 @@ int             ext_dns_message_build_query (extDnsCtx * ctx, const char * qname
 	/* set header to the caller if defined */
 	if (header)
 		*header = _header;
+	else {
+		/* release the header in the case the caller doesn't want it */
+		axl_free (_header);
+	}
 
 	return position;
 }
