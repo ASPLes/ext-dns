@@ -69,7 +69,7 @@ void _ext_dns_message_notify_failure (extDnsCtx * ctx, extDnsSession * listener,
 	handler = _ext_dns_message_get_on_received (ctx, listener);
 	if (handler == NULL)
 	        return;
-	
+
 	/* call to notify on message */
 	handler (ctx, listener, source_address, source_port, NULL, listener->on_message_data);
 	return;
@@ -1505,10 +1505,6 @@ axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type
 	/* build the query */
 	bytes_written = ext_dns_message_build_query (ctx, name, _type, _class, buffer, &header);
 	if (bytes_written <= 0) {
-		/* call notify on the on received handler that a
-		   failure was found */
-		_ext_dns_message_notify_failure (ctx, NULL, NULL, 0);
-
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "ERROR: failed to build query message, buffer reported was %d size\n", bytes_written);
 		return axl_false;
 	} /* end if */
@@ -1516,11 +1512,6 @@ axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type
 	/* create listener */
 	listener = ext_dns_listener_new2 (ctx, "0.0.0.0", 0, extDnsUdpSession, NULL, NULL);
 	if (! ext_dns_session_is_ok (listener, axl_false)) {
-
-		/* call notify on the on received handler that a
-		   failure was found */
-		_ext_dns_message_notify_failure (ctx, NULL, NULL, 0);
-
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "ERROR: failed to start listener to receive the reply");
 		return axl_false; 
 	}
@@ -1554,14 +1545,9 @@ axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type
 		/* log error found */
 		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "ERROR: failed to send UDP message, written different number of bytes than expected. Replying to client with unknown code.");
 
-		/* call notify on the on received handler that a
-		   failure was found */
-		_ext_dns_message_notify_failure (ctx, listener, NULL, 0);
-
 		ext_dns_session_close (listener);
 		return axl_false;
 	} /* end if */
-
 
 	/* message sent */
 	return axl_true;
@@ -1836,7 +1822,12 @@ axl_bool        ext_dns_message_query_and_forward_from_msg (extDnsCtx * ctx, ext
 	data->message          = message;
 	
 	/* send query */
-	return ext_dns_message_query_from_msg (ctx, message, server, server_port, ext_dns_message_handle_reply, data);
+	if (! ext_dns_message_query_from_msg (ctx, message, server, server_port, ext_dns_message_handle_reply, data)) {
+		/* message not sent, release */
+		ext_dns_message_handle_reply_data_free (data);
+	} /* end if */
+
+	return axl_true;
 }
 
 /** 

@@ -137,6 +137,12 @@ axlPointer __ext_dns_reader_on_message_received (extDnsOnMessageReceivedData * d
 		ext_dns_message_unref (message);
 		ext_dns_session_unref (session, "on received");
 
+		/* restore handler because valgrind will detect this
+		   leak. This is not required in fact because reaching
+		   this point will make function to be invoked, and
+		   hence all memory resources released */
+		session->on_message = on_received;
+
 		return NULL;
 	} /* end if */
 #endif
