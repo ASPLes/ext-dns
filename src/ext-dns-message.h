@@ -118,4 +118,6 @@ const char *    ext_dns_message_get_qclass_to_str (extDnsCtx * ctx, extDnsClass 
 /*** private api ***/
 void _ext_dns_message_notify_failure (extDnsCtx * ctx, extDnsSession * listener, const char * source_address, int source_port);
 
+extDnsOnMessageReceived _ext_dns_message_get_on_received (extDnsCtx * ctx, extDnsSession * listener);
+
 #endif /* __EXT_DNS_MESSAGE_H__ */

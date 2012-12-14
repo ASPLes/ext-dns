@@ -117,7 +117,7 @@ axlPointer __ext_dns_reader_on_message_received (extDnsOnMessageReceivedData * d
 	axl_free (data);
 
 	/* call handler defined on session */
-	on_received = session->on_message;
+	on_received = _ext_dns_message_get_on_received (ctx, session);
 	_data       = session->on_message_data;
 
 	if (on_received == NULL) {
@@ -135,6 +135,7 @@ axlPointer __ext_dns_reader_on_message_received (extDnsOnMessageReceivedData * d
 		/* release pending resources */
 		axl_free (source_address);
 		ext_dns_message_unref (message);
+		ext_dns_session_unref (session, "on received");
 
 		return NULL;
 	} /* end if */
@@ -180,6 +181,7 @@ axlPointer __ext_dns_reader_on_message_received (extDnsOnMessageReceivedData * d
 
 	/* call to release message */
 	ext_dns_message_unref (message);
+	ext_dns_session_unref (session, "on received");
 	return NULL;
 }
 
@@ -418,6 +420,17 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 	data->source_port    = source_port;
 	data->source_address = source_address;
 
+	/* acquire here a reference to the session to avoid loosing it
+	   in the middle */
+	if (! ext_dns_session_ref (session, "on received")) {
+	        /* release the message */
+		ext_dns_message_unref (message);
+		axl_free (data);
+
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to acquire reference to the extDnsSession");
+		return;
+	} /* end if */
+	
 	/* call to invoke dns on message */
 	ext_dns_thread_pool_new_task (ctx, (extDnsThreadFunc) __ext_dns_reader_on_message_received, data);
 
@@ -705,6 +718,9 @@ EXT_DNS_SOCKET __ext_dns_reader_build_set_to_watch_aux (extDnsCtx     * ctx,
 			 * finishing the reference the reader owns */
 			axl_list_cursor_unlink (cursor);
 
+			/* notify failure and unref */
+			_ext_dns_message_notify_failure (ctx, session, NULL, 0);
+
 			/* session isn't ok, unref it */
 			ext_dns_session_unref (session, "ext_dns reader (build set)");
 
@@ -727,6 +743,9 @@ EXT_DNS_SOCKET __ext_dns_reader_build_set_to_watch_aux (extDnsCtx     * ctx,
 			 * session is out of our handling before
 			 * finishing the reference the reader owns */
 			axl_list_cursor_unlink (cursor);
+
+			/* notify failure and unref */
+			_ext_dns_message_notify_failure (ctx, session, NULL, 0);
 
 			/* set it as not connected */
 			if (ext_dns_session_is_ok (session, axl_false))

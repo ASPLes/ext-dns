@@ -52,6 +52,8 @@
    failure was found */
 void _ext_dns_message_notify_failure (extDnsCtx * ctx, extDnsSession * listener, const char * source_address, int source_port)
 {
+        extDnsOnMessageReceived handler;
+
 	/* unable to notify nothing, without session, no handler to call to */
 	if (listener == NULL)
 		return;
@@ -59,8 +61,17 @@ void _ext_dns_message_notify_failure (extDnsCtx * ctx, extDnsSession * listener,
 	if (! listener->on_message)
 		return;
 
+	if (! listener->notify_failure)
+	        return;
+	listener->notify_failure = axl_true;
+
+	/* get handler */
+	handler = _ext_dns_message_get_on_received (ctx, listener);
+	if (handler == NULL)
+	        return;
+	
 	/* call to notify on message */
-	listener->on_message (ctx, listener, source_address, source_port, NULL, listener->on_message_data);
+	handler (ctx, listener, source_address, source_port, NULL, listener->on_message_data);
 	return;
 }
 
@@ -2347,6 +2358,36 @@ const char *     ext_dns_message_get_qclass_to_str (extDnsCtx * ctx, extDnsClass
 	/* unrecognized class */
 	ext_dns_log (EXT_DNS_LEVEL_WARNING, "Unsupported class received: %d", class);
 	return "UNKNOWN";
+}
+
+/** 
+ * @internal Get the on received handler associated in the provided
+ * listener in a thread safe manner.
+ */
+extDnsOnMessageReceived _ext_dns_message_get_on_received (extDnsCtx * ctx, extDnsSession * listener)
+{
+        axlPointer ptr;
+
+        if (ctx == NULL || listener == NULL || listener->on_message)
+	       return NULL;
+	
+	/* acquire mutex */
+	ext_dns_mutex_lock (&listener->ref_mutex);
+
+	/* get reference */
+	ptr = listener->on_message;
+
+	/* nufilly on received message if this is a listener to receive replies */
+	if (listener->close_on_reply) {
+	        listener->on_message = NULL;
+		listener->on_message_data = NULL;
+	}
+
+	/* unlock mutex */
+	ext_dns_mutex_unlock (&listener->ref_mutex);
+
+	/* return pointer */
+	return ptr;
 }
 
 /* @} */
