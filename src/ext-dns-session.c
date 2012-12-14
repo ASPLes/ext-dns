@@ -916,7 +916,7 @@ void               ext_dns_session_unref                  (extDnsSession * sessi
 		ext_dns_getpid (),
 		session->id, session,
 		session->ref_count, who ? who : "??");  
-		
+
 	/* get current count */
 	count = session->ref_count;
 	ext_dns_mutex_unlock (&(session->ref_mutex));
@@ -2074,9 +2074,8 @@ axl_bool _ext_dns_session_track_pending_replies (extDnsCtx * ctx,
 			/* close listener */
 			ext_dns_session_close (session);			
 
-			/* call notify on the on received handler that a
-			   failure was found */
-			_ext_dns_message_notify_failure (ctx, session, NULL, 0);
+			/* flag this function to notify failure by reader when it reaches it */
+			session->notify_failure = axl_true;
 
 			/* remove from pending hash */
 			axl_hash_cursor_remove (ctx->pending_cursor);

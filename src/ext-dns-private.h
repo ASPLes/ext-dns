@@ -222,6 +222,9 @@ struct _extDnsSession {
 	 * received: usually a listener created just to receive a DNS
 	 * reply ***/
 	axl_bool   close_on_reply;
+        /* flag to control if a failure notification shouldn't be done
+	   before releasing the connection */
+        axl_bool   notify_failure;
 
 	/*** handler for bad request received  ***/
 	extDnsOnBadRequest       on_bad_request;
