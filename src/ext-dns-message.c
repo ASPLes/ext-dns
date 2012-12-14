@@ -1822,7 +1822,7 @@ axl_bool        ext_dns_message_query_and_forward_from_msg (extDnsCtx * ctx, ext
 		return axl_false;
 
 	/* build state data */
-	data                   = axl_new (extDnsHandleReplyData, 1);
+	data = axl_new (extDnsHandleReplyData, 1);
 	if (data == NULL) {
 		ext_dns_message_unref (message);
 		return axl_false;
@@ -2368,7 +2368,7 @@ extDnsOnMessageReceived _ext_dns_message_get_on_received (extDnsCtx * ctx, extDn
 {
         axlPointer ptr;
 
-        if (ctx == NULL || listener == NULL || listener->on_message)
+        if (ctx == NULL || listener == NULL || listener->on_message == NULL)
 	       return NULL;
 	
 	/* acquire mutex */
@@ -2380,8 +2380,7 @@ extDnsOnMessageReceived _ext_dns_message_get_on_received (extDnsCtx * ctx, extDn
 	/* nufilly on received message if this is a listener to receive replies */
 	if (listener->close_on_reply) {
 	        listener->on_message = NULL;
-		listener->on_message_data = NULL;
-	}
+	} /* end if */
 
 	/* unlock mutex */
 	ext_dns_mutex_unlock (&listener->ref_mutex);
