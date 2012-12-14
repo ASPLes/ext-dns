@@ -123,7 +123,7 @@ axlPointer __ext_dns_reader_on_message_received (extDnsOnMessageReceivedData * d
 	if (on_received == NULL) {
 		on_received = ctx->on_message;
 		_data       = ctx->on_message_data;
-	}
+	} /* end if */
 
 #if ! defined (__EXT_DNS_DISABLE_DEBUG_CODE)
 	/* enable failure simulation, replies to this name will never

@@ -2,6 +2,7 @@ EXPORTS
 _ext_dns_log
 _ext_dns_log2
 _ext_dns_log_common
+_ext_dns_message_get_on_received
 _ext_dns_message_notify_failure
 _ext_dns_session_record_pending_reply
 _ext_dns_session_remove_from_pending_hash
