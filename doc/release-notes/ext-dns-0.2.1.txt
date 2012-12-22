@@ -1,4 +1,4 @@
-                      ext-Dns toolkit           
+                --== ext-Dns toolkit ==--
                   Call it what you want         
                           0.2.1               
 
