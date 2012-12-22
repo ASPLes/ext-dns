@@ -815,6 +815,12 @@ void start_listeners (void)
 		} /* end if */
 
 		axl_free (listen_declaration);
+
+		/* check listener values */
+		if (axl_cmp (values[0], "0.0.0.0")) {
+			printf ("ERROR: you can't setup that listening address '%s' because will give you problems. Please, especify the particular address(es) that ext-dnsd is going to use\n", values[0]);
+			exit (-1);
+		} /* end if */
 		
 		/* init a listener */
 		listener = ext_dns_listener_new (ctx, values[0], values[1], extDnsUdpSession, NULL, NULL);
