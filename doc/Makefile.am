@@ -1,6 +1,6 @@
 EXTRA_DIST = ext-dns.doxygen \
-	     ext-dns-doc-footer.html \
-	     ext-dns-doc-header.html \
+	     ext-dns-footer.html \
+	     ext-dns-header.html \
 	     main-page-logo.png \
 	     ext-dns.css \
 	     body_back.gif \

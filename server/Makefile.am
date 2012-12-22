@@ -4,7 +4,7 @@ endif
 
 etcdir = $(sysconfdir)/ext-dnsd/
 etc_DATA = ext-dns.example.conf
-EXTRA_DIST = $(etc_DATA)
+EXTRA_DIST = $(etc_DATA) child-resolver-skel.py
 
 bin_PROGRAMS = ext-dnsd
 

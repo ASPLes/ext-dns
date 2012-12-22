@@ -45,6 +45,7 @@ libext_dns_la_SOURCES =	\
 
 libext_dns_include_HEADERS = \
 	ext-dns.h \
+	ext-dns-handlers.h \
 	ext-dns-types.h \
 	ext-dns-private.h \
 	ext-dns-ctx.h \
