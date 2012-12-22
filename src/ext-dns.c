@@ -1582,7 +1582,7 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
  *
  * \snippet ext-dns-simple-listener.c Wait and finish
  *
- * \section ext_dns_listener_on_received_example An example of a \ref extDnsOnMessageReceived handler
+ * \section ext_dns_listener_on_received_example An example of a extDnsOnMessageReceived handler
  *
  * Now, for the on received handler, you must configure a handler that
  * has the following signature. Look also at the example to see how
