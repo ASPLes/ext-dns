@@ -1342,6 +1342,11 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
  * - \ref ext_dns_library_manual
  * - \ref ext_dns_library_full_api
  *
+ * Additional documenantation and tutorials:
+ *
+ * - \ref ext_dns_why_write_it
+ *  
+ *
  * \section commercial_support Commercial support and license
  *
  * ext-Dns and all its components are released under the LGPL2.1
@@ -1614,5 +1619,39 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
  * - \ref ext_dns_reader
  * - \ref ext_dns_thread
  * - \ref ext_dns_thread_pool
+ *
+ */
+
+/** 
+ * \page ext_dns_why_write_it Why did you write ext-Dns framework, especially having powerDns's pipe backend?
+ *
+ * That's a good question because it goes to the point about why we have written this software.
+ *
+ * Currently, powerDns's pipe backend is more designed as a
+ * "connection" to a program that could allow getting resolution
+ * information, than a way to connect to a program that implements
+ * resolution policy.
+ *
+ * This means that powerDns design is more focused to allow resolving
+ * certain zones for a particular domain, and in that context, pipe
+ * backend may allow accessing to that information.
+ *
+ * However, ext-Dns server is more designed not only with that target,
+ * but to allow the posibility to ask the server to "forward" the
+ * request because "you don't oppose to that resolution" (see \ref intro_ext_dnsd for more details about this).
+ *
+ * This way ext-Dns becomes more a policy-caching-forward DNS server
+ * than a zone domain server like powerDns does.
+ *
+ * Knowing this, we wrote ext-Dns becase we wanted to have a DNS
+ * server that could allow an organization to control what is resolved
+ * and how, letting accepted requests to continue its normal DNS
+ * resolution path.
+ *
+ * That is, DNS servers like powerDns, no matter what backend they
+ * use, hold only domain zone information, whereas ext-Dns holds
+ * domain zone information plus policy resolution (and more, like for
+ * example, running commands on query received..).
+ *
  *
  */
