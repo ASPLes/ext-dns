@@ -1723,7 +1723,7 @@ void ext_dns_message_handle_reply (extDnsCtx     * ctx,
 		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "ERROR: failed to SEND UDP entire reply, expected to write %d bytes but something different was written", bytes_written);
 	else {
 		/* store reply in the cache */
-		ext_dns_cache_store (ctx, message, source_address);
+		ext_dns_cache_store (ctx, message, reply_data->source_address);
 	} /* end if */
 
 	/* release data */

@@ -1563,7 +1563,6 @@ axlPointer __ext_dns_listener_new (extDnsListenerData * data)
 	axl_bool             threaded      = data->threaded;
 	char               * str_port      = axl_strdup_printf ("%d", data->port);
 	axlPointer           user_data     = data->user_data;
-	const char         * message       = NULL;
 	extDnsSession      * listener      = NULL;
 	extDnsCtx          * ctx           = data->ctx;
 	extDnsStatus         status        = extDnsOk;
@@ -1637,12 +1636,12 @@ axlPointer __ext_dns_listener_new (extDnsListenerData * data)
 	if (threaded) {
 		/* notify error found to handlers */
 		if (on_ready != NULL) 
-			on_ready      (NULL, 0, status, (char*) message, user_data);
+			on_ready      (NULL, 0, status, NULL, user_data);
 		if (on_ready_full != NULL) 
-			on_ready_full (NULL, 0, status, (char*) message, NULL, user_data);
+			on_ready_full (NULL, 0, status, NULL, NULL, user_data);
 	} else {
-		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "unable to start ext_dns server, error was: %s, unblocking ext_dns_listener_wait",
-		       message);
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "unable to start ext_dns server, unblocking ext_dns_listener_wait");
+
 		/* notify the listener that an error was found
 		 * (because the server didn't suply a handler) */
 		ext_dns_mutex_lock (&ctx->listener_unlock);

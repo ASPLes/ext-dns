@@ -14,7 +14,7 @@ INCLUDES = -I$(top_srcdir)/src  $(AXL_CFLAGS)  $(PTHREAD_CFLAGS) $(EXARG_FLAGS) 
 
 LIBS            = $(AXL_LIBS) $(PTHREAD_LIBS) $(ADDITIONAL_LIBS)
 
-ext_dnsd_SOURCES        = main.c exarg.c exarg.h
+ext_dnsd_SOURCES        = main.c exarg.c exarg.h ext-dnsd.h
 ext_dnsd_LDADD          = $(LIBS) $(top_builddir)/src/libext-dns.la 
 
 # copy exarg dependency to not force people to download a library with

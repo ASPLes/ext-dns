@@ -1,5 +1,5 @@
 /* 
- *  ext-dns: a framework to build DNS solutions
+ *  ext-dnsd: another, but configurable, DNS server
  *  Copyright (C) 2012 Advanced Software Production Line, S.L.
  *
  *  This program is free software; you can redistribute it and/or
@@ -35,21 +35,61 @@
  *      Email address:
  *         info@aspl.es - http://www.aspl.es/ext-dns
  */
-#ifndef __EXT_DNS_CACHE_H__
-#define __EXT_DNS_CACHE_H__
+
+#ifndef __EXT_DNSD_H__
+#define __EXT_DNSD_H__
+
+/* import gnu source declarations */
+#define _GNU_SOURCE
 
 #include <ext-dns.h>
 
-void            ext_dns_cache_init (extDnsCtx * ctx, int max_cache_size);
+#include <syslog.h>
 
-extDnsMessage * ext_dns_cache_get (extDnsCtx * ctx, extDnsClass qclass, extDnsType qtype, const char * query, const char * source_address);
+#ifdef AXL_OS_UNIX
+#include <signal.h>
+#endif
 
-extDnsMessage * ext_dns_cache_get_by_query (extDnsCtx * ctx, extDnsMessage * msg, const char * source_address);
+#include <axl.h>
+#include <exarg.h>
+#include <sys/wait.h>
 
-axl_bool        ext_dns_cache_store (extDnsCtx * ctx, extDnsMessage * msg, const char * source_address);
+typedef struct _childState {
+	/* read fds[0], write fds[1] */
+	int fds[2];
 
-void            ext_dns_cache_stats (extDnsCtx * ctx, extDnsCacheStats * stats);
+	/* current child state */
+	axl_bool       ready;
+	extDnsMutex    mutex;
 
-void            ext_dns_cache_finish (extDnsCtx * ctx);
+	/* last command sent */
+	char         * last_command;
 
-#endif /* endif */
+	int            pid;
+	/* when was acquired this child */
+	int            stamp;
+} childState;
+
+/** common functions **/
+void ext_dnsd_forward_request (extDnsCtx     * ctx, 
+			       extDnsMessage * message, 
+			       extDnsSession * session,
+			       const char    * source_address,
+			       int             source_port,
+			       axl_bool        nocache);
+
+void ext_dnsd_handle_child_cmd (extDnsCtx     * ctx, 
+				extDnsMessage * message, 
+				extDnsSession * session, 
+				childState    * child, 
+				const char    * source_address,
+				int             source_port,
+				const char    * command);
+
+void ext_dnsd_send_request_reply (extDnsCtx     * ctx, 
+				  extDnsSession * session, 
+				  const char    * source_address, 
+				  int             source_port, 
+				  extDnsMessage * reply,
+				  axl_bool        nocache);
+#endif

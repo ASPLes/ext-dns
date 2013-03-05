@@ -148,7 +148,9 @@ struct _extDnsCtx {
 	/*** cache support ***/
 	axlHash            * cache;
 	extDnsMutex          cache_mutex;
-	int                  max_cache_size;
+	long int             max_cache_size;
+	long int             cache_access;
+	long int             cache_hits;
 	axlHashCursor      * cache_cursor;
 
 	/*** track of pending replies ***/
