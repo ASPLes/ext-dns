@@ -199,12 +199,15 @@ extDnsMessage * ext_dns_cache_get (extDnsCtx * ctx, extDnsClass qclass, extDnsTy
 	else
 		key = axl_strdup_printf ("%s%d%d", query, qtype, qclass);
 	if (key == NULL) {
-		ext_dns_mutex_unlock (&ctx->cache_mutex);
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "Unable to store item, printf_buffer failed to build key");
 		return NULL;;
 	} /* end if */
 
 	ext_dns_mutex_lock (&ctx->cache_mutex);
+	/* increase cache access */
+	ctx->cache_access++;
+
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "CACHE-GET: attempting with key=%s", key);
 	msg = axl_hash_get (ctx->cache, key);
 	if (msg == NULL) {
 		axl_free (key);
@@ -229,6 +232,9 @@ extDnsMessage * ext_dns_cache_get (extDnsCtx * ctx, extDnsClass qclass, extDnsTy
 		/* failed to acquire reference */
 		msg = NULL;
 	}
+
+	/* increase cache access */
+	ctx->cache_hits++;
 
 	/* no message found at this moment */
 	ext_dns_mutex_unlock (&ctx->cache_mutex);
@@ -352,10 +358,41 @@ axl_bool            ext_dns_cache_store (extDnsCtx * ctx, extDnsMessage * msg, c
 
 	/* store, unlock and return */
 	axl_hash_insert_full (ctx->cache, key, axl_free, msg, (axlDestroyFunc) ext_dns_message_unref);
-	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "CACHE-STORE: handling now %d items", axl_hash_items (ctx->cache));
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "CACHE-STORE: handling now %d items, key=%s", axl_hash_items (ctx->cache), key);
 	ext_dns_mutex_unlock (&ctx->cache_mutex);
 
 	return axl_true;
+}
+
+/** 
+ * @brief Allows to get cache stats on the provided context.
+ *
+ * @param ctx The context where the operation will take place.
+ *
+ * @param stats Caller allocated object where the stats will be
+ * stored.
+ *
+ * Note the function returns without updating anything in the case a
+ * reference to a NULL ctx or stats is received.
+ */ 
+void            ext_dns_cache_stats (extDnsCtx * ctx, extDnsCacheStats * stats)
+{
+	if (ctx == NULL || stats == NULL)
+		return;
+
+	/* lock */
+	ext_dns_mutex_lock (&ctx->cache_mutex);
+	/* report cache status */
+	stats->cache_items   = axl_hash_items (ctx->cache);
+	stats->cache_size    = ctx->max_cache_size;
+	stats->cache_hits    = ctx->cache_hits;
+	stats->cache_access  = ctx->cache_access;
+
+	/* unlock */
+	ext_dns_mutex_unlock (&ctx->cache_mutex);
+	
+
+	return;
 }
 
 /** 

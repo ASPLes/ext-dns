@@ -801,6 +801,31 @@ struct _extDnsMessage {
  */
 typedef struct _extDnsMessage extDnsMessage;
 
+/** 
+ * @brief Object used by \ref ext_dns_cache_stats to report current
+ * cache stats on a particular context.
+ */
+typedef struct _extDnsCacheStats {
+	/** 
+	 * @brief Current caché size
+	 */
+	int cache_size;
+	/** 
+	 * @brief Number of items stored in the cache
+	 */
+	int cache_items;
+	
+	/** 
+	 * @brief Current cache hits
+	 */
+	int cache_hits;
+
+	/** 
+	 * @brief Current cache total access so far.
+	 */
+	int cache_access;
+} extDnsCacheStats;
+
 #endif /* __EXT_DNS_TYPES_H__ */
 
 /* @} */

@@ -394,6 +394,9 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 		} /* end if */
 	} /* CACHE SUPPORT: end if */
 
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "No using cache (cache on: %d, is query: %d, reply: %p)", 
+		     ctx->cache != NULL, ext_dns_message_is_query (message), reply);
+
 	/* queue message to be handled in other part */
 	if (! session->on_message && ! ctx->on_message) {
 		if (session->close_on_reply)  

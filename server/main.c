@@ -44,20 +44,7 @@ Copyright (C) 2012  Advanced Software Production Line, S.L.\n"
 If you have question, bugs to report, patches, you can reach us\n\
 at <ext-dns@lists.aspl.es>."
 
-/* import gnu source declarations */
-#define _GNU_SOURCE
-
-#include <ext-dns.h>
-
-#include <syslog.h>
-
-#ifdef AXL_OS_UNIX
-#include <signal.h>
-#endif
-
-#include <axl.h>
-#include <exarg.h>
-#include <sys/wait.h>
+#include <ext-dnsd.h>
 
 axl_bool verbose = axl_false;
 axl_bool forward_all_requests = axl_true;
@@ -86,23 +73,6 @@ typedef struct _HandleReplyData {
 	axl_bool        nocache;
 } HandleReplyData;
 
-typedef struct _childState {
-	/* read fds[0], write fds[1] */
-	int fds[2];
-
-	/* current child state */
-	axl_bool       ready;
-	extDnsMutex    mutex;
-
-	/* last command sent */
-	char         * last_command;
-
-	int            pid;
-	/* when was acquired this child */
-	int            stamp;
-} childState;
-
-
 /** 
  * @internal Structure to hold child pending requests.
  */
@@ -110,6 +80,13 @@ typedef struct _childPendingRequest {
 	extDnsMessage * msg;
 	char          * command;
 	int             stamp;
+	extDnsCtx     * ctx;
+	extDnsSession * session;
+	char          * source_address;
+	int             source_port;
+
+	/* child that finally handles this */
+	childState    * child;
 } childPendingRequest;
 
 /** reference to childs created and their state **/
@@ -120,13 +97,29 @@ const char   * child_resolver = NULL;
 
 /** additional global status **/
 axlList      * pending_requests;
+int            max_pnd_reqs = 150;
 int            command_timeout = -1;
 
 /** stats */
 extDnsMutex    stat_mutex;
-int            requests_received = 0;
-int            requests_served   = 0;
-int            failures_found    = 0;
+extDnsMutex    pnd_req_mutex;
+long int       requests_received = 0;
+long int       requests_served   = 0;
+long int       failures_found    = 0;
+
+void increase_failures_found (void) {
+	ext_dns_mutex_lock (&stat_mutex);
+	failures_found ++;
+	ext_dns_mutex_unlock (&stat_mutex);
+	return;
+}
+
+void increase_requests_served (void) {
+	ext_dns_mutex_lock (&stat_mutex);
+	requests_served ++;
+	ext_dns_mutex_unlock (&stat_mutex);
+	return;
+}
 
 void __release_pending_request (axlPointer _ptr) {
 	childPendingRequest * ptr = _ptr;
@@ -444,10 +437,10 @@ extDnsMessage * ext_dnsd_handle_reply (extDnsCtx     * ctx,
 {
 	int               ttl;
 	char           ** items = axl_split (reply_buffer, 1, " ");
-	extDnsMessage   * reply = NULL;
 	const char      * value;
 	extDnsMessage   * aux;
 	HandleReplyData * handle_reply;
+	extDnsMessage   * reply = NULL;
 	
 	/* check result */
 	if (items == NULL)
@@ -466,6 +459,10 @@ extDnsMessage * ext_dnsd_handle_reply (extDnsCtx     * ctx,
 		if (! ext_dns_support_is_ipv4 (value)) {
 			syslog (LOG_ERR, "ERROR: reported something that is not an IP %s..", value ? value : "(null value)" );
 			axl_freev (items);
+
+			/* update stats */
+			increase_failures_found ();
+
 			return NULL;
 		} /* end if */
 
@@ -491,6 +488,7 @@ extDnsMessage * ext_dnsd_handle_reply (extDnsCtx     * ctx,
 		reply = ext_dns_message_build_cname_reply (ctx, query, value, ttl);
 		if (reply == NULL) {
 			syslog (LOG_ERR, "Failed to build cname reply with name=%s ttl=%d (memory allocation error)", value, ttl);
+			increase_failures_found ();
 			return INT_TO_PTR (2); /* report to do anything */
 		}
 
@@ -597,6 +595,42 @@ extDnsMessage * ext_dns_resolve_via_etc_hosts (extDnsCtx * ctx, extDnsMessage * 
 	return NULL;
 }
 
+/* call to queue */
+void ext_dnsd_queue_pending_reply (extDnsCtx     * ctx, 
+				   extDnsSession * session, 
+				   extDnsMessage * message, 
+				   const char    * command,
+				   const char    * source_address, 
+				   int             source_port)
+{
+	childPendingRequest * request;
+
+	request = axl_new (childPendingRequest, 1);
+	if (request == NULL)
+		return;
+	request->msg = message;
+	ext_dns_message_ref (message);
+
+	request->session = session;
+	request->command = axl_strdup (command);
+
+	/* record source address */
+	request->source_address = axl_strdup (source_address);
+	request->source_port    = source_port;
+
+	/* setup an stamp */
+	request->stamp = time (NULL);
+
+	/* store request */
+	ext_dns_mutex_lock (&pnd_req_mutex);
+	axl_list_append (pending_requests, request);
+	ext_dns_mutex_unlock (&pnd_req_mutex);
+
+	
+
+	return;
+}
+
 void on_received  (extDnsCtx     * ctx,
 		   extDnsSession * session,
 		   const char    * source_address,
@@ -604,14 +638,10 @@ void on_received  (extDnsCtx     * ctx,
 		   extDnsMessage * message,
 		   axlPointer      _data)
 {
-	axl_bool          result;
 	char            * command;
 	childState      * child;
-	char              reply_buffer[1024];
 	extDnsMessage   * reply = NULL;
-	int               bytes_written;
 	axl_bool          nocache = axl_false;
-	axl_bool          permanent;
 
 	/* skip messages that are queries */
 	if (! ext_dns_message_is_query (message)) {
@@ -633,8 +663,11 @@ void on_received  (extDnsCtx     * ctx,
 	} /* end if */
 
 	/* check for forward all requests */
-	if (forward_all_requests) 
-		goto forward_request;
+	if (forward_all_requests)  {
+		/* call to forward request */
+		ext_dnsd_forward_request (ctx, message, session, source_address, source_port, nocache);
+		return;
+	} /* end if */
 
 	/* build query line to be resolved by child process */
 	command = axl_strdup_printf ("RESOLVE %s %s %s %s", 
@@ -646,16 +679,48 @@ void on_received  (extDnsCtx     * ctx,
 	/* find a free child */
 	child = ext_dnsd_find_free_child (command);
 	if (child == NULL) {
+		/* update stats */
+		increase_failures_found ();
+
 		syslog (LOG_ERR, "ERROR: failed to get a child to attend request %s, replying unknown", command);
 		axl_free (command);
+
+		if (axl_list_length (pending_requests) < max_pnd_reqs) {
+			/* call to queue */
+			ext_dnsd_queue_pending_reply (ctx, session, message, command, source_address, source_port);
+			return;
+		} /* end if */
 		
 		/* build the unknown reply */
 		reply = ext_dns_message_build_unknown_reply (ctx, message);
-		goto send_reply;
+		ext_dnsd_send_request_reply (ctx, session, source_address, source_port, reply, nocache);
+		return;
 	} /* end if */
+
+	ext_dnsd_handle_child_cmd (ctx, message, session, child, source_address, source_port, command);
+	return;
+}
+
+void ext_dnsd_handle_child_cmd (extDnsCtx     * ctx, 
+				extDnsMessage * message, 
+				extDnsSession * session, 
+				childState    * child, 
+				const char    * source_address,
+				int             source_port,
+				const char    * command)
+{
+
+	axl_bool          permanent;
+	int               bytes_written;
+	char              reply_buffer[1024];
+	axl_bool          nocache = axl_false;
+	extDnsMessage   * reply = NULL;
 
 	bytes_written = send_command (command, child, reply_buffer, 1024);
 	if (bytes_written <= 0) {
+		/* update stats */
+		increase_failures_found ();
+
 		syslog (LOG_ERR, "ERROR: unable to send command to child process (bytes_written=%d)", bytes_written);
 		/* kill child and recreate a new child */
 		return;
@@ -710,7 +775,11 @@ void on_received  (extDnsCtx     * ctx,
 		reply = ext_dnsd_handle_reply (ctx, message, reply_buffer, session, source_address, source_port, nocache);
 	} else {
 		syslog (LOG_INFO, "ERROR: unrecognized command reply found from child: %s..", reply_buffer);
-		return; /* do not handle the request in this case */
+		/* update stats */
+		increase_failures_found ();
+
+		/* report unknown in this case */
+		reply = ext_dns_message_build_unknown_reply (ctx, message);
 	}
 
 	if (exarg_is_defined ("debug"))
@@ -724,27 +793,63 @@ void on_received  (extDnsCtx     * ctx,
 	if (exarg_is_defined ("debug"))
 		syslog (LOG_INFO, "INFO: after processing command reply from child resolver, reply value is %p", reply);
 	
-send_reply:
 	if (reply) {
-		/* store reply in the cache */
-		if (! nocache) {
-			if (exarg_is_defined ("debug"))
-				syslog (LOG_INFO, "INFO: caching value because nocache option wasn't found");
-			ext_dns_cache_store (ctx, reply, source_address);
-		}
-
-		/* found reply we've got now, send it back to the user */
-		ext_dnsd_send_reply (ctx, session, source_address, source_port, reply, axl_true);
+		/* send reply */
+		ext_dnsd_send_request_reply (ctx, session, source_address, source_port, reply, nocache);
 		return;
 	} /* end if */
 
-forward_request:
+	/* call to forward request */
+	ext_dnsd_forward_request (ctx, message, session, source_address, source_port, nocache);
+
+	return;
+}
+
+void ext_dnsd_send_request_reply (extDnsCtx     * ctx, 
+				  extDnsSession * session, 
+				  const char    * source_address, 
+				  int             source_port, 
+				  extDnsMessage * reply,
+				  axl_bool        nocache)
+{
+	if (reply == NULL)
+		return;
+
+	/* store reply in the cache */
+	if (! nocache) {
+		if (exarg_is_defined ("debug"))
+			syslog (LOG_INFO, "INFO: caching value because nocache option wasn't found");
+		ext_dns_cache_store (ctx, reply, source_address);
+	}
+	
+	/* update stats */
+	increase_requests_served ();
+	
+	/* found reply we've got now, send it back to the user */
+	ext_dnsd_send_reply (ctx, session, source_address, source_port, reply, axl_true);
+	return;
+}
+
+void ext_dnsd_forward_request (extDnsCtx     * ctx, 
+			       extDnsMessage * message, 
+			       extDnsSession * session,
+			       const char    * source_address,
+			       int             source_port,
+			       axl_bool        nocache)
+{
+	axl_bool result;
 	
 	/* send query */
 	result = ext_dns_message_query_and_forward_from_msg (ctx, message, server, server_port, source_address, source_port, session, nocache);
 
-	if (! result) 
+	if (! result) {
 		syslog (LOG_ERR, "ERROR: failed to send query to master server..");
+		/* update stats */
+		increase_failures_found ();
+	} else {
+		/* update stats */
+		increase_requests_served ();
+	}
 
 	return;
 }
@@ -1088,18 +1193,43 @@ axl_bool ext_dnsd_create_child_process (childState * child, axl_bool exit_on_fai
 	return axl_true;
 }
 
+axlPointer ext_dnsd_handle_pending_request (axlPointer _ptr)
+{
+	childPendingRequest * pnd_req = _ptr;
+	extDnsCtx           * ctx     = pnd_req->ctx;
+
+	/* call to handle child command */
+	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Calling to handle pending request: %s with child %d", pnd_req->command, pnd_req->child->pid);
+	ext_dnsd_handle_child_cmd (pnd_req->ctx, 
+				   pnd_req->msg, 
+				   pnd_req->session, 
+				   pnd_req->child, 
+				   pnd_req->source_address, 
+				   pnd_req->source_port, 
+				   pnd_req->command);
+
+	/* release pending request */
+	__release_pending_request (pnd_req);
+
+	return NULL;
+}
+
 axl_bool check_pending_tasks  (extDnsCtx * ctx,
 			       axlPointer  user_data,
 			       axlPointer  user_data2)
 {
-	int           children_ready;
-	int           children_dead;
-	FILE        * file;
-	char        * msg;
-	mode_t        old_umask;
-	const char  * label = "";
-	int           iterator;
-	int           diff;
+	int                    children_ready;
+	int                    children_dead;
+	FILE                 * file;
+	char                 * msg;
+	mode_t                 old_umask;
+	const char           * label = "";
+	int                    iterator;
+	int                    diff;
+	extDnsCacheStats       cache_stats;
+	float                  ratio;
+	childState           * child;
+	childPendingRequest  * pnd_req;
 
 	skip_pending_tasks++;
 	if (skip_pending_tasks < 3)
@@ -1149,12 +1279,33 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 		axl_free (msg);
 	} /* end if */
 
+	/* some stas */
 	msg = axl_strdup_printf ("Requests received: %d\n", requests_received);
+	fwrite (msg, strlen (msg), 1, file);
+	axl_free (msg);
+
+	msg = axl_strdup_printf ("Requests served: %d\n", requests_served);
+	fwrite (msg, strlen (msg), 1, file);
+	axl_free (msg);
+
+	msg = axl_strdup_printf ("Failures found: %d\n", failures_found);
 	fwrite (msg, strlen (msg), 1, file);
 	axl_free (msg);
 
 	/* pending requests */
 	msg = axl_strdup_printf ("Pending requests: %d\n", axl_list_length (pending_requests));
+	fwrite (msg, strlen (msg), 1, file);
+	axl_free (msg);
+
+	/* pending requests */
+	ext_dns_cache_stats (ctx, &cache_stats);
+	ratio = 0;
+	if (cache_stats.cache_access > 0)
+		ratio = ((float)cache_stats.cache_hits / (float)cache_stats.cache_access) * 100;
+	msg = axl_strdup_printf ("Cache stats: %d/%d (used/max)  %d/%d (hits/access) %.2f% (ratio)\n", 
+				 cache_stats.cache_items, cache_stats.cache_size, 
+				 cache_stats.cache_hits, cache_stats.cache_access,
+				 ratio);
 	fwrite (msg, strlen (msg), 1, file);
 	axl_free (msg);
 
@@ -1197,6 +1348,37 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 	/* restore umask */
 	umask (old_umask);
 
+	/* process pending requests */
+	while (axl_list_length (pending_requests) > 0) {
+		ext_dns_mutex_lock (&pnd_req_mutex);
+		
+		/* get first pending request */
+		pnd_req = axl_list_get_first (pending_requests);
+		if (pnd_req == NULL) {
+			ext_dns_mutex_unlock (&pnd_req_mutex);
+			return axl_false; /* do not remove the event */
+		} /* end if */
+
+		/* find a free child */
+		child = ext_dnsd_find_free_child (pnd_req->command);
+		if (child == NULL) {
+			ext_dns_mutex_unlock (&pnd_req_mutex);
+			return axl_false; /* do not remove the event */
+		} /* end if */
+
+		/* remove the first position */
+		axl_list_unlink_first (pending_requests);
+
+		/* set the child that will handle this request */
+		pnd_req->child = child;
+
+		/* unlock */
+		ext_dns_mutex_unlock (&pnd_req_mutex);
+
+		/* call to handle this request on its own thread */
+		ext_dns_thread_pool_new_task (ctx, ext_dnsd_handle_pending_request, pnd_req);
+	}
+
 	return axl_false; /* do not remove the event */
 }
 
@@ -1204,6 +1386,7 @@ void init_structures_and_handlers (void) {
 
 	/* init mutex stats */
 	ext_dns_mutex_create (&stat_mutex);
+	ext_dns_mutex_create (&pnd_req_mutex);
 
 	/* init pending requests list */
 	pending_requests = axl_list_new (ext_dnsd_equal_requests, __release_pending_request);
