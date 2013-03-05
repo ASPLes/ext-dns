@@ -65,6 +65,7 @@ axl_bool forward_all_requests = axl_true;
 axlDoc     * config = NULL;
 const char * path = "/etc/ext-dns/ext-dns.conf";
 const char * __pidfile = "/var/run/ext-dnsd.pid";
+const char * __blkbrd  = "/var/run/ext-dnsd.status";
 
 /* server we rely request to */
 const char * server = "8.8.8.8";
@@ -74,6 +75,7 @@ int          server_port = 53;
 axlHash    * etchosts = NULL;
 axlHash    * etchosts_ipv6 = NULL;
 extDnsMutex  etchosts_mutex;
+
 
 typedef struct _HandleReplyData {
 	int             id;
@@ -96,17 +98,58 @@ typedef struct _childState {
 	char         * last_command;
 
 	int            pid;
+	/* when was acquired this child */
+	int            stamp;
 } childState;
 
+
+/** 
+ * @internal Structure to hold child pending requests.
+ */
+typedef struct _childPendingRequest {
+	extDnsMessage * msg;
+	char          * command;
+	int             stamp;
+} childPendingRequest;
+
 /** reference to childs created and their state **/
-childState * children;
-int          child_number;
-extDnsMutex  children_mutex;
+childState   * children;
+int            children_number;
+extDnsMutex    children_mutex;
+const char   * child_resolver = NULL;
+
+/** additional global status **/
+axlList      * pending_requests;
+int            command_timeout = -1;
+
+/** stats */
+extDnsMutex    stat_mutex;
+int            requests_received = 0;
+int            requests_served   = 0;
+int            failures_found    = 0;
+
+void __release_pending_request (axlPointer _ptr) {
+	childPendingRequest * ptr = _ptr;
+	if (ptr == NULL)
+		return;
+	ext_dns_message_unref (ptr->msg);
+	axl_free (ptr->command);
+	axl_free (ptr);
+
+	return;
+}
+
+int ext_dnsd_equal_requests (axlPointer _ptr_a, axlPointer _ptr_b)
+{
+	if (_ptr_a == _ptr_b)
+		return 0;
+	return 1;
+} /* end if */
 
 void ext_dnsd_finish_childs (void) {
 	int iterator = 0;
 
-	while (iterator < child_number) {
+	while (iterator < children_number) {
 		ext_dns_mutex_destroy (&(children[iterator].mutex));
 		axl_free (children[iterator].last_command);
 
@@ -117,6 +160,32 @@ void ext_dnsd_finish_childs (void) {
 	axl_free (children);
 	ext_dns_mutex_destroy (&children_mutex);
 
+	return;
+}
+
+void ext_dnsd_release_child_by_pid (int pid)
+{
+	int          iterator;
+
+	ext_dns_mutex_lock (&children_mutex);
+
+	iterator = 0;
+	while (iterator < children_number) {
+
+		/* count */
+		if (children[iterator].pid == pid) {
+			/* flag child as not usable */
+			children[iterator].pid = -1;
+			break;
+		}
+
+		/* next iterator */
+		iterator++;
+	} /* end if */
+
+	ext_dns_mutex_unlock (&children_mutex);
+	
+	/* no child was found */
 	return;
 }
 
@@ -136,6 +205,54 @@ void ext_dnsd_release_child (childState * child)
 	return;
 }
 
+int          ext_dnsd_get_children_ready (void)
+{
+	int total = 0;
+	int iterator;
+
+	ext_dns_mutex_lock (&children_mutex);
+
+	iterator = 0;
+	while (iterator < children_number) {
+
+		/* count */
+		if (children[iterator].ready) 
+			total++;
+
+		/* next iterator */
+		iterator++;
+	} /* end if */
+
+	ext_dns_mutex_unlock (&children_mutex);
+	
+	/* no child was found */
+	return total;
+}
+
+int          ext_dnsd_get_children_dead (void)
+{
+	int total = 0;
+	int iterator;
+
+	ext_dns_mutex_lock (&children_mutex);
+
+	iterator = 0;
+	while (iterator < children_number) {
+
+		/* count */
+		if (children[iterator].pid == -1) 
+			total++;
+
+		/* next iterator */
+		iterator++;
+	} /* end if */
+
+	ext_dns_mutex_unlock (&children_mutex);
+	
+	/* no child was found */
+	return total;
+}
+
 childState * ext_dnsd_find_free_child (char * command)
 {
 	int          iterator;
@@ -144,9 +261,9 @@ childState * ext_dnsd_find_free_child (char * command)
 	ext_dns_mutex_lock (&children_mutex);
 
 	iterator = 0;
-	while (iterator < child_number) {
+	while (iterator < children_number) {
 
-		if (children[iterator].ready) {
+		if (children[iterator].ready && children[iterator].pid > 0) {
 			/* flag it as not ready */
 			children[iterator].ready = axl_false;
 
@@ -154,12 +271,15 @@ childState * ext_dnsd_find_free_child (char * command)
 			child = &(children[iterator]);
 
 			/* prepare child and send query to a child */
-			child->last_command = command;
+			child->last_command = axl_strdup (command);
+
+			/* record current stamp */
+			children[iterator].stamp = time (NULL);
 
 			ext_dns_mutex_unlock (&children_mutex);
 			
 			return child;
-		}
+		} /* end if */
 		
 		/* next iterator */
 		iterator++;
@@ -223,11 +343,11 @@ axl_bool send_command (const char * command, childState * child, char * reply, i
 	/* send command */
 	bytes_written = strlen (command);
 	if (write (child->fds[1], command, bytes_written) != bytes_written) {
-		syslog (LOG_ERR, "ERROR: failed to send command to child, error was errno=%d (%s)\n", errno, ext_dns_errno_get_last_error ());
+		syslog (LOG_ERR, "ERROR: failed to send command to child, error was errno=%d (%s)", errno, ext_dns_errno_get_last_error ());
 		return axl_false;
 	}
 	if (write (child->fds[1], "\n", 1) != 1) {
-		syslog (LOG_ERR, "ERROR: failed to write trailing command, error was errno=%d (%s)\n", errno, ext_dns_errno_get_last_error ());
+		syslog (LOG_ERR, "ERROR: failed to write trailing command, error was errno=%d (%s)", errno, ext_dns_errno_get_last_error ());
 		return axl_false;
 	}
 
@@ -236,9 +356,10 @@ axl_bool send_command (const char * command, childState * child, char * reply, i
 	/* now wait for reply */
 	bytes_written = ext_dnsd_readline (child->fds[0], reply, reply_size);
 
-	if (bytes_written < 0) {
-		syslog (LOG_ERR, "ERROR: failed to receive content from child, error was errno=%d (%s)\n", errno, ext_dns_errno_get_last_error ());
-		return axl_false;
+	if (bytes_written <= 0) {
+		syslog (LOG_ERR, "ERROR: failed to receive content from child, error was errno=%d (%s)", 
+			errno, errno == 0 ? "" :ext_dns_errno_get_last_error ());
+		return bytes_written;
 	} /* end if */
 
 	/* printf ("data received '%s' (size: %d)\n", reply, bytes_written); */
@@ -260,13 +381,13 @@ axl_bool ext_dnsd_send_reply (extDnsCtx * ctx, extDnsSession * session, const ch
 	/* build buffer reply */
 	bytes_written = ext_dns_message_to_buffer (ctx, reply, buffer, 512);
 	if (bytes_written <= 0) {
-		syslog (LOG_ERR, "ERROR: failed to dump message into the buffer, unable to reply to resolver..\n");
+		syslog (LOG_ERR, "ERROR: failed to dump message into the buffer, unable to reply to resolver..");
 		goto return_result;
 	}
 
 	/* send reply */
 	if (ext_dns_session_send_udp_s (ctx, session, buffer, bytes_written, source_address, source_port) != bytes_written) {
-		syslog (LOG_ERR, "ERROR: failed to send %d bytes as reply, different amount of bytes where written\n", bytes_written);
+		syslog (LOG_ERR, "ERROR: failed to send %d bytes as reply, different amount of bytes where written", bytes_written);
 		goto return_result;
 	} /* end if */
 
@@ -343,7 +464,7 @@ extDnsMessage * ext_dnsd_handle_reply (extDnsCtx     * ctx,
 
 		/* check if the value reported a valid ipv4 value */
 		if (! ext_dns_support_is_ipv4 (value)) {
-			syslog (LOG_ERR, "ERROR: reported something that is not an IP %s..\n", value ? value : "(null value)" );
+			syslog (LOG_ERR, "ERROR: reported something that is not an IP %s..", value ? value : "(null value)" );
 			axl_freev (items);
 			return NULL;
 		} /* end if */
@@ -351,7 +472,7 @@ extDnsMessage * ext_dnsd_handle_reply (extDnsCtx     * ctx,
 		/* get ttl */
 		ttl = atoi (items[2]);
 		if (exarg_is_defined ("debug"))
-			syslog (LOG_INFO, "Script reported to use IP %s (with ttl %d) as reply..\n", items[1] + 5, ttl);
+			syslog (LOG_INFO, "Script reported to use IP %s (with ttl %d) as reply..", items[1] + 5, ttl);
 
 		/* build reply */
 		reply = ext_dns_message_build_ipv4_reply (ctx, query, value, ttl);
@@ -364,7 +485,7 @@ extDnsMessage * ext_dnsd_handle_reply (extDnsCtx     * ctx,
 		value = items[1] + 5;
 
 		if (exarg_is_defined ("debug"))
-			syslog (LOG_INFO, "Script reported to use Name %s (with ttl %d) as reply..\n", value, ttl);
+			syslog (LOG_INFO, "Script reported to use Name %s (with ttl %d) as reply..", value, ttl);
 
 		/* build reply */
 		reply = ext_dns_message_build_cname_reply (ctx, query, value, ttl);
@@ -494,13 +615,17 @@ void on_received  (extDnsCtx     * ctx,
 
 	/* skip messages that are queries */
 	if (! ext_dns_message_is_query (message)) {
-		syslog (LOG_ERR, "ERROR: received a query message, dropping DNS message..\n");
+		syslog (LOG_ERR, "ERROR: received a query message, dropping DNS message..");
 		return;
 	} /* end if */
 
+	/* update stats */
+	ext_dns_mutex_lock (&stat_mutex);
+	requests_received ++;
+	ext_dns_mutex_unlock (&stat_mutex);
 	
 	if (exarg_is_defined ("debug")) {
-		syslog (LOG_INFO, "received message from %s:%d, query type: %s %s %s..\n", 
+		syslog (LOG_INFO, "received message from %s:%d, query type: %s %s %s..", 
 			source_address, source_port, 
 			ext_dns_message_get_qtype_to_str (ctx, message->questions[0].qtype),
 			ext_dns_message_get_qclass_to_str (ctx, message->questions[0].qclass),
@@ -508,10 +633,8 @@ void on_received  (extDnsCtx     * ctx,
 	} /* end if */
 
 	/* check for forward all requests */
-	if (forward_all_requests) {
+	if (forward_all_requests) 
 		goto forward_request;
-		return;
-	} /* end if */
 
 	/* build query line to be resolved by child process */
 	command = axl_strdup_printf ("RESOLVE %s %s %s %s", 
@@ -522,10 +645,18 @@ void on_received  (extDnsCtx     * ctx,
 
 	/* find a free child */
 	child = ext_dnsd_find_free_child (command);
+	if (child == NULL) {
+		syslog (LOG_ERR, "ERROR: failed to get a child to attend request %s, replying unknown", command);
+		axl_free (command);
+		
+		/* build the unknown reply */
+		reply = ext_dns_message_build_unknown_reply (ctx, message);
+		goto send_reply;
+	} /* end if */
 
 	bytes_written = send_command (command, child, reply_buffer, 1024);
 	if (bytes_written <= 0) {
-		syslog (LOG_ERR, "ERROR: unable to send command to child process (bytes_written=%d)\n", bytes_written);
+		syslog (LOG_ERR, "ERROR: unable to send command to child process (bytes_written=%d)", bytes_written);
 		/* kill child and recreate a new child */
 		return;
 	} /* end if */
@@ -578,7 +709,7 @@ void on_received  (extDnsCtx     * ctx,
 		/* parse reply received */
 		reply = ext_dnsd_handle_reply (ctx, message, reply_buffer, session, source_address, source_port, nocache);
 	} else {
-		syslog (LOG_INFO, "ERROR: unrecognized command reply found from child: %s..\n", reply_buffer);
+		syslog (LOG_INFO, "ERROR: unrecognized command reply found from child: %s..", reply_buffer);
 		return; /* do not handle the request in this case */
 	}
 
@@ -592,7 +723,8 @@ void on_received  (extDnsCtx     * ctx,
 
 	if (exarg_is_defined ("debug"))
 		syslog (LOG_INFO, "INFO: after processing command reply from child resolver, reply value is %p", reply);
-
+	
+send_reply:
 	if (reply) {
 		/* store reply in the cache */
 		if (! nocache) {
@@ -606,14 +738,13 @@ void on_received  (extDnsCtx     * ctx,
 		return;
 	} /* end if */
 
- forward_request:
-
+forward_request:
+	
 	/* send query */
 	result = ext_dns_message_query_and_forward_from_msg (ctx, message, server, server_port, source_address, source_port, session, nocache);
 
-	if (! result) {
-		syslog (LOG_ERR, "ERROR: failed to send query to master server..\n");
-	}
+	if (! result) 
+		syslog (LOG_ERR, "ERROR: failed to send query to master server..");
 
 	return;
 }
@@ -627,7 +758,7 @@ void     on_bad_request (extDnsCtx     * ctx,
 			 const char    * reason,
 			 axlPointer      data)
 {
-	syslog (LOG_ERR, "BAD REQUEST from %s:%d, reason: %s (blacklisting for 3 seconds)\n", source_address, source_port, reason);
+	syslog (LOG_ERR, "BAD REQUEST from %s:%d, reason: %s (blacklisting for 3 seconds)", source_address, source_port, reason);
 	ext_dns_ctx_black_list (ctx, source_address, axl_false, 3);
 	return;
 }
@@ -773,7 +904,7 @@ void load_configuration_file (void)
 		exit (-1);
 	}
 	
-	syslog (LOG_INFO, "configuration from %s loaded ok\n", path);
+	syslog (LOG_INFO, "configuration from %s loaded ok", path);
 
 	return;
 }
@@ -899,12 +1030,198 @@ int ext_dns_create_child (int fds[2], const char * child_resolver) {
 	return -1; 
 }
 
+int skip_pending_tasks = 0;
+
+void do_kill (int pid, const char * last_command, int diff) {
+	if (pid <= 1)
+		return;
+
+	kill (pid, SIGTERM);
+	syslog (LOG_INFO, "ERROR: killed child resolver pid %d because it was working for more than %d seconds, processing command: %s",
+		pid, diff, last_command);
+	return;
+}
+
+/* call to create child process and to exit if a failure is found */
+axl_bool ext_dnsd_create_child_process (childState * child, axl_bool exit_on_failure)
+{
+	char reply[20];
+
+	if (child == NULL)
+		return axl_false;
+
+	/* start child and set initial state */
+	child->ready = axl_true;
+	ext_dns_mutex_create (&child->mutex);
+
+	/* create and get child pid */
+	child->pid = ext_dns_create_child (child->fds, child_resolver);
+
+	/* printf ("child created with pid %d, fds [%d, %d]\n", childs[iterator].pid, childs[iterator].fds[0], childs[iterator].fds[1]); */
+
+	if (child->pid < 0) {
+		printf ("ERROR: failed to create child process from child resolver '%s', error was errno=%d\n", child_resolver, errno);
+		if (exit_on_failure)
+			exit (-1);
+		return axl_false;
+	} /* end if */
+	
+	/* send init command to check if the child is working */
+	if (! send_command ("INIT", child, reply, 20)) {
+		printf ("ERROR: child resolver (pid %d) %s didn't reply to INIT command..\n", child->pid, child_resolver);
+		if (exit_on_failure)
+			exit (-1);
+		return axl_false;
+	} /* end if */
+	
+	if (! axl_cmp (reply, "OK")) {
+		printf ("ERROR: child resolver (pid %d) %s didn't reply OK to INIT command..\n", child->pid, child_resolver);
+		if (exit_on_failure)
+			exit (-1);
+		return axl_false;
+	} /* end if */
+	
+	
+	syslog (LOG_INFO, "child resolver (pid %d) %s created..", child->pid, child_resolver);
+	
+	/* report ok status */
+	return axl_true;
+}
+
+axl_bool check_pending_tasks  (extDnsCtx * ctx,
+			       axlPointer  user_data,
+			       axlPointer  user_data2)
+{
+	int           children_ready;
+	int           children_dead;
+	FILE        * file;
+	char        * msg;
+	mode_t        old_umask;
+	const char  * label = "";
+	int           iterator;
+	int           diff;
+
+	skip_pending_tasks++;
+	if (skip_pending_tasks < 3)
+		return axl_false; /* do not stop */
+	skip_pending_tasks = 4;
+
+	/* check childs to be created */
+	ext_dns_mutex_lock (&children_mutex);
+	iterator = 0;
+	while (iterator < children_number) {
+
+		/* show childs blocked */
+		if (children[iterator].pid == -1) {
+			/* call to start child */
+			syslog (LOG_INFO, "Starting a new child process...");
+			ext_dnsd_create_child_process (&children[iterator], axl_false);
+		} /* end if */
+
+		iterator++;
+	} /* end while */
+	ext_dns_mutex_unlock (&children_mutex);
+
+	/* get child ready */
+	children_ready = ext_dnsd_get_children_ready ();
+	children_dead = ext_dnsd_get_children_dead ();
+
+	old_umask = umask (0077);
+
+	/* call to check pending requests to be requeued */
+	file = fopen (__blkbrd, "w");
+
+	/* place stamp */
+	msg = axl_strdup_printf ("Stamp: %d\n", time (NULL));
+	fwrite (msg, strlen (msg), 1, file);
+	axl_free (msg);
+	
+	/* child status */
+	if (children_ready == 0)
+		label = " (all children busy)";
+	msg = axl_strdup_printf ("Child status: %d/%d%s\n", children_number - children_ready, children_number, label);
+	fwrite (msg, strlen (msg), 1, file);
+	axl_free (msg);
+
+	if (children_dead > 0) {
+		msg = axl_strdup_printf ("Children dead: %d%s\n", children_dead);
+		fwrite (msg, strlen (msg), 1, file);
+		axl_free (msg);
+	} /* end if */
+
+	msg = axl_strdup_printf ("Requests received: %d\n", requests_received);
+	fwrite (msg, strlen (msg), 1, file);
+	axl_free (msg);
+
+	/* pending requests */
+	msg = axl_strdup_printf ("Pending requests: %d\n", axl_list_length (pending_requests));
+	fwrite (msg, strlen (msg), 1, file);
+	axl_free (msg);
+
+	/* show command timeout */
+	if (command_timeout > 0) 
+		msg = axl_strdup_printf ("Command timeout: %d secs\n", command_timeout);
+	else 
+		msg = axl_strdup_printf ("Command timeout: disabled\n", command_timeout);
+	fwrite (msg, strlen (msg), 1, file);
+	axl_free (msg);
+
+	/* show pending childs */
+	ext_dns_mutex_lock (&children_mutex);
+	iterator = 0;
+	while (iterator < children_number) {
+
+		/* show childs blocked */
+		if (! children[iterator].ready && children[iterator].pid > 0) {
+			/* pending requests */
+			diff = time (NULL) - children[iterator].stamp;
+			msg  = axl_strdup_printf ("Child busy: pid %d, working for: %d secs, cmd: %s\n", 
+						  children[iterator].pid, diff, children[iterator].last_command);
+			fwrite (msg, strlen (msg), 1, file);
+			axl_free (msg);	
+
+			if (diff > command_timeout) {
+				/* call to implement kill */
+				do_kill (children[iterator].pid, children[iterator].last_command, diff);
+			} /* end if */
+		}
+		
+		/* next iterator */
+		iterator++;
+	} /* end if */
+	ext_dns_mutex_unlock (&children_mutex);
+
+	/* close file */
+	fclose (file);
+
+	/* restore umask */
+	umask (old_umask);
+
+	return axl_false; /* do not remove the event */
+}
+
+void init_structures_and_handlers (void) {
+
+	/* init mutex stats */
+	ext_dns_mutex_create (&stat_mutex);
+
+	/* init pending requests list */
+	pending_requests = axl_list_new (ext_dnsd_equal_requests, __release_pending_request);
+	if (pending_requests == NULL) {
+		syslog (LOG_INFO, "Unable to acquire memory to hold pending request list");
+		exit (-1);
+	} /* end if */
+
+	/* init tracking event */
+	ext_dns_thread_pool_new_event (ctx, 1000000, check_pending_tasks, NULL, NULL);
+
+	return;
+}
+
 void start_child_applications (void)
 {
 	axlNode        * node;
-	const char     * child_resolver;
 	int              iterator;
-	char             reply[20];
 
 	/* find first listener node */
 	node = axl_doc_get (config, "/ext-dns-server/child-resolver");
@@ -939,46 +1256,22 @@ void start_child_applications (void)
 	}
 
 	/* child number */
-	child_number = atoi (ATTR_VALUE (node, "value"));
+	children_number = atoi (ATTR_VALUE (node, "value"));
 
 	/* check child number */
-	if (child_number <= 0) {
-		printf ("ERROR: child number received is %d. It must be bigger than 0\n", child_number);
+	if (children_number <= 0) {
+		printf ("ERROR: child number received is %d. It must be bigger than 0\n", children_number);
 		exit (-1);
 	}
 
 	/* allocate memory to handle child state */
-	children = axl_new (childState, child_number);
+	children = axl_new (childState, children_number);
 
 	iterator     = 0;
-	while (iterator < child_number) {
-		/* start child and set initial state */
-		children[iterator].ready = axl_true;
-		ext_dns_mutex_create (&children[iterator].mutex);
+	while (iterator < children_number) {
 
-		/* create and get child pid */
-		children[iterator].pid = ext_dns_create_child (children[iterator].fds, child_resolver);
-
-		/* printf ("child created with pid %d, fds [%d, %d]\n", childs[iterator].pid, childs[iterator].fds[0], childs[iterator].fds[1]); */
-
-		if (children[iterator].pid < 0) {
-			printf ("ERROR: failed to create child process from child resolver '%s', error was errno=%d\n", child_resolver, errno);
-			exit (-1);
-		} /* end if */
-
-		/* send init command to check if the child is working */
-		if (! send_command ("INIT", &children[iterator], reply, 20)) {
-			printf ("ERROR: child resolver (pid %d) %s didn't reply to INIT command..\n", children[iterator].pid, child_resolver);
-			exit (-1);
-		}
-
-		if (! axl_cmp (reply, "OK")) {
-			printf ("ERROR: child resolver (pid %d) %s didn't reply OK to INIT command..\n", children[iterator].pid, child_resolver);
-			exit (-1);
-		}
-			
-
-		syslog (LOG_INFO, "child resolver (pid %d) %s created..\n", children[iterator].pid, child_resolver);
+		/* call to create child process and to exit if a failure is found */
+		ext_dnsd_create_child_process (&children[iterator], axl_true);
 
 		/* next iterator */
 		iterator++;
@@ -1001,6 +1294,9 @@ void child_terminated (int _signal) {
 
 	/* reinstall signal */
 	signal (SIGCHLD, child_terminated);
+
+	/* release child by pid */
+	ext_dnsd_release_child_by_pid (pid);
 
 	return;
 }
@@ -1158,11 +1454,28 @@ void setup_thread_num (void) {
 	}
 	
 	number = atoi (number_str);
-	if (number <= 0)
+	if (number <= 0) {
+		syslog (LOG_ERR, "Leaving default thread number because found invalid value: %s", number_str);
 		return;
+	} /* end if */
 
 	/* setup this number of threads */
-	ext_dns_thread_pool_set_num (number);
+	syslog (LOG_INFO, "Calling to setup %d threads", number + 1);
+	ext_dns_thread_pool_set_num (number + 1);
+
+	number_str = ATTR_VALUE (node, "command-timeout");
+	if (axl_cmp (number_str, "disable"))
+		command_timeout = 0;
+	else {
+		/* get command timeout and default value */
+		if (number_str)
+			command_timeout = atoi (number_str);
+		else
+			command_timeout = 15;
+		if (command_timeout == 0)
+			command_timeout = 15;
+	} /* end if */
+
 	return;
 } /* end if */
 
@@ -1218,6 +1531,9 @@ int main (int argc, char ** argv) {
 		exit (-1);
 	} 
 
+	/* init structures and handlers */
+	init_structures_and_handlers ();
+
 	/* init cache */
 	ext_dns_cache_init (ctx, 1000);
 
@@ -1251,6 +1567,7 @@ int main (int argc, char ** argv) {
 	ext_dns_mutex_destroy (&etchosts_mutex);
 	axl_hash_free (etchosts_ipv6);
 	axl_hash_free (etchosts);
+	axl_list_free (pending_requests);
 	
 	return 0;
 }
