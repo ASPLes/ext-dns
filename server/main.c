@@ -731,7 +731,7 @@ extDnsMessage * ext_dns_resolve_via_etc_hosts (extDnsCtx * ctx, extDnsMessage * 
 			ext_dns_mutex_unlock (&etchosts_mutex);
 
 			if (value) {
-				/* build reply (low ttl) */
+				/* build reply (low ttl=5) */
 				return ext_dns_message_build_ipv4_reply (ctx, message, value, 5);
 			} /* end if */
 			
