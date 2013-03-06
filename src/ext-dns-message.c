@@ -1124,7 +1124,7 @@ axl_bool        ext_dns_message_add_mx_reply (extDnsCtx * ctx, extDnsMessage * r
  *
  * @param reply The DNS reply where the NS reply will be added.
  *
- * @param dns_name DNS servername added to the reply.
+ * @param dns_server DNS servername added to the reply.
  *
  * @param ttl The ttl to be reported in the reply.
  *
