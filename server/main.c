@@ -1039,6 +1039,8 @@ void __terminate_ext_dns_listener (int value)
 
 	syslog (LOG_INFO, "Received signal %d, finishing server..", value);
 
+	unlink (__blkbrd);
+
 	/* unlocking listener */
 	/* printf ("Calling to unlock listener due to signal received: extDnsCtx %p", ctx); */
 	ext_dns_ctx_unlock (ctx);
@@ -1813,6 +1815,45 @@ void setup_thread_num (void) {
 	return;
 } /* end if */
 
+#ifdef AXL_OS_UNIX
+void __block_server (int value) 
+{
+	extDnsAsyncQueue * queue;
+	axlNode          * node;
+	const char       * action = "hold";
+
+	syslog (LOG_INFO, "****** Received a signal (ext-dnsd is failing): pid %d", ext_dns_getpid ());
+
+	/* find first listener node */
+	node = axl_doc_get (config, "/ext-dns-server/failure-action");
+	if (node && HAS_ATTR (node, "value"))
+		action = ATTR_VALUE (node, "value");
+
+	if (axl_cmp (action, "abort")) {
+		syslog (LOG_INFO, "****** finishing process because failure-action = 'abort': pid %d", ext_dns_getpid ());
+		exit (value);
+	}
+
+	if (axl_cmp (action, "hold")) {
+		syslog (LOG_INFO, "****** holding process because failure-action = 'abort': pid %d", ext_dns_getpid ());
+
+		/* block the caller */
+		queue = ext_dns_async_queue_new ();
+		ext_dns_async_queue_pop (queue);
+	} /* end if */
+
+	if (axl_cmp (action, "continue")) {
+		/* continue */
+		syslog (LOG_INFO, "****** continue as if nothing had happened because failure-action = 'continue': pid %d", ext_dns_getpid ());
+	} /* end if */
+
+	syslog (LOG_INFO, "****** unsupported failure action, finishing process: pid %d", ext_dns_getpid ());
+	exit (value);
+
+	return;
+}
+#endif
+
 int main (int argc, char ** argv) {
 
 	/* install default handling to get notification about
@@ -1822,6 +1863,8 @@ int main (int argc, char ** argv) {
 	signal (SIGQUIT,  __terminate_ext_dns_listener);
 	signal (SIGCHLD, child_terminated);
 	signal (SIGHUP, reload_configuration);
+	signal (SIGSEGV, __block_server);
+	signal (SIGABRT, __block_server);
 #endif
 
 	/* open syslog */
@@ -1896,6 +1939,8 @@ int main (int argc, char ** argv) {
 
 	/* finalize childs */
 	ext_dnsd_finish_childs ();
+
+	unlink (__blkbrd);
 
 	/* release hashes */
 	ext_dns_mutex_destroy (&etchosts_mutex);
