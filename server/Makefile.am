@@ -2,7 +2,7 @@ if ENABLE_EXT_DNS_LOG
 INCLUDE_EXT_DNS_LOG=-DENABLE_EXT_DNS_LOG
 endif
 
-etcdir = $(sysconfdir)/ext-dnsd/
+etcdir = $(sysconfdir)/ext-dns/
 etc_DATA = ext-dns.example.conf
 EXTRA_DIST = $(etc_DATA) child-resolver-skel.py
 
