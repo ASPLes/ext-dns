@@ -1835,7 +1835,7 @@ void __block_server (int value)
 	}
 
 	if (axl_cmp (action, "hold")) {
-		syslog (LOG_INFO, "****** holding process because failure-action = 'abort': pid %d", ext_dns_getpid ());
+		syslog (LOG_INFO, "****** holding process because failure-action = 'hold': pid %d", ext_dns_getpid ());
 
 		/* block the caller */
 		queue = ext_dns_async_queue_new ();
