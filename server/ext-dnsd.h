@@ -92,4 +92,13 @@ void ext_dnsd_send_request_reply (extDnsCtx     * ctx,
 				  int             source_port, 
 				  extDnsMessage * reply,
 				  axl_bool        nocache);
+
+extDnsMessage * ext_dnsd_parse_and_handle_reply_single (extDnsCtx     * ctx, 
+							extDnsMessage * query, 
+							extDnsMessage * reply,
+							const char    * reply_buffer,
+							extDnsSession * session,
+							const char    * source_address,
+							int             source_port, 
+							axl_bool        nocache);
 #endif

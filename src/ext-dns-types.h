@@ -573,21 +573,68 @@ typedef enum {
 	extDnsResponseRefused            = 5
 } extDnsResponseType;
 
+
+/** 
+ * @brief Header information for each DNS message. 
+ */ 
 typedef struct _extDnsHeader {
-	/* message id */
+	/** 
+	 * @brief Unique message id for query or reply being
+	 * implemented.
+	 */ 
 	unsigned int       id;
+	/** 
+	 * @brief Holds information about if this message is a query
+	 * or a reply.
+	 */
 	axl_bool           is_query;
+	/** 
+	 * @brief Additional information for this message. Check each
+	 * code to know more about them.
+	 */
 	extDnsQueryType    opcode;
 
+	/** 
+	 * @brief Flag to indicate this is an authorative answer.
+	 */
 	axl_bool           is_authorative_answer;
+	/** 
+	 * @brief Flag to indicate this is a truncated DNS message.
+	 */
 	axl_bool           was_truncated;
+	/** 
+	 * @brief Flag to indicate that the client requested to make
+	 * recursion to resolve the DNS query.
+	 */
 	axl_bool           recursion_desired;
+	/** 
+	 * @brief Flag to indicate that the server support recursion.
+	 */
 	axl_bool           recursion_available;
 
+	/** 
+	 * @brief Flag to indicate the type of response.
+	 */
 	extDnsResponseType rcode;
+	/** 
+	 * @brief How many query elements are inside the
+	 * message->questions section inside the message.
+	 */
 	int                query_count;
+	/** 
+	 * @brief How many anser elements are inside the
+	 * message->answers section inside the message.
+	 */
 	int                answer_count;
+	/** 
+	 * @brief How many authority elements are inside the
+	 * message->authorities section inside the message.
+	 */
 	int                authority_count;
+	/** 
+	 * @brief How many additional elements are inside the
+	 * message->additionals section inside the message.
+	 */
 	int                additional_count;
 
 	/* private records */
@@ -721,38 +768,74 @@ typedef enum {
 	extDnsClassANY   = 255
 } extDnsClass;
 
+/** 
+ * @brief Represents a question inside the question section.
+ */ 
 typedef struct _extDnsQuestion {
+	/** 
+	 * @brief Question name being asked inside the question
+	 * section.
+	 */
 	char         * qname;
+	/** 
+	 * @brief Question type being asked.
+	 */
 	extDnsType     qtype;
+	/** 
+	 * @brief Question class being asked.
+	 */
 	extDnsClass    qclass;
 } extDnsQuestion;
 
 /** 
- * @brief Public structure that defines a single resource record.
+ * @brief Public structure that defines a single resource record. This
+ * is a generic structure where, according to the record type each
+ * value is filled with the right content. Not all attributes are used
+ * at the same time.
  */
 typedef struct _extDnsResourceRecord {
-	/**
-	 * generic common resource record data 
+	/** 
+	 * @brief Record name.
 	 */
 	char         * name;
+	/** 
+	 * @brief Record type.
+	 */
 	extDnsType     type;
+	/** 
+	 * @brief Record class.
+	 */
 	extDnsClass    class;
+	/** 
+	 * @brief Record ttl.
+	 */
 	int            ttl;
 
-	/* MX exchange, NS nsdname, A the IP, CNAME the hostname
-	 * alias, TXT and SPF */
+	/** 
+	 * @brief Printable, easy to read content to show what's
+	 * inside this record. MX exchange, NS nsdname, A the IP,
+	 * CNAME the hostname alias, TXT and SPF. */
 	char         * name_content;
 
-	/* MX preference and SRV priority */
+	/** 
+	 * @brief MX preference and SRV priority 
+	 */
 	int            preference;
-	/* weight attribute for SRV records */
+	/** 
+	 * @brief Weight attribute for SRV records. Only used for SRV records.
+	 */
 	int            weight; 
-	/* port attribute for SRV records */
+	/** 
+	 * @brief Port attribute for SRV records. Only used for SRV records.
+	 */
 	int            port;
-	/* target value for SRV records */
+	/** 
+	 * @brief Target value for SRV records. Only used for SRV records.
+	 */
 	char         * target;
 
-	/* SOA specific values */
+	/** 
+	 * SOA specific values */
 	char         * mname;
 	char         * contact_address;
 	int            serial;
@@ -761,16 +844,65 @@ typedef struct _extDnsResourceRecord {
 	int            expire;
 	int            minimum;
 
-	/* raw data received */
+	/** 
+	 * @brief Raw rdlength data found in the DNS record at the wire.
+	 */
 	int            rdlength;
+	/** 
+	 * @brief Raw rdata data found in the DNS record at the wire.
+	 */
 	char         * rdata;
 } extDnsResourceRecord;
 
-struct _extDnsMessage {
+/** 
+ * @brief Data type that represents a single DNS message.
+ *
+ * The \ref extDnsMessage is one of the most important API definition
+ * because is is used to create DNS messages or as a representation
+ * for messages received (via \ref extDnsOnMessageReceived handler,
+ * usually configured by \ref ext_dns_session_set_on_message or by \ref ext_dns_ctx_set_on_message).
+ *
+ * The \ref extDnsMessage may represent a query or a reply (\ref ext_dns_message_is_query), and when it represents an error reply,
+ * you can use several functions to know what is the exact error type
+ * (\ref ext_dns_message_is_reject , \ref ext_dns_message_is_name_error or \ref ext_dns_message_is_answer_valid).
+ *
+ * Every \ref extDnsMessage object has a reference counting associated
+ * with it. You can use the following functions to acquire references
+ * to the object via \ref ext_dns_message_ref and \ref ext_dns_message_unref to release them.
+ *
+ * Please, check the \ref ext_dns_message "extDnsMessage API" for more
+ * information about available options and \ref ext_dns_library_manual "libext-dns manual".
+ */
+typedef struct _extDnsMessage {
+	/** 
+	 * @brief The reference to the header of the DNS package. It
+	 * contains information about every section contained in this
+	 * DNS message.
+	 */
 	extDnsHeader         * header;
+	/** 
+	 * @brief The reference to the question section where each
+	 * position represents a question.
+	 */
 	extDnsQuestion       * questions;
+	
+	/** 
+	 * @brief The reference to the answers section where each
+	 * position represents an answer.
+	 */
 	extDnsResourceRecord * answers;
+	
+	/** 
+	 * @brief The reference to the authorities section where each
+	 * posisition represents an answer.
+	 */
 	extDnsResourceRecord * authorities;
+
+	/** 
+	 * @brief The reference to the additional section where each
+	 * posisition represents an additional section to the
+	 * query/reply.
+	 */
 	extDnsResourceRecord * additionals;
 
 	/* private definitions, do not touch them, may change in
@@ -781,25 +913,11 @@ struct _extDnsMessage {
 	/* message size */
 	int                    message_size;
 
-	/* when the message was created */
+	/** 
+	 * @brief When this message was created. 
+	 */ 
 	int                    stamp;
-};
-
-
-/** 
- * @brief Data type that represents a single DNS message.
- *
- * The \ref extDnsMessage is one of the most important API definition
- * because is is used to create DNS messages or as a representation
- * for messages received (via \ref extDnsOnMessageReceived handler, usually configured by \ref ext_dns_session_set_on_message or by \ref ext_dns_ctx_set_on_message).
- *
- * The \ref extDnsMessage may represent a query or a reply (\ref ext_dns_message_is_query), and when it represents an error reply, you can use several functions to know what is the exact error type (\ref ext_dns_message_is_reject , \ref ext_dns_message_is_name_error or \ref ext_dns_message_is_answer_valid). 
- *
- * Every \ref extDnsMessage object has a reference counting associated with it. You can use the following functions to acquire references to the object via \ref ext_dns_message_ref and \ref ext_dns_message_unref to release them.
- *
- * Please, check the \ref ext_dns_message "extDnsMessage API" for more information about available options and \ref ext_dns_library_manual "libext-dns manual".
- */
-typedef struct _extDnsMessage extDnsMessage;
+} extDnsMessage;
 
 /** 
  * @brief Object used by \ref ext_dns_cache_stats to report current

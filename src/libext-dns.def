@@ -29,6 +29,7 @@ ext_dns_cache_finish
 ext_dns_cache_get
 ext_dns_cache_get_by_query
 ext_dns_cache_init
+ext_dns_cache_stats
 ext_dns_cache_store
 ext_dns_color_log_enable
 ext_dns_color_log_is_enabled
@@ -108,12 +109,12 @@ ext_dns_log_set_handler
 ext_dns_log_set_prepare_log
 ext_dns_message_add_answer
 ext_dns_message_add_answer_from_msg
+ext_dns_message_add_ipv4_reply
 ext_dns_message_build_cname_reply
 ext_dns_message_build_ipv4_reply
 ext_dns_message_build_query
 ext_dns_message_build_reject_reply
 ext_dns_message_build_unknown_reply
-ext_dns_message_count
 ext_dns_message_create
 ext_dns_message_get_label
 ext_dns_message_get_qclass
@@ -139,6 +140,7 @@ ext_dns_message_query_name
 ext_dns_message_query_type
 ext_dns_message_rand
 ext_dns_message_ref
+ext_dns_message_ref_count
 ext_dns_message_release_and_return
 ext_dns_message_send_udp_s
 ext_dns_message_to_buffer

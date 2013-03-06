@@ -813,6 +813,38 @@ extDnsMessage * ext_dns_message_build_ipv4_reply (extDnsCtx * ctx, extDnsMessage
 }
 
 /** 
+ * @brief Given a created reply, this function allows to add an
+ * additional A reply to the query replied.
+ *
+ * @param ctx The context where the operation will take place.
+ *
+ * @param reply A DNS reply message already created by other functions
+ * (like \ref ext_dns_message_build_ipv4_reply).
+ *
+ * @param ip An IPv4 string value what will be used to complete the
+ * ANSWER section of the message. Note the reply created will have IN
+ * for the DNS class, and A for the dns type record.
+ *
+ * @param ttl The ttl to be reported in the reply.
+ *
+ * @return axl_true in the case of proper operation, otherwise
+ * axl_false is returned.
+ */
+axl_bool        ext_dns_message_add_ipv4_reply (extDnsCtx * ctx, extDnsMessage * reply, const char * ip, int ttl)
+{
+	/* query if the question section is ok */
+	if (reply == NULL || reply->questions == NULL || reply->questions[0].qname == NULL)
+		return axl_false;
+
+	/* ok, now query if the IP provided is ok */
+	if (! ext_dns_support_is_ipv4 (ip))
+		return axl_false;
+
+	/* report result */
+	return ext_dns_message_add_answer (ctx, reply, extDnsTypeA, extDnsClassIN, reply->questions[0].qname, ttl, ip);
+}
+
+/** 
  * @brief Allows to build a message reply to the provided message,
  * using as reply to the question the name provided.
  *
@@ -856,6 +888,33 @@ extDnsMessage * ext_dns_message_build_cname_reply (extDnsCtx * ctx, extDnsMessag
 
 	/* return reply */
 	return reply;	
+}
+
+/** 
+ * @brief Allows to add a cname reply on the provided reply already
+ * created.
+ *
+ * @param ctx The context where the operation will take place.
+ *
+ * @param reply The DNS reply where the cname reply will be added.
+ *
+ * @param name A name string value what will be used to complete the
+ * ANSWER section of the message. Note the reply created will have IN
+ * for the DNS class, and CNAME for the dns type record.
+ *
+ * @param ttl The ttl to be reported in the reply.
+ *
+ * @return axl_true in the case the reply was added, otherwise
+ * axl_false is returned.
+ */
+axl_bool        ext_dns_message_add_cname_reply (extDnsCtx * ctx, extDnsMessage * reply, const char * name, int ttl)
+{
+	/* query if the question section is ok */
+	if (reply == NULL || reply->questions == NULL || reply->questions[0].qname == NULL)
+		return axl_false;
+
+	/* report result */
+	return ext_dns_message_add_answer (ctx, reply, extDnsTypeA, extDnsClassIN, reply->questions[0].qname, ttl, name);
 }
 
 /** 
@@ -2021,7 +2080,7 @@ void ext_dns_message_unref (extDnsMessage * message)
  * @return The reference counting value, or -1 if it fails (for
  * example, NULL reference).
  */
-int             ext_dns_message_count (extDnsMessage * message)
+int             ext_dns_message_ref_count (extDnsMessage * message)
 {
 	if (message == NULL)
 		return -1;
