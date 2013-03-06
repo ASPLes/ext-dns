@@ -427,33 +427,78 @@ void handle_reply_complete_cname (extDnsCtx     * ctx,
 	return;
 }
 
-extDnsMessage * ext_dnsd_handle_reply (extDnsCtx     * ctx, 
-				       extDnsMessage * query, 
-				       const char    * reply_buffer,
-				       extDnsSession * session,
-				       const char    * source_address,
-				       int             source_port, 
-				       axl_bool        nocache)
+extDnsMessage * ext_dnsd_parse_and_handle_reply (extDnsCtx     * ctx, 
+						 extDnsMessage * query, 
+						 const char    * reply_buffer,
+						 extDnsSession * session,
+						 const char    * source_address,
+						 int             source_port, 
+						 axl_bool        nocache)
 {
-	int               ttl;
-	char           ** items = axl_split (reply_buffer, 1, " ");
-	const char      * value;
-	extDnsMessage   * aux;
-	HandleReplyData * handle_reply;
+	char           ** items;
 	extDnsMessage   * reply = NULL;
+	int               iterator;
 	
-	/* check result */
-	if (items == NULL)
-		return NULL;
+	/* get pieces for multiple replies */
+	if (strstr (reply_buffer, ",")) {
+		/* multiple reply found */
+		items = axl_split (reply_buffer, 1, ",");
+
+		/* check result */
+		if (items == NULL)
+			return NULL;
+		
+		/* now get and accumulate the reply */
+		iterator = 0;
+		while (items[iterator]) {
+
+			/* call to get and accumulate replies into a single object */
+			reply = ext_dnsd_parse_and_handle_reply_single (ctx, query, reply, items[iterator], session, source_address, source_port, nocache);
+			if (PTR_TO_INT(reply) == 2)
+				break;
+
+			/* next iterator */
+			iterator++;
+		} /* end while */
+
+		return reply;
+	} /* end if */
+
+	/* report single reply received */
+	return ext_dnsd_parse_and_handle_reply_single (ctx, query, reply, reply_buffer, session, source_address, source_port, nocache);
+}
+
+extDnsMessage * ext_dnsd_parse_and_handle_reply_single (extDnsCtx     * ctx, 
+							extDnsMessage * query, 
+							extDnsMessage * reply,
+							const char    * reply_buffer,
+							extDnsSession * session,
+							const char    * source_address,
+							int             source_port, 
+							axl_bool        nocache)
+{
+	char           ** items;
+	HandleReplyData * handle_reply;
+	extDnsMessage   * aux;
+	const char      * value;
+	int               ttl;
+	int               desp = 0;
+	
+	/* get items */
+	items = axl_split (reply_buffer, 1, " ");
+
+	/* configure desp according to the data inside the reply buffer */
+	if (axl_cmp (items[0], "REPLY"))
+	    desp = 1;
 
 	/* clean split */
 	axl_stream_clean_split (items);
 
 	/* check result */
-	if (axl_memcmp (items[1], "ipv4:", 5)) {
+	if (axl_memcmp (items[desp], "ipv4:", 5)) {
 
 		/* get value */
-		value = items[1] + 5;
+		value = items[desp] + 5;
 
 		/* check if the value reported a valid ipv4 value */
 		if (! ext_dns_support_is_ipv4 (value)) {
@@ -467,33 +512,39 @@ extDnsMessage * ext_dnsd_handle_reply (extDnsCtx     * ctx,
 		} /* end if */
 
 		/* get ttl */
-		ttl = atoi (items[2]);
+		ttl = atoi (items[desp + 1]);
 		if (exarg_is_defined ("debug"))
-			syslog (LOG_INFO, "Script reported to use IP %s (with ttl %d) as reply..", items[1] + 5, ttl);
+			syslog (LOG_INFO, "Script reported to use IP %s (with ttl %d) as reply..", items[desp] + 5, ttl);
 
 		/* build reply */
-		reply = ext_dns_message_build_ipv4_reply (ctx, query, value, ttl);
+		if (reply) {
+			ext_dns_message_add_ipv4_reply (ctx, reply, value, ttl);
+		} else
+			reply = ext_dns_message_build_ipv4_reply (ctx, query, value, ttl);
 		
-	} else if (axl_memcmp (items[1], "name:", 5)) {
+	} else if (axl_memcmp (items[desp], "name:", 5)) {
 		/* get ttl */
-		ttl = atoi (items[2]);
+		ttl = atoi (items[desp + 1]);
 
 		/* get value */
-		value = items[1] + 5;
+		value = items[desp] + 5;
 
 		if (exarg_is_defined ("debug"))
 			syslog (LOG_INFO, "Script reported to use Name %s (with ttl %d) as reply..", value, ttl);
 
 		/* build reply */
-		reply = ext_dns_message_build_cname_reply (ctx, query, value, ttl);
+		if (reply) 
+			ext_dns_message_add_cname_reply (ctx, reply, value, ttl);
+		else
+			reply = ext_dns_message_build_cname_reply (ctx, query, value, ttl);
 		if (reply == NULL) {
 			syslog (LOG_ERR, "Failed to build cname reply with name=%s ttl=%d (memory allocation error)", value, ttl);
 			increase_failures_found ();
 			return INT_TO_PTR (2); /* report to do anything */
-		}
+		} /* end if */
 
 		if (exarg_is_defined ("debug"))
-			syslog (LOG_INFO, "INFO: created partial cname reply  %p, references: %d", reply, ext_dns_message_count (reply));
+			syslog (LOG_INFO, "INFO: created partial cname reply  %p, references: %d", reply, ext_dns_message_ref_count (reply));
 
 		/* because we are going to reply a CNAME, we need to
 		 * add the IP that resolves that request. Check if the
@@ -712,11 +763,12 @@ void ext_dnsd_handle_child_cmd (extDnsCtx     * ctx,
 
 	axl_bool          permanent;
 	int               bytes_written;
-	char              reply_buffer[1024];
+	char              reply_buffer[4096];
 	axl_bool          nocache = axl_false;
 	extDnsMessage   * reply = NULL;
 
-	bytes_written = send_command (command, child, reply_buffer, 1024);
+	/* send command and process reply */
+	bytes_written = send_command (command, child, reply_buffer, 4096);
 	if (bytes_written <= 0) {
 		/* update stats */
 		increase_failures_found ();
@@ -772,7 +824,8 @@ void ext_dnsd_handle_child_cmd (extDnsCtx     * ctx,
 
 	} else if (axl_memcmp (reply_buffer, "REPLY ", 6)) {
 		/* parse reply received */
-		reply = ext_dnsd_handle_reply (ctx, message, reply_buffer, session, source_address, source_port, nocache);
+		reply = ext_dnsd_parse_and_handle_reply (ctx, message, reply_buffer, session, source_address, source_port, nocache);
+		
 	} else {
 		syslog (LOG_INFO, "ERROR: unrecognized command reply found from child: %s..", reply_buffer);
 		/* update stats */

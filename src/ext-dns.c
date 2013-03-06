@@ -1496,8 +1496,8 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
  *                                        - BLACKLIST 3
  *                                        - BLACKLIST permanent
  *
- *            - REPLY ipv4:[value] [ttl] [nocache] 
- *            - REPLY name:[value] [ttl] [nocache] 
+ *            - REPLY ipv4:[value] [ttl] [nocache] [, more replies]
+ *            - REPLY name:[value] [ttl] [nocache] [, more replies]
  *                                      : in this case the reply is directly handled by the child resolver
  *                                        providing a cname as reply to the request (in the case name: is used)
  *                                        or a particular ipv4 value if ipv4: is used. 
@@ -1506,12 +1506,16 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
  *                                        indication about caching the result reported. In the case nocache string
  *                                        is provided, ext-DnsD won't cache the value. 
  *
+ *                                        In the case you want multiple replies (answers) to the same question, 
+ *                                        just add them separated by comma (,).
+ *
  *                                        Here are some examples:
  *
  *                                        - REPLY ipv4:127.0.0.1 3600 nocache
  *                                        - REPLY ipv4:127.0.0.1 3600
+ *                                        - REPLY ipv4:127.0.0.1 3600 nocache, ipv4:192.168.0.154 3600, ipv4:192.168.0.155 3600 nocache
  *                                        - REPLY name:www.aspl.es 3600 
- *                                        - REPLY name:www.google.com 3600 nocache
+ *                                        - REPLY name:www.google.com 3600 nocache, name:www.aspl.es 3600, name:www.asplhosting.com 3600 nocache
  *
  * \endcode
  * 

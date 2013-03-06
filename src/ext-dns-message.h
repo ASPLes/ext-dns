@@ -50,9 +50,19 @@ extDnsMessage * ext_dns_message_build_unknown_reply (extDnsCtx * ctx, extDnsMess
 
 extDnsMessage * ext_dns_message_build_ipv4_reply (extDnsCtx * ctx, extDnsMessage * message, const char * ip, int ttl);
 
+axl_bool        ext_dns_message_add_ipv4_reply (extDnsCtx * ctx, extDnsMessage * reply, const char * ip, int ttl);
+
 extDnsMessage * ext_dns_message_build_cname_reply (extDnsCtx * ctx, extDnsMessage * message, const char * name, int ttl);
 
-axl_bool        ext_dns_message_add_answer (extDnsCtx * ctx, extDnsMessage * message, extDnsType type, extDnsClass class, const char * name, int ttl, const char * content);
+axl_bool        ext_dns_message_add_cname_reply (extDnsCtx * ctx, extDnsMessage * reply, const char * name, int ttl);
+
+axl_bool        ext_dns_message_add_answer (extDnsCtx     * ctx, 
+					    extDnsMessage * message, 
+					    extDnsType      type, 
+					    extDnsClass     class, 
+					    const char    * name, 
+					    int             ttl, 
+					    const char    * content);
 
 axl_bool        ext_dns_message_add_answer_from_msg (extDnsCtx * ctx, extDnsMessage * message, extDnsMessage * extension);
 
@@ -68,7 +78,7 @@ axl_bool        ext_dns_message_ref (extDnsMessage * message);
 
 void            ext_dns_message_unref (extDnsMessage * message);
 
-int             ext_dns_message_count (extDnsMessage * message);
+int             ext_dns_message_ref_count (extDnsMessage * message);
 
 axl_bool        ext_dns_message_send_udp_s (extDnsCtx      * ctx, 
 					    extDnsSession  * session,
