@@ -50,11 +50,29 @@ extDnsMessage * ext_dns_message_build_unknown_reply (extDnsCtx * ctx, extDnsMess
 
 extDnsMessage * ext_dns_message_build_ipv4_reply (extDnsCtx * ctx, extDnsMessage * message, const char * ip, int ttl);
 
-axl_bool        ext_dns_message_add_ipv4_reply (extDnsCtx * ctx, extDnsMessage * reply, const char * ip, int ttl);
-
 extDnsMessage * ext_dns_message_build_cname_reply (extDnsCtx * ctx, extDnsMessage * message, const char * name, int ttl);
 
+extDnsMessage * ext_dns_message_build_mx_reply (extDnsCtx * ctx, extDnsMessage * message, const char * mailer, int preference, int ttl);
+
+extDnsMessage * ext_dns_message_build_ns_reply (extDnsCtx * ctx, extDnsMessage * message, const char * dns_server, int ttl);
+
+extDnsMessage * ext_dns_message_build_soa_reply (extDnsCtx * ctx, extDnsMessage * message, 
+						 const char * primary_server, const char * mail_contact, 
+						 int serial, int refresh, int retry, int expire, int minimum,
+						 int ttl);
+
+axl_bool        ext_dns_message_add_ipv4_reply (extDnsCtx * ctx, extDnsMessage * reply, const char * ip, int ttl);
+
 axl_bool        ext_dns_message_add_cname_reply (extDnsCtx * ctx, extDnsMessage * reply, const char * name, int ttl);
+
+axl_bool        ext_dns_message_add_mx_reply (extDnsCtx * ctx, extDnsMessage * reply, const char * mailer, int preference, int ttl);
+
+axl_bool        ext_dns_message_add_ns_reply (extDnsCtx * ctx, extDnsMessage * reply, const char * dns_server, int ttl);
+
+axl_bool        ext_dns_message_add_soa_reply (extDnsCtx * ctx, extDnsMessage * reply, 
+					       const char * primary_server, const char * mail_contact, 
+					       int serial, int refresh, int retry, int expire, int minimum,
+					       int ttl);
 
 axl_bool        ext_dns_message_add_answer (extDnsCtx     * ctx, 
 					    extDnsMessage * message, 

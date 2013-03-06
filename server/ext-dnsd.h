@@ -99,6 +99,5 @@ extDnsMessage * ext_dnsd_parse_and_handle_reply_single (extDnsCtx     * ctx,
 							const char    * reply_buffer,
 							extDnsSession * session,
 							const char    * source_address,
-							int             source_port, 
-							axl_bool        nocache);
+							int             source_port);
 #endif

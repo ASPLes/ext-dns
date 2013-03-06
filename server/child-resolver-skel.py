@@ -34,8 +34,20 @@ while True:
             print "FORWARD"
             continue
 
-        print "FORWARD"
-        continue
+        # MX reply example
+        if name == "aspl.es" and dns_record == "MX":
+            print "REPLY mx:mail3.aspl.es 10 3600, mx:mail4.aspl.es 20 3600"
+            continue
+
+        # NS reply example
+        if name == "aspl.es" and dns_record == "NS":
+            print "REPLY ns:nsserver01.aspl.es 3600, ns:nsserver02.aspl.es 3600"
+            continue
+
+        # SOA example
+        if name == "aspl.es" and dns_record == "SOA":
+            print "REPLY soa:ns1.account.aspl.es soporte@aspl.es 2012120400 10800 3600 604800 3600"
+            continue
 
         # example about rewriting a request into another name
         if name == "www.google.com":

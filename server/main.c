@@ -432,8 +432,7 @@ extDnsMessage * ext_dnsd_parse_and_handle_reply (extDnsCtx     * ctx,
 						 const char    * reply_buffer,
 						 extDnsSession * session,
 						 const char    * source_address,
-						 int             source_port, 
-						 axl_bool        nocache)
+						 int             source_port)
 {
 	char           ** items;
 	extDnsMessage   * reply = NULL;
@@ -453,9 +452,11 @@ extDnsMessage * ext_dnsd_parse_and_handle_reply (extDnsCtx     * ctx,
 		while (items[iterator]) {
 
 			/* call to get and accumulate replies into a single object */
-			reply = ext_dnsd_parse_and_handle_reply_single (ctx, query, reply, items[iterator], session, source_address, source_port, nocache);
-			if (PTR_TO_INT(reply) == 2)
+			reply = ext_dnsd_parse_and_handle_reply_single (ctx, query, reply, items[iterator], session, source_address, source_port);
+			if (PTR_TO_INT(reply) == 2 || reply == NULL)
 				break;
+			if (reply)
+				ext_dns_log (EXT_DNS_LEVEL_DEBUG, "MULTIPLE-REPLY: Replies hold in the header: %d", reply->header->answer_count);
 
 			/* next iterator */
 			iterator++;
@@ -465,7 +466,7 @@ extDnsMessage * ext_dnsd_parse_and_handle_reply (extDnsCtx     * ctx,
 	} /* end if */
 
 	/* report single reply received */
-	return ext_dnsd_parse_and_handle_reply_single (ctx, query, reply, reply_buffer, session, source_address, source_port, nocache);
+	return ext_dnsd_parse_and_handle_reply_single (ctx, query, reply, reply_buffer, session, source_address, source_port);
 }
 
 extDnsMessage * ext_dnsd_parse_and_handle_reply_single (extDnsCtx     * ctx, 
@@ -474,15 +475,27 @@ extDnsMessage * ext_dnsd_parse_and_handle_reply_single (extDnsCtx     * ctx,
 							const char    * reply_buffer,
 							extDnsSession * session,
 							const char    * source_address,
-							int             source_port, 
-							axl_bool        nocache)
+							int             source_port)
 {
 	char           ** items;
 	HandleReplyData * handle_reply;
 	extDnsMessage   * aux;
 	const char      * value;
+	int               preference;
 	int               ttl;
 	int               desp = 0;
+	axl_bool          nocache;
+	axl_bool          norecurse;
+
+	/* check for additional flags */
+	nocache = !(strstr (reply_buffer, "nocache") == NULL);
+	if (exarg_is_defined ("debug"))
+		syslog (LOG_INFO, "nocache indication was=%d (inside: %s)", nocache, reply_buffer);
+
+	/* check for additional flags */
+	norecurse = !(strstr (reply_buffer, "norecurse") == NULL);
+	if (exarg_is_defined ("debug"))
+		syslog (LOG_INFO, "norecurse indication was=%d (inside: %s)", norecurse, reply_buffer);
 	
 	/* get items */
 	items = axl_split (reply_buffer, 1, " ");
@@ -512,7 +525,7 @@ extDnsMessage * ext_dnsd_parse_and_handle_reply_single (extDnsCtx     * ctx,
 		} /* end if */
 
 		/* get ttl */
-		ttl = atoi (items[desp + 1]);
+		ttl = ext_dns_atoi (items[desp + 1]);
 		if (exarg_is_defined ("debug"))
 			syslog (LOG_INFO, "Script reported to use IP %s (with ttl %d) as reply..", items[desp] + 5, ttl);
 
@@ -522,12 +535,14 @@ extDnsMessage * ext_dnsd_parse_and_handle_reply_single (extDnsCtx     * ctx,
 		} else
 			reply = ext_dns_message_build_ipv4_reply (ctx, query, value, ttl);
 		
-	} else if (axl_memcmp (items[desp], "name:", 5)) {
+	} else if (axl_memcmp (items[desp], "name:", 5) || axl_memcmp (items[desp], "cname:", 6)) {
 		/* get ttl */
-		ttl = atoi (items[desp + 1]);
+		ttl = ext_dns_atoi (items[desp + 1]);
 
 		/* get value */
 		value = items[desp] + 5;
+		if (axl_memcmp (items[desp], "cname:", 6))
+			value = items[desp] + 6;
 
 		if (exarg_is_defined ("debug"))
 			syslog (LOG_INFO, "Script reported to use Name %s (with ttl %d) as reply..", value, ttl);
@@ -540,6 +555,7 @@ extDnsMessage * ext_dnsd_parse_and_handle_reply_single (extDnsCtx     * ctx,
 		if (reply == NULL) {
 			syslog (LOG_ERR, "Failed to build cname reply with name=%s ttl=%d (memory allocation error)", value, ttl);
 			increase_failures_found ();
+			axl_freev (items);
 			return INT_TO_PTR (2); /* report to do anything */
 		} /* end if */
 
@@ -551,27 +567,31 @@ extDnsMessage * ext_dnsd_parse_and_handle_reply_single (extDnsCtx     * ctx,
 		 * cache have that value */
 		aux   = ext_dns_cache_get (ctx, extDnsClassIN, extDnsTypeA, value, source_address);
 		if (aux == NULL) {
-			/* build reply data */
-			handle_reply                  = axl_new (HandleReplyData, 1);
-			if (handle_reply == NULL) {
-				/* release reply */
-				ext_dns_message_unref (reply);
+			/* only recurse when the user didn't state anything against */
+			if (! norecurse) {
+				/* build reply data */
+				handle_reply                  = axl_new (HandleReplyData, 1);
+				if (handle_reply == NULL) {
+					/* release reply */
+					ext_dns_message_unref (reply);
+					axl_freev (items);
+					return INT_TO_PTR (2); /* report failure */
+				} /* end if */
+				
+				handle_reply->source_address  = axl_strdup (source_address);
+				handle_reply->source_port     = source_port;
+				handle_reply->master_listener = session;
+				handle_reply->reply           = reply;
+				handle_reply->nocache         = nocache;
+				
+				/* found that the value A isn't found in the
+				 * case, we have to ask for it */
+				ext_dns_message_query_int (ctx, extDnsClassIN, extDnsTypeA, value,
+							   server, server_port, handle_reply_complete_cname, handle_reply);
 				axl_freev (items);
-				return INT_TO_PTR (2); /* report failure */
+				return INT_TO_PTR (2); /* report that we are asking to complete the request */
 			} /* end if */
 
-			handle_reply->source_address  = axl_strdup (source_address);
-			handle_reply->source_port     = source_port;
-			handle_reply->master_listener = session;
-			handle_reply->reply           = reply;
-			handle_reply->nocache         = nocache;
-
-			/* found that the value A isn't found in the
-			 * case, we have to ask for it */
-			ext_dns_message_query_int (ctx, extDnsClassIN, extDnsTypeA, value,
-						   server, server_port, handle_reply_complete_cname, handle_reply);
-			axl_freev (items);
-			return INT_TO_PTR (2); /* report that we are asking to complete the request */
 		} else {
 			/* ok, extend reply with the provided value and reply */
 			if (exarg_is_defined ("debug")) {
@@ -582,6 +602,83 @@ extDnsMessage * ext_dnsd_parse_and_handle_reply_single (extDnsCtx     * ctx,
 			ext_dns_message_unref (aux);
 
 		} /* end if */
+	} else if (axl_memcmp (items[desp], "mx:", 3)) {
+
+		/* get value */
+		value = items[desp] + 3;
+
+		/* get ttl */
+		preference = ext_dns_atoi (items[desp + 1]);
+
+		/* get ttl */
+		ttl = ext_dns_atoi (items[desp + 2]);
+
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "MX: creating or adding MX reply %s %d %d",
+			     value, preference, ttl);
+		if (reply) {
+			ext_dns_message_add_mx_reply (ctx, reply, value, preference, ttl);
+		} else
+			reply = ext_dns_message_build_mx_reply (ctx, query, value, preference, ttl);
+
+	} else if (axl_memcmp (items[desp], "ns:", 3)) { /* support for NS records */ 
+
+		/* get value */
+		value = items[desp] + 3;
+
+		/* get ttl */
+		ttl   = ext_dns_atoi (items[desp + 1]);
+
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "NS: creating or adding NS reply %s %d", value, ttl);
+		if (reply) {
+			ext_dns_message_add_ns_reply (ctx, reply, value, ttl);
+		} else
+			reply = ext_dns_message_build_ns_reply (ctx, query, value, ttl);
+
+	} else if (axl_memcmp (items[desp], "soa:", 4)) { /* support for NS records */ 
+
+		/* get value */
+		value = items[desp] + 4;
+
+		/* get ttl */
+		ttl   = ext_dns_atoi (items[desp + 7]);
+
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "SOA: creating or adding SOA reply (mname: %s, rname: %s, ttl: %d, reply: %p)",
+			     value, items[desp + 1], ttl, reply);
+		if (reply) {
+			ext_dns_message_add_soa_reply (ctx, reply, 
+						       /* soa main server (mname) */
+						       value,  
+						       /* mail contact (rname) */
+						       items[desp + 1], 
+						       /* serial */
+						       ext_dns_atoi(items[desp + 2]), 
+						       /* refresh */
+						       ext_dns_atoi(items[desp + 3]), 
+						       /* retry */
+						       ext_dns_atoi(items[desp + 4]), 
+						       /* expire */
+						       ext_dns_atoi(items[desp + 5]), 
+						       /* minimum */
+						       ext_dns_atoi(items[desp + 6]), 
+						       ttl);
+		} else
+			reply = ext_dns_message_build_soa_reply (
+				ctx, query, 
+				/* soa main server (mname) */
+				value,  
+				/* mail contact (rname) */
+				items[desp + 1], 
+				/* serial */
+				ext_dns_atoi(items[desp + 2]), 
+				/* refresh */
+				ext_dns_atoi(items[desp + 3]), 
+				/* retry */
+				ext_dns_atoi(items[desp + 4]), 
+				/* expire */
+				ext_dns_atoi(items[desp + 5]), 
+				/* minimum */
+				ext_dns_atoi(items[desp + 6]), 
+				ttl);
 	}
 
 	axl_freev (items);
@@ -606,7 +703,7 @@ int ext_dnsd_server_get_int (const char * reply_buffer)
 		    reply_buffer[iterator] == '7' ||
 		    reply_buffer[iterator] == '8' ||
 		    reply_buffer[iterator] == '9')
-			return atoi (reply_buffer + iterator);
+			return ext_dns_atoi (reply_buffer + iterator);
 
 		/* next position */
 		iterator++;
@@ -692,7 +789,6 @@ void on_received  (extDnsCtx     * ctx,
 	char            * command;
 	childState      * child;
 	extDnsMessage   * reply = NULL;
-	axl_bool          nocache = axl_false;
 
 	/* skip messages that are queries */
 	if (! ext_dns_message_is_query (message)) {
@@ -716,7 +812,7 @@ void on_received  (extDnsCtx     * ctx,
 	/* check for forward all requests */
 	if (forward_all_requests)  {
 		/* call to forward request */
-		ext_dnsd_forward_request (ctx, message, session, source_address, source_port, nocache);
+		ext_dnsd_forward_request (ctx, message, session, source_address, source_port, axl_true);
 		return;
 	} /* end if */
 
@@ -744,7 +840,7 @@ void on_received  (extDnsCtx     * ctx,
 		
 		/* build the unknown reply */
 		reply = ext_dns_message_build_unknown_reply (ctx, message);
-		ext_dnsd_send_request_reply (ctx, session, source_address, source_port, reply, nocache);
+		ext_dnsd_send_request_reply (ctx, session, source_address, source_port, reply, axl_false);
 		return;
 	} /* end if */
 
@@ -764,8 +860,8 @@ void ext_dnsd_handle_child_cmd (extDnsCtx     * ctx,
 	axl_bool          permanent;
 	int               bytes_written;
 	char              reply_buffer[4096];
-	axl_bool          nocache = axl_false;
 	extDnsMessage   * reply = NULL;
+	axl_bool          nocache;
 
 	/* send command and process reply */
 	bytes_written = send_command (command, child, reply_buffer, 4096);
@@ -785,7 +881,7 @@ void ext_dnsd_handle_child_cmd (extDnsCtx     * ctx,
 	nocache = !(strstr (reply_buffer, "nocache") == NULL);
 	if (exarg_is_defined ("debug"))
 		syslog (LOG_INFO, "nocache indication was=%d (inside: %s)", nocache, reply_buffer);
-	
+
 	/* get reply */
 	if (axl_memcmp (reply_buffer, "DISCARD", 7)) {
 		if (exarg_is_defined ("debug"))
@@ -824,8 +920,10 @@ void ext_dnsd_handle_child_cmd (extDnsCtx     * ctx,
 
 	} else if (axl_memcmp (reply_buffer, "REPLY ", 6)) {
 		/* parse reply received */
-		reply = ext_dnsd_parse_and_handle_reply (ctx, message, reply_buffer, session, source_address, source_port, nocache);
-		
+		reply = ext_dnsd_parse_and_handle_reply (ctx, message, reply_buffer, session, source_address, source_port);
+		if (reply == NULL) {
+			syslog (LOG_INFO, "ERROR: child reported NULL content which means there's a failure or the child resolver application is not properly handling command: %s, forwarding query to serve request", command);
+		} /* end if */
 	} else {
 		syslog (LOG_INFO, "ERROR: unrecognized command reply found from child: %s..", reply_buffer);
 		/* update stats */
@@ -1492,7 +1590,7 @@ void start_child_applications (void)
 	}
 
 	/* child number */
-	children_number = atoi (ATTR_VALUE (node, "value"));
+	children_number = ext_dns_atoi (ATTR_VALUE (node, "value"));
 
 	/* check child number */
 	if (children_number <= 0) {
@@ -1689,7 +1787,7 @@ void setup_thread_num (void) {
 		   exit (-1); */
 	}
 	
-	number = atoi (number_str);
+	number = ext_dns_atoi (number_str);
 	if (number <= 0) {
 		syslog (LOG_ERR, "Leaving default thread number because found invalid value: %s", number_str);
 		return;
@@ -1705,7 +1803,7 @@ void setup_thread_num (void) {
 	else {
 		/* get command timeout and default value */
 		if (number_str)
-			command_timeout = atoi (number_str);
+			command_timeout = ext_dns_atoi (number_str);
 		else
 			command_timeout = 15;
 		if (command_timeout == 0)

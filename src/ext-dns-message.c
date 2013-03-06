@@ -802,10 +802,10 @@ extDnsMessage * ext_dns_message_build_ipv4_reply (extDnsCtx * ctx, extDnsMessage
 
 	/* place ip values */
 	ip_items = axl_split (ip, 1, ".");
-	reply->answers[0].rdata[0] = atoi(ip_items[0]);
-	reply->answers[0].rdata[1] = atoi(ip_items[1]);
-	reply->answers[0].rdata[2] = atoi(ip_items[2]);
-	reply->answers[0].rdata[3] = atoi(ip_items[3]);
+	reply->answers[0].rdata[0] = ext_dns_atoi(ip_items[0]);
+	reply->answers[0].rdata[1] = ext_dns_atoi(ip_items[1]);
+	reply->answers[0].rdata[2] = ext_dns_atoi(ip_items[2]);
+	reply->answers[0].rdata[3] = ext_dns_atoi(ip_items[3]);
 	axl_freev (ip_items);
 
 	/* return reply */
@@ -891,12 +891,171 @@ extDnsMessage * ext_dns_message_build_cname_reply (extDnsCtx * ctx, extDnsMessag
 }
 
 /** 
+ * @brief Allows to build a message reply to the provided message,
+ * using as reply to the question the name provided.
+ *
+ * @param ctx The context where the operation will take place.
+ *
+ * @param message A DNS message question that will be used to build a reply.
+ *
+ * @param mailer The mailer that will appear in the MX record.
+ *
+ * @param preference The MX preference.
+ *
+ * @param ttl The ttl to be reported in the reply.
+ *
+ * @return A reference to a newly created message that represents the
+ * reply or NULL if the function fails. 
+ */
+extDnsMessage * ext_dns_message_build_mx_reply (extDnsCtx * ctx, extDnsMessage * message, const char * mailer, int preference, int ttl)
+{
+	extDnsMessage   * reply;
+
+	if (ctx == NULL || message == NULL || mailer == NULL || preference < 0)
+		return NULL;
+
+	/* build reply without error */
+	reply = __ext_dns_message_build_reply_common (ctx, message, extDnsResponseNoError);
+
+	/* copy questions */
+	reply->header->answer_count = 1;
+	reply->answers = axl_new (extDnsResourceRecord, 1);
+
+	/* configure answer record type */
+	reply->answers[0].name  = axl_strdup (reply->questions[0].qname);
+	reply->answers[0].class = extDnsClassIN;
+	reply->answers[0].type  = extDnsTypeMX;
+
+	/* MX content */
+	reply->answers[0].name_content  = axl_strdup (mailer);
+	reply->answers[0].preference    = preference;
+
+	/* set ttl */
+	reply->answers[0].ttl = ttl;
+
+	/* return reply */
+	return reply;	
+}
+
+/** 
+ * @brief Allows to build a message reply to the provided message,
+ * using as reply to the question the name provided.
+ *
+ * @param ctx The context where the operation will take place.
+ *
+ * @param message A DNS message question that will be used to build a reply.
+ *
+ * @param dns_server The DNS server that will appear in the NS record.
+ *
+ * @param ttl The ttl to be reported in the reply.
+ *
+ * @return A reference to a newly created message that represents the
+ * reply or NULL if the function fails. 
+ */
+extDnsMessage * ext_dns_message_build_ns_reply (extDnsCtx * ctx, extDnsMessage * message, const char * dns_server, int ttl)
+{
+	extDnsMessage   * reply;
+
+	if (ctx == NULL || message == NULL || dns_server == NULL)
+		return NULL;
+
+	/* build reply without error */
+	reply = __ext_dns_message_build_reply_common (ctx, message, extDnsResponseNoError);
+
+	/* copy questions */
+	reply->header->answer_count = 1;
+	reply->answers = axl_new (extDnsResourceRecord, 1);
+
+	/* configure answer record type */
+	reply->answers[0].name  = axl_strdup (reply->questions[0].qname);
+	reply->answers[0].class = extDnsClassIN;
+	reply->answers[0].type  = extDnsTypeNS;
+
+	/* NS content */
+	reply->answers[0].name_content  = axl_strdup (dns_server);
+
+	/* set ttl */
+	reply->answers[0].ttl = ttl;
+
+	/* return reply */
+	return reply;	
+}
+
+/** 
+ * @brief Allows to build a message reply to the provided message,
+ * using as reply to the question the name provided.
+ *
+ * @param ctx The context where the operation will take place.
+ *
+ * @param message A DNS message question that will be used to build a reply.
+ *
+ * @param primary_server The primary DNS server name for the SOA record.
+ *
+ * @param mail_contact The mail contact for this domain.
+ *
+ * @param serial The serial value for SOA record.
+ *
+ * @param refresh The refresh value for SOA record.
+ *
+ * @param retry The retry value for SOA record.
+ *
+ * @param expire The expire value for SOA record.
+ *
+ * @param minimum The minimum value for SOA record.
+ *
+ * @param ttl The ttl to be reported in the reply.
+ *
+ * @return A reference to a newly created message that represents the
+ * reply or NULL if the function fails. 
+ */
+extDnsMessage * ext_dns_message_build_soa_reply (extDnsCtx * ctx, extDnsMessage * message, 
+						 const char * primary_server, const char * mail_contact, 
+						 int serial, int refresh, int retry, int expire, int minimum,
+						 int ttl)
+{
+	extDnsMessage   * reply;
+
+	if (ctx == NULL || message == NULL || primary_server == NULL || mail_contact == NULL)
+		return NULL;
+
+	/* build reply without error */
+	reply = __ext_dns_message_build_reply_common (ctx, message, extDnsResponseNoError);
+
+	/* copy questions */
+	reply->header->answer_count = 1;
+	reply->answers = axl_new (extDnsResourceRecord, 1);
+
+	/* configure answer record type */
+	reply->answers[0].name  = axl_strdup (reply->questions[0].qname);
+	reply->answers[0].class = extDnsClassIN;
+	reply->answers[0].type  = extDnsTypeSOA;
+
+	/* SOA content */
+	reply->answers[0].mname           = axl_strdup (primary_server);
+	reply->answers[0].contact_address = axl_strdup (mail_contact);
+	axl_replace (reply->answers[0].contact_address, "@", ".");
+
+	/* numeric values */
+	reply->answers[0].serial  = serial;
+	reply->answers[0].refresh = refresh;
+	reply->answers[0].retry   = retry;
+	reply->answers[0].expire  = expire;
+	reply->answers[0].minimum = minimum;
+
+	/* set ttl */
+	reply->answers[0].ttl = ttl;
+
+	/* return reply */
+	return reply;		
+}
+
+/** 
  * @brief Allows to add a cname reply on the provided reply already
  * created.
  *
  * @param ctx The context where the operation will take place.
  *
- * @param reply The DNS reply where the cname reply will be added.
+ * @param reply The DNS reply where the MX reply will be added.
  *
  * @param name A name string value what will be used to complete the
  * ANSWER section of the message. Note the reply created will have IN
@@ -910,11 +1069,129 @@ extDnsMessage * ext_dns_message_build_cname_reply (extDnsCtx * ctx, extDnsMessag
 axl_bool        ext_dns_message_add_cname_reply (extDnsCtx * ctx, extDnsMessage * reply, const char * name, int ttl)
 {
 	/* query if the question section is ok */
-	if (reply == NULL || reply->questions == NULL || reply->questions[0].qname == NULL)
+	if (reply == NULL || reply->questions == NULL || reply->questions[0].qname == NULL) {
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to add cname value %s, ttl %d to the reply %p, NULL reply, NULL questions section or NULL qname", 
+			     name, ttl, reply);
 		return axl_false;
+	}
 
 	/* report result */
-	return ext_dns_message_add_answer (ctx, reply, extDnsTypeA, extDnsClassIN, reply->questions[0].qname, ttl, name);
+	return ext_dns_message_add_answer (ctx, reply, extDnsTypeCNAME, extDnsClassIN, reply->questions[0].qname, ttl, name);
+}
+
+/** 
+ * @brief Allows to add a MX reply on the provided reply already
+ * created.
+ *
+ * @param ctx The context where the operation will take place.
+ *
+ * @param reply The DNS reply where the cname reply will be added.
+ *
+ * @param mailer The hostname that is going to appear as the mailer host.
+ *
+ * @param preference The MX preference.
+ *
+ * @param ttl The ttl to be reported in the reply.
+ *
+ * @return axl_true in the case the reply was added, otherwise
+ * axl_false is returned.
+ */
+axl_bool        ext_dns_message_add_mx_reply (extDnsCtx * ctx, extDnsMessage * reply, const char * mailer, int preference, int ttl)
+{
+	axl_bool   result;
+	char     * temp;
+
+	/* query if the question section is ok */
+	if (reply == NULL || reply->questions == NULL || reply->questions[0].qname == NULL || mailer == NULL || preference < 0) {
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, 
+			     "Failed to add MX value, received invalid content (null context %p), (null reply %p), (null mailer %p) (wrong preference %d)",
+			     ctx, reply, mailer, preference);
+		return axl_false;
+	} /* end if */
+
+	/* report result */
+	temp = axl_strdup_printf ("%d %s", preference, mailer);
+	result = ext_dns_message_add_answer (ctx, reply, extDnsTypeMX, extDnsClassIN, reply->questions[0].qname, ttl, temp);
+	axl_free (temp);
+	return result;
+}
+
+/** 
+ * @brief Allows to add a cname reply on the provided reply already
+ * created.
+ *
+ * @param ctx The context where the operation will take place.
+ *
+ * @param reply The DNS reply where the NS reply will be added.
+ *
+ * @param dns_name DNS servername added to the reply.
+ *
+ * @param ttl The ttl to be reported in the reply.
+ *
+ * @return axl_true in the case the reply was added, otherwise
+ * axl_false is returned.
+ */
+axl_bool        ext_dns_message_add_ns_reply (extDnsCtx * ctx, extDnsMessage * reply, const char * dns_server, int ttl)
+{
+	/* query if the question section is ok */
+	if (reply == NULL || reply->questions == NULL || reply->questions[0].qname == NULL) {
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to add cname value %s, ttl %d to the reply %p, NULL reply, NULL questions section or NULL qname", 
+			     dns_server, ttl, reply);
+		return axl_false;
+	}
+
+	/* report result */
+	return ext_dns_message_add_answer (ctx, reply, extDnsTypeCNAME, extDnsClassIN, reply->questions[0].qname, ttl, dns_server);
+}
+
+/** 
+ * @brief Allows to add a NS reply on the provided reply already
+ * created.
+ *
+ * @param ctx The context where the operation will take place.
+ *
+ * @param reply The DNS reply where the NS reply will be added.
+ *
+ * @param primary_server The primary DNS server name for the SOA record.
+ *
+ * @param mail_contact The mail contact for this domain.
+ *
+ * @param serial The serial value for SOA record.
+ *
+ * @param refresh The refresh value for SOA record.
+ *
+ * @param retry The retry value for SOA record.
+ *
+ * @param expire The expire value for SOA record.
+ *
+ * @param minimum The minimum value for SOA record.
+ *
+ * @param ttl The ttl to be reported in the reply.
+ *
+ * @return axl_true in the case the reply was added, otherwise
+ * axl_false is returned.
+ */
+axl_bool        ext_dns_message_add_soa_reply (extDnsCtx * ctx, extDnsMessage * reply, 
+					       const char * primary_server, const char * mail_contact, 
+					       int serial, int refresh, int retry, int expire, int minimum,
+					       int ttl)
+{
+	char     * temp;
+	axl_bool   result;
+
+	/* query if the question section is ok */
+	if (reply == NULL || reply->questions == NULL || reply->questions[0].qname == NULL || primary_server == NULL || mail_contact == NULL) {
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, 
+			     "Failed to add NS value, received invalid content (null context %p), (null reply %p), (null mailer %p) (wrong preference %d)",
+			     ctx, reply, primary_server, mail_contact);
+		return axl_false;
+	} /* end if */
+
+	/* report result */
+	temp   = axl_strdup_printf ("%s %s %d %d %d %d %d", primary_server, mail_contact, serial, refresh, retry, expire, minimum);
+	result = ext_dns_message_add_answer (ctx, reply, extDnsTypeSOA, extDnsClassIN, reply->questions[0].qname, ttl, temp);
+	axl_free (temp);
+	return result;
 }
 
 /** 
@@ -934,32 +1211,57 @@ axl_bool        ext_dns_message_add_cname_reply (extDnsCtx * ctx, extDnsMessage 
  *
  * @param ttl The record ttl value.
  *
- * @param content The record content to be configured.
+ * @param content The record content to be configured. The following are supported formats for content: 
+ *
+ * \code
+ * Record type      Content
+ *
+ * A                ipv4
+ *
+ * AAAA             ipv6
+ *
+ * CNAME            host domain name
+ *
+ * SOA              <mname> <rname> <serial> <retry> <expire> 
+ *                  ; check RFC1035, page 19 for more information.
+ *
+ * MX               <preference>
+ *                  ; where <preference> is a number and <mailer> is the mailer hostname
+ *
+ * NS               host domain name
+ * \endcode
  *
  * @return axl_true if the answer was added to the reply, otherwise,
  * axl_false is returned. The function also returns axl_false when the
  * value provided doesn't match the type. For example, if extDnsTypeA
  * is provided, content must have a valid IPv4 value.
  */
-axl_bool        ext_dns_message_add_answer (extDnsCtx * ctx, extDnsMessage * message, extDnsType type, extDnsClass class, const char * name, int ttl, const char * content)
+axl_bool        ext_dns_message_add_answer (extDnsCtx * ctx, extDnsMessage * message, extDnsType type, extDnsClass class, 
+					    const char * name, int ttl, const char * content)
 {
 	axlPointer              ptr;
 	extDnsResourceRecord  * rr;
 	char                 ** items;
 
-	if (ctx == NULL || message == NULL || name == NULL || content == NULL)
+	if (ctx == NULL || message == NULL || name == NULL || content == NULL) {
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to add answer, context, message, record name or record content is NULL");
 		return axl_false;
+	} /* end if */
 	
 	/* prechecks before doing anything */
 	if (type == extDnsTypeA) {
-		if (! ext_dns_support_is_ipv4 (content))
+		if (! ext_dns_support_is_ipv4 (content)) {
+			ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to add answer, received an IP which isn't valid: %s", content);
 			return axl_false;
+		}
 	} /* end if */
 
 	/* realloc value */
 	ptr = axl_realloc (message->answers, sizeof (extDnsResourceRecord) * (message->header->answer_count + 1));
-	if (ptr == NULL)
+	if (ptr == NULL) {
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to add answer, unable to allocate enough memory");
 		return axl_false;
+	} /* end if */
 
 	/* update references */
 	message->answers = ptr;
@@ -986,6 +1288,7 @@ axl_bool        ext_dns_message_add_answer (extDnsCtx * ctx, extDnsMessage * mes
 			/* remove this answer from the header because
 			 * the data isn't complete */
 			message->header->answer_count--;
+			ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to add answer, failed to allocate memory for the rdata section");
 			return axl_false;
 		} /* end if */
 
@@ -995,13 +1298,48 @@ axl_bool        ext_dns_message_add_answer (extDnsCtx * ctx, extDnsMessage * mes
 			/* remove this answer from the header because
 			 * the data isn't complete */
 			message->header->answer_count--;
+			ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to add answer, failed to allocate memory to the answer question");
 			return axl_false;
 		} /* end if */
 
-		rr->rdata[0] = atoi (items[0]);
-		rr->rdata[1] = atoi (items[1]);
-		rr->rdata[2] = atoi (items[2]);
-		rr->rdata[3] = atoi (items[3]);
+		rr->rdata[0] = ext_dns_atoi (items[0]);
+		rr->rdata[1] = ext_dns_atoi (items[1]);
+		rr->rdata[2] = ext_dns_atoi (items[2]);
+		rr->rdata[3] = ext_dns_atoi (items[3]);
+		axl_freev (items);
+	} else if (type == extDnsTypeMX) {
+		/* cear items */
+		items = axl_split (content, 1, " ");
+		/* clean split */
+		axl_stream_clean_split (items);
+		
+		/* get preference ... */
+		rr->preference  = ext_dns_atoi(items[0]);
+
+		/* ... and domain */
+		axl_free (rr->name_content);
+		rr->name_content = axl_strdup (items[1]);
+		
+		axl_freev (items);
+	} else if (type == extDnsTypeSOA) {
+		/* clear items */
+		items = axl_split (content, 1, " ");
+		/* clean split */
+		axl_stream_clean_split (items);
+		
+		/* get soa values */
+		rr->mname              = axl_strdup (items[0]);
+		rr->contact_address    = axl_strdup (items[1]);
+		axl_replace (rr->contact_address, "@", ".");
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Result of processing contact address: '%s'", rr->contact_address);
+
+		rr->serial   = ext_dns_atoi (items[2]);
+		rr->refresh  = ext_dns_atoi (items[3]);
+		rr->retry    = ext_dns_atoi (items[4]);
+		rr->expire   = ext_dns_atoi (items[5]);
+		rr->minimum  = ext_dns_atoi (items[6]);
+
+		/* release items */
 		axl_freev (items);
 	} /* end if */
 	
