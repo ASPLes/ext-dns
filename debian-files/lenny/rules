@@ -70,7 +70,7 @@ install: build
 	test -d $(CURDIR)/debian/tmp/usr/share/doc/ext-dns || mkdir $(CURDIR)/debian/tmp/usr/share/doc/ext-dns
 	rsync -avz doc/html $(CURDIR)/debian/tmp/usr/share/doc/ext-dns/manual
 # prepare default configuration
-	sed 's@/home/acinom/core-admin/app-builder/apps/internet_access_manager/iam-resolver.py@@g' $(CURDIR)/server/ext-dns.example.conf > $(CURDIR)/debian/tmp/etc/ext-dns/ext-dns.conf 
+
 # copy initial init.d
 	cp $(CURDIR)/doc/ext-dnsd-init.d $(CURDIR)/debian/tmp/etc/init.d/ext-dnsd
 
