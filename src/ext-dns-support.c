@@ -313,3 +313,16 @@ axl_bool ext_dns_support_is_ipv4 (const char * value)
 	return iterator == 4;
 }
 
+/** 
+ * @brief Allows to get the number that represents the string
+ * provided.
+ *
+ * @return The number found or 0 if it fails.
+ */ 
+long int ext_dns_atoi (const char * number)
+{
+	if (number == NULL)
+		return 0;
+	return atoi (number);
+}
+

@@ -1496,15 +1496,22 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
  *                                        - BLACKLIST 3
  *                                        - BLACKLIST permanent
  *
- *            - REPLY ipv4:[value] [ttl] [nocache] [, more replies]
- *            - REPLY name:[value] [ttl] [nocache] [, more replies]
+ *            - REPLY ipv4:[value] [ttl] [, more replies] [nocache]
+ *            - REPLY (name:|cname:)[value] [ttl] [norecurse] [, more replies] [nocache]
+ *            - REPLY mx:[mailer] [preference] [ttl] [, more replies] [nocache]
+ *            - REPLY ns:[dns server] [ttl] [, more replies] [nocache]
+ *            - REPLY soa:[primary server] [mail contact] [serial] [refresh] [retry] [expire] [minimum] [, more replies] [nocache]
  *                                      : in this case the reply is directly handled by the child resolver
- *                                        providing a cname as reply to the request (in the case name: is used)
+ *                                        providing a cname as reply to the request (in the case name:/cname: is used)
  *                                        or a particular ipv4 value if ipv4: is used. 
  *
- *                                        The reply also includes what's the ttl to be used and optionally, an
+ *                                        The reply also includes the ttl to be used and optionally, an
  *                                        indication about caching the result reported. In the case nocache string
- *                                        is provided, ext-DnsD won't cache the value. 
+ *                                        is provided, ext-DnsD will not cache the value. 
+ *                                        
+ *                                        In the case of name: or cname: reply is received,
+ *                                        you can also especify norecurse option to enforce
+ *                                        ext-dns to avoid recursing to get the IP value associated to that name.
  *
  *                                        In the case you want multiple replies (answers) to the same question, 
  *                                        just add them separated by comma (,).
@@ -1513,9 +1520,18 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
  *
  *                                        - REPLY ipv4:127.0.0.1 3600 nocache
  *                                        - REPLY ipv4:127.0.0.1 3600
- *                                        - REPLY ipv4:127.0.0.1 3600 nocache, ipv4:192.168.0.154 3600, ipv4:192.168.0.155 3600 nocache
+ *                                        - REPLY ipv4:127.0.0.1 3600, ipv4:192.168.0.154 3600, ipv4:192.168.0.155 3600 nocache
+ *
  *                                        - REPLY name:www.aspl.es 3600 
- *                                        - REPLY name:www.google.com 3600 nocache, name:www.aspl.es 3600, name:www.asplhosting.com 3600 nocache
+ *                                        - REPLY name:www.google.com 3600, name:www.aspl.es 3600, name:www.asplhosting.com 3600 nocache
+ *
+ *                                        - REPLY mx:mail3.aspl.es 10 3600, mx:mail4.aspl.es 20 3600
+ *                                        - REPLY mx:mail3.aspl.es 10 3600
+ *
+ *                                        - REPLY ns:nsserver01.aspl.es 3600, ns:nsserver02.aspl.es 3600
+ *                                        - REPLY ns:test01.aspl.es 3600
+ *
+ *                                        - REPLY soa:ns1.account.aspl.es soporte@aspl.es 2012120400 10800 3600 604800 3600
  *
  * \endcode
  * 
