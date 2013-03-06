@@ -1026,6 +1026,9 @@ extDnsCtx     * ctx = NULL;
 
 void __terminate_ext_dns_listener (int value)
 {
+
+	/* reinstall signal handler */
+	signal (value, __terminate_ext_dns_listener);
 	
 	ext_dns_mutex_lock (&doing_exit_mutex);
 	if (__doing_exit) {
@@ -1823,6 +1826,9 @@ void __block_server (int value)
 	const char       * action = "hold";
 
 	syslog (LOG_INFO, "****** Received a signal (ext-dnsd is failing): pid %d", ext_dns_getpid ());
+
+	/* install signal again */
+	signal (value, __block_server);
 
 	/* find first listener node */
 	node = axl_doc_get (config, "/ext-dns-server/failure-action");
