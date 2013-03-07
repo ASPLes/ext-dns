@@ -39,3 +39,12 @@ Description: ext-Dns core library manual and API reference
   This package includes ext-Dns core library manual, API reference
   and ext-dnsd manual.
 
+Package: ext-dns-query
+Section: libs
+Architecture: any
+Depends: libext-dns (>= ${Source-Version})
+Description: client DNS query tool with host like output
+  edq (ext-dns-query) tool is a command client tool that allows
+  doing DNS query operations providing a host like output and
+  a similar invocation. It includes additional options not available
+  on host tool.

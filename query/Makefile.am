@@ -4,7 +4,7 @@ endif
 
 EXTRA_DIST =
 
-bin_PROGRAMS = ext-dns-query
+bin_PROGRAMS = edq
 
 INCLUDES = -I$(top_srcdir)/src  $(AXL_CFLAGS)  $(PTHREAD_CFLAGS) $(EXARG_FLAGS) \
 	$(compiler_options) -D__axl_disable_broken_bool_def__   \
@@ -12,8 +12,8 @@ INCLUDES = -I$(top_srcdir)/src  $(AXL_CFLAGS)  $(PTHREAD_CFLAGS) $(EXARG_FLAGS) 
 
 LIBS            = $(AXL_LIBS) $(PTHREAD_LIBS) $(ADDITIONAL_LIBS)
 
-ext_dns_query_SOURCES        = ext-dns-query.c exarg.h exarg.c
-ext_dns_query_LDADD          = $(LIBS) $(top_builddir)/src/libext-dns.la 
+edq_SOURCES        = ext-dns-query.c exarg.h exarg.c
+edq_LDADD          = $(LIBS) $(top_builddir)/src/libext-dns.la 
 
 # copy exarg dependency to not force people to download a library with
 # two files
