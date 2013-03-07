@@ -38,7 +38,8 @@ dnl
 AC_INIT(src/ext-dns.h)
 
 configure_dir=`dirname "$0"`
-EXT_DNS_VERSION=`cat $configure_dir/VERSION`
+EXT_DNS_SUBVERSION=b`LANG=C svn info .  | grep "Revision:" | sed 's/Revision: //g' | sed 's/ //g'`
+EXT_DNS_VERSION=`cat $configure_dir/VERSION`.${EXT_DNS_SUBVERSION}
 AC_SUBST(EXT_DNS_VERSION)
 
 AC_CONFIG_AUX_DIR(.)
@@ -254,7 +255,7 @@ doc/ext-dns.doxygen
 ])
 
 echo "------------------------------------------"
-echo "--     ext-DNS  SETTINGS                 --"
+echo "--     ext-DNS v.${EXT_DNS_VERSION}  SETTINGS       --"
 echo "------------------------------------------"
 echo "   Installation prefix:            [$prefix]"
 echo "      select(2) support:           [yes]"

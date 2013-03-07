@@ -1300,7 +1300,7 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
  */
 
 /** 
- * \mainpage ext-Dns: a framework to build DNS server solutions
+ * \mainpage ext-Dns: a framework to build DNS server solutions 
  *
  * \section intro Introduction
  *
