@@ -127,6 +127,7 @@ void __release_pending_request (axlPointer _ptr) {
 		return;
 	ext_dns_message_unref (ptr->msg);
 	axl_free (ptr->command);
+	axl_free (ptr->source_address);
 	axl_free (ptr);
 
 	return;
@@ -774,8 +775,6 @@ void ext_dnsd_queue_pending_reply (extDnsCtx     * ctx,
 	axl_list_append (pending_requests, request);
 	ext_dns_mutex_unlock (&pnd_req_mutex);
 
-	
-
 	return;
 }
 
@@ -830,13 +829,14 @@ void on_received  (extDnsCtx     * ctx,
 		increase_failures_found ();
 
 		syslog (LOG_ERR, "ERROR: failed to get a child to attend request %s, replying unknown", command);
-		axl_free (command);
 
 		if (axl_list_length (pending_requests) < max_pnd_reqs) {
 			/* call to queue */
 			ext_dnsd_queue_pending_reply (ctx, session, message, command, source_address, source_port);
+			axl_free (command);
 			return;
 		} /* end if */
+		axl_free (command);
 		
 		/* build the unknown reply */
 		reply = ext_dns_message_build_unknown_reply (ctx, message);
@@ -845,6 +845,7 @@ void on_received  (extDnsCtx     * ctx,
 	} /* end if */
 
 	ext_dnsd_handle_child_cmd (ctx, message, session, child, source_address, source_port, command);
+	axl_free (command);
 	return;
 }
 
@@ -1933,6 +1934,8 @@ int main (int argc, char ** argv) {
 	/* wait and process requests */
 	syslog (LOG_INFO, "ext-dnsD started OK");
 	ext_dns_ctx_wait (ctx);
+
+	syslog (LOG_INFO, "Releasing ext-dns resources..");
 
 	/* terminate process */
 	ext_dns_exit_ctx (ctx, axl_true);

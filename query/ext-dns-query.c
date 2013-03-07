@@ -72,6 +72,12 @@ void install_arguments (int argc, char ** argv) {
 			   "Enable ext-dns debug output.");
 	exarg_install_arg ("type", "t", EXARG_STRING, 
 			   "By default, query sent to the DNS server uses A and class IN. With this flag you can change the query to other resource record type: mx, cname, hinfo, etc.");
+	/* debug options */
+	exarg_install_arg ("release-resources-on-finish", "z", EXARG_NONE,
+			   "By default, the tool will query and show the result and exit without releasing all resources that may be acquired. This is fine in many cases because the application is about to finish so there is no point to release those resources. However, while debugging, you can enable this option to check that the tool do not leak");
+	exarg_install_arg ("flood-dns-server", "f", EXARG_INT,
+			   "Allows to send send the amount of requests indicated by the user (randomly created) to the server in question. SECURITY CONSIDERATION: this is a debugging tool that you must use with your own server: NEVER against shared servers or DNS servers that aren't yours.");
+
 
 	/* call to parse arguments */
 	exarg_parse (argc, argv);
@@ -151,6 +157,56 @@ void ext_dns_query_show_message_as_host (extDnsCtx * ctx, extDnsMessage * messag
 	return;
 }
 
+/** flooding names */
+const char * const flood_names [] = { 
+	"google.com", 
+	"yahoo.com", 
+	"microsoft.com", 
+	"elmundo.es", 
+	"apple.com", 
+	"nasdac.com", 
+	"microsoft.com", 
+	"aspl.es" 
+};
+
+void ext_dns_query_flood_server (extDnsCtx * ctx) 
+{
+	ExArgument * arg;
+	const char * server = NULL;
+	int flood_requests;
+	int iterator;
+	char * name;
+
+	/* get first param */
+	arg = exarg_get_params ();
+
+	/* get server asked */
+	server = exarg_param_get (arg);
+	if (server == NULL) {
+		printf ("ERROR: you must provide a server name to query to\n");
+		exit (-1);
+	} /* end if */
+
+	/* get flood requests */
+	flood_requests = exarg_get_int ("flood-dns-server");
+	
+	printf ("FLOODING: sending %d requests without waiting to: %s:53\n", flood_requests, server);
+
+	/* create base name */
+	iterator = 0;
+	while (iterator < flood_requests) {
+		/* get name to query */
+		name = axl_strdup_printf ("www%d.%s", iterator, flood_names[iterator % 8]);
+		ext_dns_message_query (ctx, "A", "IN", name, server, 53, NULL, NULL);
+		axl_free (name);
+
+		iterator++;
+	} /* end while */
+	
+
+	return;
+}
+
 void ext_dns_query_do_request (extDnsCtx * ctx) {
 	ExArgument    * arg;
 	const char    * qname;
@@ -162,12 +218,6 @@ void ext_dns_query_do_request (extDnsCtx * ctx) {
 	const char    * qclass = "IN";
 	extDnsClass     _qclass;
 	const char    * server = NULL;
-	char            buffer[512];
-	int             bytes_written;
-	extDnsHeader  * header = NULL;
-
-	char          * source_address;
-	int             source_port;
 
 	/* queue to wait for reply */
 	extDnsAsyncQueue * queue;
@@ -210,35 +260,14 @@ void ext_dns_query_do_request (extDnsCtx * ctx) {
 		exit (-1);
 	} /* end if */
 
-	/* build the query */
-	bytes_written = ext_dns_message_build_query (ctx, qname, _qtype, _qclass, buffer, &header);
-	if (bytes_written <= 0) {
-		printf ("ERROR: failed to build query message, buffer reported was %d size\n", bytes_written);
-		exit (-1);
-	} /* end if */
-
-	if (verbose)
-		printf ("INFO: Build request with size: %d\n", bytes_written);
-
-	/* set on message query */
+	/* create queue */
 	queue = ext_dns_async_queue_new ();
-	ext_dns_ctx_set_on_message (ctx, ext_dns_query_on_message, queue);
-
-	/* send message */
-	if (ext_dns_session_send_udp (ctx, buffer, bytes_written, server, 53, &source_address, &source_port) != bytes_written) {
-		printf ("ERROR: failed to message..\n");
+	if (! ext_dns_message_query_int (ctx, _qtype, _qclass, qname, server, 53,
+					 ext_dns_query_on_message, queue)) {
+		printf ("ERROR: unable to send query to %s\n", qname);
 		exit (-1);
 	} /* end if */
 
-	if (verbose)
-		printf ("INFO: Request sent ID %d, source_address=%s, source port=%d..\n", header->id, source_address, source_port);
-
-	/* wait for reply and process it */
-	ext_dns_listener_new2 (ctx, source_address, source_port, extDnsUdpSession, NULL, NULL);
-
-	/* release source address */
-	axl_free (source_address);
-	
 	/* wait for reply */
 	message = ext_dns_async_queue_timedpop (queue, 5000000);
 	if (message == NULL) {
@@ -246,23 +275,11 @@ void ext_dns_query_do_request (extDnsCtx * ctx) {
 		exit (-1);
 	}
 
-	/* check message header */
-	if (message->header->id != header->id) {
-		printf ("ERROR: received wrong ID identifier on reply..\n");
-		exit (-1);
-	}
-
-	if (verbose)
-		printf ("INFO: reply received..\n");
-
 	/* release queue */
 	ext_dns_async_queue_unref (queue);
 
 	/*** message ***/
 	ext_dns_query_show_message_as_host (ctx, message, server, 53);
-
-	/* release header */
-	axl_free (header);
 
 	/* release message */
 	ext_dns_message_unref (message);
@@ -300,14 +317,20 @@ int main (int argc, char ** argv)
 
 	/* check for query */
 	if (exarg_get_params_num () > 0) {
-		ext_dns_query_do_request (ctx);
-	}
+		if (exarg_is_defined ("flood-dns-server")) {
+			ext_dns_query_flood_server (ctx);
+		} else {
+			ext_dns_query_do_request (ctx);
+		}
+	} /* end if */
 
-	/* terminate process */
-	ext_dns_exit_ctx (ctx, axl_true);
+	if (exarg_is_defined ("release-resources-on-finish")) {
+		/* terminate process */
+		ext_dns_exit_ctx (ctx, axl_true);
 
-	/* finish exarg */
-	exarg_end ();
+		/* finish exarg */
+		exarg_end ();
+	} /* end if */
 
 	return 0;
 }
