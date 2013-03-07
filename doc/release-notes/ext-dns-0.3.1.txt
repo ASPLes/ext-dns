@@ -1,0 +1,120 @@
+                 --== ext-Dns toolkit ==--
+              If you are in doubt, leave it out
+                          0.3.1
+
+Advanced Software Production Line is proud to announce a new stable
+public release of ext-Dns toolkit.
+
+ext-Dns is a ready to use toolkit that includes a core-library, a
+ready to use forward DNS server and some additional tools that will
+allow you building DNS solutions that performs additional operations
+when a request is received.
+
+Resources
+~~~~~~~~~
+
+   ext-Dns homepage
+   [ http://www.aspl.es/ext-dns ]
+
+   Advanced Software Production Line, S.L.
+   [ http://www.aspl.es ]
+
+This release in short
+~~~~~~~~~~~~~~~~~~~~~
+
+ - EXT-DNSD: Improved ext-Dnsd server to restart childs in the case
+     they die. Also added support to watch child status to kill them
+     in the case they take too much time to finish. Added support to
+     see current server state through /var/run/ext-dns.status. Fixed
+     some problems while using the cache. Added support to queue
+     pending requests that can't be handled because all childs are
+     busy, but with a configurable limit, dropping the rest of the
+     traffic.
+
+ - LIB-EXTDNS: Several bugs and memory leaks were corrected. Added new
+     API functions to ease adding records to query replies.
+  
+Changes from previous release
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* [fix] Updated ext-dns-query to do query operations using new API
+  provided by core library. Updated the tool to allow implementing
+  flooding operations against a DNS server.
+
+* [fix] Several memory leaks were fixed inside ext-dnsd.
+
+* [fix] Making the package to not provide an ext-dns.conf by default.
+
+* [fix] Updated signal handling inside ext-dnsd.
+
+* [fix] Fixed comment inside ext-dnsd, while holding the server.
+
+* [fix] Added signal handling to ext-dnsd to allow controlling what to
+  when they are received.
+
+* [new] Updated ext-dnsd to handle MX, NS and SOA records through
+  child resolvers.
+
+* [new] Several updates were applied to the base C library to include
+  support to easily add or create reply NS, MX or SOA records to a DNS
+  reply. API added:
+
+  - ext_dns_message_build_mx_reply
+  - ext_dns_message_build_ns_reply
+  - ext_dns_message_build_soa_reply
+  - ext_dns_message_add_mx_reply
+  - ext_dns_message_add_ns_reply
+  - ext_dns_message_add_soa_reply
+  
+* [fix] Added lot of mising documention to the C API.
+
+* [new] Updated ext-dnsD server to allow multiple replies to the same
+  question (name: and ipv4:).
+
+* [new] Updated ext dns message API to include new functions 
+  to update reply content. API added:
+
+   - ext_dns_message_add_ipv4_reply
+   - ext_dns_message_add_cname_reply
+
+* [fix] Updated cache stats to also report cache access and cache
+  hits.  Making ext-dnsd to also provide this information through the
+  status file.
+
+* [fix] Fixed cache usage. It was broken (uupps).
+
+* [fix] Added support to ext-dnsd to queue and later handle pending
+  requests when all children are busy. NICE!
+
+* [new] Updated ext-dnsd code to provide more stats about requests
+  received, request served and failures found.
+
+* [new] Several updates to make the ext-dnsd server to detect childs
+  not working and to kill and restart a new child. Also added code to
+  detect child taking to long to finish command sent to kill them in
+  the case timeout is reached.
+
+* [new] Updated ext-dnsd server to create an status file where various
+  elements are recorded so an administrator can check what's happening
+  with ext-dnsd. Nice!!
+
+* [fix] Updated web files..
+
+About Advanced Software Production Line, S.L. (ASPL)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  Advanced Software Production Line (ASPL) provides GNU/Linux support
+  and consulting services to enable organization to introduce
+  GNU/Linux into their processes, making other platforms to properly
+  interact with it.
+
+  You can contact us, using English or Spanish, at:
+
+       http://www.aspl.es - info@aspl.es
+
+  We hope ext-Dns may be useful you. Enjoy ext-Dns toolkit!
+
+--
+Francis Brosnan Blázquez           - francis@aspl.es
+Advanced Software Production Line  - http://www.aspl.es
+7th Mar 2013, Madrid (Spain)
