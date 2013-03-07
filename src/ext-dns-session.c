@@ -657,7 +657,7 @@ void              ext_dns_session_set_on_message (extDnsSession             * se
 						  axlPointer                  data)
 {
 	/* check pointer received */
-	if (session == NULL || on_dns_message == NULL)
+	if (session == NULL)
 		return;
 
 	/* set on message */
@@ -2040,9 +2040,11 @@ axl_bool _ext_dns_session_track_pending_replies (extDnsCtx * ctx,
 						 axlPointer  user_data,
 						 axlPointer  user_data2)
 {
-	int             stamp;
-	extDnsSession * session;
-	int             session_stamp;
+	int                       stamp;
+	extDnsSession           * session;
+	int                       session_stamp;
+	axlPointer                data;
+	extDnsOnMessageReceived   on_message;
 
 	if (axl_hash_items (ctx->pending_hash) == 0)
 		return axl_false; /* nothing to check, don't stop checking */
@@ -2069,6 +2071,14 @@ axl_bool _ext_dns_session_track_pending_replies (extDnsCtx * ctx,
 
 		if ((session_stamp + 3) < stamp) {
 			ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Found query session <%p> timed out after %d seconds, notifying failure", session, stamp - session_stamp);
+
+			/* call to notify error */
+			on_message = session->on_message;
+			data       = session->on_message_data;
+			session->on_message = NULL;
+			session->on_message_data = NULL;
+			if (on_message) 
+				on_message (ctx, session, NULL, 0, NULL, data);
 
 			/* close listener */
 			ext_dns_session_close (session);			

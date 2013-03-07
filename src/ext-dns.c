@@ -1404,6 +1404,14 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
 /** 
  * \page ext_dns_server_manual ext-DnsD administrator manual
  *
+ * \section ext_dns_server_manual_index Index
+ * 
+ * - \ref intro_ext_dnsd
+ * - \ref ext_dns_server_configuration
+ * - \ref ext_dns_server_status
+ * - \ref ext_dnsd_writing_a_child_resolver
+ * - \ref ext_dnsd_python_child_resolver
+ *
  * \section intro_ext_dnsd ext-DnsD Introduction: how it works, basic description
  *
  * ext-DnsD works as a caching forward dns server for a network,
@@ -1449,7 +1457,26 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
  * the child resolver script, how many childs to create and other easy
  * to see settings.
  *
- * \section ext_dnsd_writing_a_child_resolver How to write a ext-Dnsd child resolver
+ * \section ext_dns_server_status Checking ext-Dnsd server status
+ *
+ * After successfully starting ext-Dnsd server, you can check its
+ * stats by reading the file located at /var/run/ext-dns.status as
+ * follows. It will give you lots of useful information about server
+ * status:
+ *
+ * \code
+ * >> cat /var/run/ext-dnsd.status 
+ * Stamp: 1362599140
+ * Child status: 0/10
+ * Requests received: 1
+ * Requests served: 1
+ * Failures found: 0
+ * Pending requests: 0
+ * Cache stats: 0/1000 (used/max)  0/1 (hits/access) 0.00% (ratio)
+ * Command timeout: 15 secs
+ * \endcode
+ *
+ * \section ext_dnsd_writing_a_child_resolver How to write a ext-Dnsd child resolver (child resolver protocol)
  * 
  * A child resolver must be essentially a loop that receives on the
  * standard input a single line when the ext-DnsD wants to ask
@@ -1486,7 +1513,7 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
  *
  *            - UNKNOWN\n               : send a reply as if it were unknown the value requested
  *
- *            - BLACKLIST [permanent] [seconds] \n  
+ *            - BLACKLIST [permanent] [seconds]\n  
  *
  *                                      : silently ignore the request, and blacklists the dns client during
  *                                        the provided amount of seconds. During that period all requests from
@@ -1496,11 +1523,12 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
  *                                        - BLACKLIST 3
  *                                        - BLACKLIST permanent
  *
- *            - REPLY ipv4:[value] [ttl] [, more replies] [nocache]
- *            - REPLY (name:|cname:)[value] [ttl] [norecurse] [, more replies] [nocache]
- *            - REPLY mx:[mailer] [preference] [ttl] [, more replies] [nocache]
- *            - REPLY ns:[dns server] [ttl] [, more replies] [nocache]
- *            - REPLY soa:[primary server] [mail contact] [serial] [refresh] [retry] [expire] [minimum] [, more replies] [nocache]
+ *            - REPLY ipv4:[value] [ttl] [, more replies] [nocache]\n
+ *            - REPLY (name:|cname:)[value] [ttl] [norecurse] [, more replies] [nocache]\n
+ *            - REPLY mx:[mailer] [preference] [ttl] [, more replies] [nocache]\n
+ *            - REPLY ns:[dns server] [ttl] [, more replies] [nocache]\n
+ *            - REPLY soa:[primary server] [mail contact] [serial] [refresh] [retry] [expire] [minimum] [, more replies] [nocache]\n
+ *
  *                                      : in this case the reply is directly handled by the child resolver
  *                                        providing a cname as reply to the request (in the case name:/cname: is used)
  *                                        or a particular ipv4 value if ipv4: is used. 

@@ -1891,7 +1891,7 @@ axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type
 	char                 buffer[512];
 	extDnsSession      * listener;
 	int                  bytes_written;
-	extDnsHeader       * header;
+	extDnsHeader       * header = NULL;
 	axl_bool             sent_status;
 
 	if (_type == -1) 
@@ -1902,6 +1902,7 @@ axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type
 	/* build the query */
 	bytes_written = ext_dns_message_build_query (ctx, name, _type, _class, buffer, &header);
 	if (bytes_written <= 0) {
+		axl_free (header);
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "ERROR: failed to build query message, buffer reported was %d size\n", bytes_written);
 		return axl_false;
 	} /* end if */
@@ -1909,6 +1910,7 @@ axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type
 	/* create listener */
 	listener = ext_dns_listener_new2 (ctx, "0.0.0.0", 0, extDnsUdpSession, NULL, NULL);
 	if (! ext_dns_session_is_ok (listener, axl_false)) {
+		axl_free (header);
 		ext_dns_log (EXT_DNS_LEVEL_WARNING, "ERROR: failed to start listener to receive the reply");
 		return axl_false; 
 	}
@@ -1936,6 +1938,11 @@ axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type
 
 	/* send message */
 	if (! sent_status) {
+		/* call to notify error */
+		ext_dns_session_set_on_message (listener, NULL, NULL);
+		if (on_message) 
+			on_message (ctx, listener, NULL, 0, NULL, data);
+
 		/* remove from tracking */
 		_ext_dns_session_remove_from_pending_hash (ctx, listener);
 
@@ -2103,7 +2110,6 @@ void ext_dns_message_handle_reply (extDnsCtx     * ctx,
 
 	/* get the reply into a buffer */
 	bytes_written = ext_dns_message_to_buffer (ctx, message, buffer, 512);
-
 	if (bytes_written == -1) {
 		/* release message before continue */
 		if (should_release_message)
