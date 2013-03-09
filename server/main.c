@@ -1426,7 +1426,7 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 	/* child status */
 	if (children_ready == 0)
 		label = " (all children busy)";
-	msg = axl_strdup_printf ("Child status: %d/%d%s\n", children_number - children_ready, children_number, label);
+	msg = axl_strdup_printf ("Child status: %d/%d (working/total)%s\n", children_number - children_ready, children_number, label);
 	fwrite (msg, strlen (msg), 1, file);
 	axl_free (msg);
 
