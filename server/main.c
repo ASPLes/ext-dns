@@ -394,7 +394,7 @@ return_result:
 	if (release_message)
 		ext_dns_message_unref (reply);
 	
-	return axl_true;
+	return result;
 }
 
 void handle_reply_complete_cname (extDnsCtx     * ctx,
@@ -1651,7 +1651,7 @@ void clear_etc_hosts (void) {
 	etchosts = NULL;
 	ext_dns_mutex_unlock (&etchosts_mutex);
 	
-	axl_hash_free (etchosts);
+	axl_hash_free (temp);
 	return;
 }
 
