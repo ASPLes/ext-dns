@@ -11,6 +11,11 @@ case "$1" in
         # create startup links
     	update-rc.d -f ext-dnsd start 23 2 3 4 5 . stop 20 0 1 6 . > /dev/null
 
+	if [ ! -f /etc/ext-dns/ext-dns.conf ]; then
+	    # install default
+	    cp /etc/ext-dns/ext-dns.example.conf /etc/ext-dns/ext-dns.conf
+	fi
+
 	# restart server if it were installed
 	/etc/init.d/ext-dnsd restart
     ;;
