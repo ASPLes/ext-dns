@@ -20,7 +20,7 @@ ext_dnsd_LDADD          = $(LIBS) $(top_builddir)/src/libext-dns.la
 # copy exarg dependency to not force people to download a library with
 # two files
 exarg.h exarg.c: 
-	test -e exarg.h || cp ~/af-arch/libexarg/src/exarg.h .
-	test -e exarg.c || cp ~/af-arch/libexarg/src/exarg.c .
+	test -e exarg.h || cp ../../libexarg/src/exarg.h .
+	test -e exarg.c || cp ../../libexarg/src/exarg.c .
 
 

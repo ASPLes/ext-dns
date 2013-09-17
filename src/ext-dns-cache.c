@@ -52,7 +52,6 @@ axl_bool __ext_dns_cache_cleanup (extDnsCtx  * ctx,
 				  axlPointer   user_data2)
 {
 	extDnsMessage * msg;
-	const char    * query;
 	int             items;
 	
 
@@ -68,7 +67,6 @@ axl_bool __ext_dns_cache_cleanup (extDnsCtx  * ctx,
 
 		/* get the message */
 		msg   = axl_hash_cursor_get_value (ctx->cache_cursor);
-		query = axl_hash_cursor_get_key (ctx->cache_cursor);
 
 		if (! ext_dns_message_is_answer_valid (ctx, msg)) {
 			/* ext_dns_log (EXT_DNS_LEVEL_DEBUG, "  ...item %s is expired", query); */
