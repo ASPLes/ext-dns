@@ -810,6 +810,14 @@ void on_received  (extDnsCtx     * ctx,
 
 	/* check for forward all requests */
 	if (forward_all_requests)  {
+		/* check if we can resolve via /etc/hosts */
+		reply = ext_dns_resolve_via_etc_hosts (ctx, message);
+		if (reply) {
+			/* nice! found resolution */
+			ext_dnsd_send_request_reply (ctx, session, source_address, source_port, reply, axl_true);
+			return;
+		} /* end if */
+
 		/* call to forward request */
 		ext_dnsd_forward_request (ctx, message, session, source_address, source_port, axl_true);
 		return;
