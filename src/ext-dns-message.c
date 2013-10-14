@@ -117,14 +117,21 @@ extDnsHeader * ext_dns_message_parse_header (extDnsCtx * ctx, const char * buf, 
 	header->id       = ext_dns_get_16bit (buf);
 
 	/* ext_dns_int2bin_print (ctx, header->id); */
-
-	header->is_query              = ext_dns_get_bit (buf[2], 7) == 0;
+	header->is_query = ext_dns_get_bit (buf[2], 7) == 0;
 
 	/* get opcode */
-	header->opcode                = ((int)(buf[2]) & 0x078) >> 3 ;
-	/* ext_dns_log (EXT_DNS_LEVEL_DEBUG, "####  OPCODE FOUND: %d", header->opcode); */
-	/* ext_dns_show_byte (ctx, buf[2], "buf[2]");
-	   ext_dns_show_byte (ctx, header->opcode, "header->opcode"); */
+	header->opcode   = ((int)(buf[2]) & 0x078) >> 3 ;
+	/* ext_dns_log (EXT_DNS_LEVEL_DEBUG, "####  OPCODE FOUND (buf_size=%d): %d", buf_size, header->opcode); 
+	ext_dns_show_byte (ctx, buf[2],  "buf[2]");
+	ext_dns_show_byte (ctx, buf[4], "buf[4]");
+	ext_dns_show_byte (ctx, buf[5], "buf[5]");
+	ext_dns_show_byte (ctx, buf[6], "buf[6]");
+	ext_dns_show_byte (ctx, buf[7], "buf[7]");
+	ext_dns_show_byte (ctx, buf[8], "buf[8]");
+	ext_dns_show_byte (ctx, buf[9], "buf[9]");
+	ext_dns_show_byte (ctx, buf[10], "buf[10]");
+	ext_dns_show_byte (ctx, buf[11], "buf[11]");
+	ext_dns_show_byte (ctx, header->opcode, "header->opcode");  */
 
 	/* get other flags */
 	header->is_authorative_answer = ext_dns_get_bit (buf[2], 2);
@@ -1934,7 +1941,7 @@ axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type
 	else
 #endif
 	/* send and grab sent status */
-	sent_status = ext_dns_session_send_udp_s (ctx, listener, buffer, bytes_written, server, 53) == bytes_written;
+	sent_status = ext_dns_session_send_udp_s (ctx, listener, buffer, bytes_written, server, server_port) == bytes_written;
 
 	/* send message */
 	if (! sent_status) {

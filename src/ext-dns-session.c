@@ -1027,7 +1027,8 @@ int               __ext_dns_session_send_udp_common   (extDnsCtx     * ctx,
 	/* remove DF flag */
 	setsockopt (session, IPPROTO_IP, IP_MTU_DISCOVER, &val, sizeof(val));
 	
-	/* a donde mandar */
+	/* where to send data */
+	memset(&dest_addr, 0, sizeof (struct sockaddr_in));
 	dest_addr.sin_family = AF_INET; /* usa host byte order */
 	dest_addr.sin_port = htons(port); /* usa network byte order */
         memcpy(&dest_addr.sin_addr, haddr, sizeof(struct in_addr));

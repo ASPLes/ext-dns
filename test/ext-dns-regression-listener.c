@@ -230,7 +230,7 @@ int main (int argc, char ** argv) {
 	ext_dns_cache_init (ctx, 1000);
 
 	/* init a listener */
-	listener = ext_dns_listener_new (ctx, "0.0.0.0", "53", extDnsUdpSession, NULL, NULL);
+	listener = ext_dns_listener_new (ctx, "0.0.0.0", "54", extDnsUdpSession, NULL, NULL);
 	if (! ext_dns_session_is_ok (listener, axl_false)) {
 		printf ("ERROR: failed to start serving requests..\n");
 		exit (-1);
