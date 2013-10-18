@@ -4,7 +4,11 @@ endif
 
 etcdir = $(sysconfdir)/ext-dns/
 etc_DATA = ext-dns.example.conf
-EXTRA_DIST = $(etc_DATA) child-resolver-skel.py
+
+crondir = $(sysconfdir)/cron.d/
+cron_DATA = ext-dnsd-watcher
+
+EXTRA_DIST = $(etc_DATA) $(cron_DATA) child-resolver-skel.py
 
 bin_PROGRAMS = ext-dnsd
 

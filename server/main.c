@@ -1132,6 +1132,8 @@ void install_arguments (int argc, char ** argv) {
 			   "Path to the server configuration file.");
 	exarg_install_arg ("detach", NULL, EXARG_NONE,
 			   "Makes ext-dnsd to detach from console, starting in background.");
+	exarg_install_arg ("show-listen-ip", "p", EXARG_NONE,
+			   "Allows to get the configured listening IP.");
 
 	/* call to parse arguments */
 	exarg_parse (argc, argv);
@@ -1145,13 +1147,16 @@ void install_arguments (int argc, char ** argv) {
 	if (exarg_is_defined ("verbose")) {
 		verbose = axl_true;
 	}
-
+	
 	return;
 }
 
 void load_configuration_file (void) 
 {  
 	axlError   * error;
+	axlNode    * node;
+	char       * listen_declaration;
+	char      ** values;
 
 	/* initialize axl library */
 	if (! axl_init ()) {
@@ -1175,6 +1180,28 @@ void load_configuration_file (void)
 	}
 	
 	syslog (LOG_INFO, "configuration from %s loaded ok", path);
+
+	if (exarg_is_defined ("show-listen-ip")) {
+		/* find first listener node */
+		node = axl_doc_get (config, "/ext-dns-server/listen");
+		if (node == NULL) {
+			printf ("ERROR: unable to find any listen declaration inside %s, unable to provide ip", path);
+			exit (-1);
+		} /* end if */
+
+		/* get listener declaration */
+		listen_declaration = axl_strdup (ATTR_VALUE (node, "value"));
+		axl_stream_trim (listen_declaration);
+		values = axl_split (listen_declaration, 1, ":");
+
+		printf ("%s\n", values[0]);
+		axl_doc_free (config);
+		axl_freev (values);
+		axl_free (listen_declaration);
+		/* finish exarg */
+		exarg_end ();	
+		exit (0);
+	}
 
 	return;
 }
@@ -1894,12 +1921,12 @@ int main (int argc, char ** argv) {
 		/* caller do not follow */
 	} /* end if */
 
+	/* parse configuration file */
+	load_configuration_file ();
+
 	/* place pid file */
 	ext_dnsd_place_pidfile ();
 
-	/* parse configuration file */
-	load_configuration_file ();
-	
 	/* create context object */
 	ctx = ext_dns_ctx_new ();
 	if (ctx == NULL) {
