@@ -2,5 +2,5 @@
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 # restart agent if found to be failing
-*/1   *         * * * root edq www.aspl.es `./ext-dnsd --show-listen-ip` > /dev/null 2>&1 || /etc/init.d/ext-dnsd restart 
+*/1   *         * * * root edq www.aspl.es `ext-dnsd --show-listen-ip` > /dev/null 2>&1 || /etc/init.d/ext-dnsd restart 
 
