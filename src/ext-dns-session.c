@@ -1477,7 +1477,7 @@ EXT_DNS_SOCKET     ext_dns_listener_sock_listen      (extDnsCtx           * ctx,
 
 	v_return_val_if_fail (ctx,  -2);
 	v_return_val_if_fail (host, -2);
-	v_return_val_if_fail (port || strlen (port) == 0, -2);
+	v_return_val_if_fail (port || ext_dns_strlen (port) == 0, -2);
 
 	/* resolve hostname */
 	he = gethostbyname (host);

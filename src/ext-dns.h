@@ -122,9 +122,6 @@
 #define ext_dns_is_disconnected ((errno == WSAESHUTDOWN) || (errno == WSAECONNABORTED) || (errno == WSAECONNRESET))
 #define EXT_DNS_FILE_SEPARATOR "\\"
 
-/* a definition to avoid warnings */
-#define strlen (int) strlen
-
 /* no link support windows */
 #define S_ISLNK(m) (0)
 
@@ -481,6 +478,8 @@ void   ext_dns_set_32bit (int value, char * buffer);
 int    ext_dns_get_32bit (const char * buffer);
 
 int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * buffer, int buffer_size);
+
+int    ext_dns_strlen (const char * content);
 
 #if defined(__COMPILING_EXT_DNS__) && defined(__GNUC__)
 /* makes gcc happy, by prototyping functions which aren't exported

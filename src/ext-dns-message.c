@@ -252,7 +252,7 @@ char * ext_dns_message_get_resource_name (extDnsCtx * ctx, const char * buffer, 
 			}
 
 			/* get length */
-			iterator += strlen (label) + 1;
+			iterator += ext_dns_strlen (label) + 1;
 		}
 		
 		if (label == NULL) 
@@ -314,7 +314,7 @@ axl_bool ext_dns_message_parse_resource_record (extDnsCtx * ctx, extDnsResourceR
 	} /* end if */
 
 	/* if (! is_label)
-		iterator += strlen (rr->name) + 2;
+		iterator += ext_dns_strlen (rr->name) + 2;
 	else
 	iterator += 2; */
 
@@ -595,13 +595,13 @@ extDnsMessage * ext_dns_message_parse_message (extDnsCtx * ctx, extDnsHeader * h
 			return ext_dns_message_release_and_return (message);
 
 		/* if (! is_label)
-			iterator += strlen (message->questions[count].qname) + 2;
+			iterator += ext_dns_strlen (message->questions[count].qname) + 2;
 		else
 		iterator += 2;*/
-		if ((iterator + 4) > buf_size || (strlen (message->questions[count].qname) == 0)) {
+		if ((iterator + 4) > buf_size || (ext_dns_strlen (message->questions[count].qname) == 0)) {
 			ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Found incomplete message in buffer (%d >= %d) or qname is is empty (%d)", 
 				     iterator + 4, buf_size,
-				     strlen (message->questions[count].qname));
+				     ext_dns_strlen (message->questions[count].qname));
 			return ext_dns_message_release_and_return (message);
 		}
 		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Resource name: '%s' (iterator=%d, buffer size=%d)", message->questions[count].qname, iterator, buf_size); 
@@ -1395,7 +1395,12 @@ axl_bool        ext_dns_message_add_answer_from_msg (extDnsCtx * ctx, extDnsMess
 
 int __ext_dns_message_get_resource_size (extDnsResourceRecord * rr)
 {
-	int result = 2 + 2 + 4 + strlen (rr->name) + 2; /* type, class, ttl, name encoded */
+	int result;
+
+	if (rr == NULL || rr->name == NULL)
+		return 0;
+
+	result = 2 + 2 + 4 + ext_dns_strlen (rr->name) + 2; /* type, class, ttl, name encoded */
 	
 	/* now according to the type, add additional values */
 	if (rr->type == extDnsTypeA) {
@@ -1404,12 +1409,12 @@ int __ext_dns_message_get_resource_size (extDnsResourceRecord * rr)
 
 	} else if (rr->type == extDnsTypeMX) {
 		/* check values */
-		result += 2 + strlen (rr->name_content);
+		result += 2 + ext_dns_strlen (rr->name_content);
 
 	} else if (rr->type == extDnsTypeCNAME || rr->type == extDnsTypePTR || rr->type == extDnsTypeNS) {
 
 		/* check values */
-		result += 2 + strlen (rr->name_content) + 2;
+		result += 2 + ext_dns_strlen (rr->name_content) + 2;
 
 	} else if (rr->type == extDnsTypeTXT || rr->type == extDnsTypeSPF) {
 		/* check values */
@@ -1418,7 +1423,7 @@ int __ext_dns_message_get_resource_size (extDnsResourceRecord * rr)
 	} else if (rr->type == extDnsTypeSOA) {
 
 		/* check values */
-		result += 26 + strlen (rr->mname) + strlen (rr->contact_address);
+		result += 26 + ext_dns_strlen (rr->mname) + ext_dns_strlen (rr->contact_address);
 
 	} else {
 		/* check values */
@@ -1496,7 +1501,7 @@ int __ext_dns_message_write_resource_record (extDnsCtx * ctx, extDnsResourceReco
 	} else if (rr->type == extDnsTypeMX) {
 		/* set RDLENGTH */
 		/* resource record + initial count + ending \0 + 2 mx preference */
-		ext_dns_set_16bit (strlen (rr->name_content) + 4, buffer + position);
+		ext_dns_set_16bit (ext_dns_strlen (rr->name_content) + 4, buffer + position);
 		/* next four bytes */
 		position += 2;
 
@@ -1510,13 +1515,13 @@ int __ext_dns_message_write_resource_record (extDnsCtx * ctx, extDnsResourceReco
 			return -1;
 		position += result;
 
-		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "   written rdlength: %d", strlen (rr->name_content) + 4);
+		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "   written rdlength: %d", ext_dns_strlen (rr->name_content) + 4);
 
 	} else if (rr->type == extDnsTypeCNAME || rr->type == extDnsTypePTR || rr->type == extDnsTypeNS) {
 
 		/* set RDLENGTH */
 		/* resource record + initial count + ending \0 */
-		ext_dns_set_16bit (strlen (rr->name_content) + 2, buffer + position);
+		ext_dns_set_16bit (ext_dns_strlen (rr->name_content) + 2, buffer + position);
 		/* next four bytes */
 		position += 2;
 
@@ -1541,7 +1546,7 @@ int __ext_dns_message_write_resource_record (extDnsCtx * ctx, extDnsResourceReco
 	} else if (rr->type == extDnsTypeSOA) {
 
 		/* set RDLENGTH */
-		ext_dns_set_16bit (strlen (rr->mname) + strlen (rr->contact_address) + 24, buffer + position);
+		ext_dns_set_16bit (ext_dns_strlen (rr->mname) + ext_dns_strlen (rr->contact_address) + 24, buffer + position);
 		/* next four bytes */
 		position += 2;
 
@@ -1743,7 +1748,7 @@ int             ext_dns_message_to_buffer (extDnsCtx * ctx, extDnsMessage * mess
 		ext_dns_log (EXT_DNS_LEVEL_DEBUG, "PLACING QUESTION:  Encoding resource name: %s", message->questions[count].qname);
 
 		/* check values before encoding */
-		limit = position + strlen (message->questions[count].qname) + 6;
+		limit = position + ext_dns_strlen (message->questions[count].qname) + 6;
 		if (limit > buffer_size) {
 			ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "found more content %d (bytes) to be placed into the buffer than is accepted %d (bytes)",
 				     limit, buffer_size);
@@ -2587,7 +2592,7 @@ int             ext_dns_message_build_query (extDnsCtx * ctx, const char * qname
 extDnsType      ext_dns_message_get_qtype (extDnsCtx * ctx, const char * qtype)
 {
 	/* get input value */
-	if (qtype == NULL || strlen (qtype) == 0)
+	if (qtype == NULL || ext_dns_strlen (qtype) == 0)
 		return -1;
 
 	if (axl_cmp (qtype, "A") || axl_cmp (qtype, "a"))
@@ -2715,7 +2720,7 @@ const char *      ext_dns_message_get_qtype_to_str (extDnsCtx * ctx, extDnsType 
 extDnsClass     ext_dns_message_get_qclass (extDnsCtx * ctx, const char * qclass)
 {
 	/* get input value */
-	if (qclass == NULL || strlen (qclass) == 0)
+	if (qclass == NULL || ext_dns_strlen (qclass) == 0)
 		return -1;
 
 	if (axl_cmp (qclass, "IN") || axl_cmp (qclass, "in"))

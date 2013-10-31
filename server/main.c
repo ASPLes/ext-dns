@@ -335,7 +335,7 @@ axl_bool send_command (const char * command, childState * child, char * reply, i
 	/* printf ("sending command %s to child %d\n", command, child->pid); */
 	
 	/* send command */
-	bytes_written = strlen (command);
+	bytes_written = ext_dns_strlen (command);
 	if (write (child->fds[1], command, bytes_written) != bytes_written) {
 		syslog (LOG_ERR, "ERROR: failed to send command to child, error was errno=%d (%s)", errno, ext_dns_errno_get_last_error ());
 		return axl_false;
@@ -360,7 +360,7 @@ axl_bool send_command (const char * command, childState * child, char * reply, i
 
 	/* trim content and recalculate */
 	axl_stream_trim (reply);
-	bytes_written = strlen (reply);
+	bytes_written = ext_dns_strlen (reply);
 
 	/* printf ("bytes received %d\n", bytes_written); */
 	return bytes_written;
@@ -1455,38 +1455,38 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 
 	/* place stamp */
 	msg = axl_strdup_printf ("Stamp: %d\n", time (NULL));
-	fwrite (msg, strlen (msg), 1, file);
+	fwrite (msg, ext_dns_strlen (msg), 1, file);
 	axl_free (msg);
 	
 	/* child status */
 	if (children_ready == 0)
 		label = " (all children busy)";
 	msg = axl_strdup_printf ("Child status: %d/%d (working/total)%s\n", children_number - children_ready, children_number, label);
-	fwrite (msg, strlen (msg), 1, file);
+	fwrite (msg, ext_dns_strlen (msg), 1, file);
 	axl_free (msg);
 
 	if (children_dead > 0) {
 		msg = axl_strdup_printf ("Children dead: %d%s\n", children_dead);
-		fwrite (msg, strlen (msg), 1, file);
+		fwrite (msg, ext_dns_strlen (msg), 1, file);
 		axl_free (msg);
 	} /* end if */
 
 	/* some stas */
 	msg = axl_strdup_printf ("Requests received: %d\n", requests_received);
-	fwrite (msg, strlen (msg), 1, file);
+	fwrite (msg, ext_dns_strlen (msg), 1, file);
 	axl_free (msg);
 
 	msg = axl_strdup_printf ("Requests served: %d\n", requests_served);
-	fwrite (msg, strlen (msg), 1, file);
+	fwrite (msg, ext_dns_strlen (msg), 1, file);
 	axl_free (msg);
 
 	msg = axl_strdup_printf ("Failures found: %d\n", failures_found);
-	fwrite (msg, strlen (msg), 1, file);
+	fwrite (msg, ext_dns_strlen (msg), 1, file);
 	axl_free (msg);
 
 	/* pending requests */
 	msg = axl_strdup_printf ("Pending requests: %d\n", axl_list_length (pending_requests));
-	fwrite (msg, strlen (msg), 1, file);
+	fwrite (msg, ext_dns_strlen (msg), 1, file);
 	axl_free (msg);
 
 	/* pending requests */
@@ -1498,7 +1498,7 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 				 cache_stats.cache_items, cache_stats.cache_size, 
 				 cache_stats.cache_hits, cache_stats.cache_access,
 				 ratio);
-	fwrite (msg, strlen (msg), 1, file);
+	fwrite (msg, ext_dns_strlen (msg), 1, file);
 	axl_free (msg);
 
 	/* show command timeout */
@@ -1506,7 +1506,7 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 		msg = axl_strdup_printf ("Command timeout: %d secs\n", command_timeout);
 	else 
 		msg = axl_strdup_printf ("Command timeout: disabled\n", command_timeout);
-	fwrite (msg, strlen (msg), 1, file);
+	fwrite (msg, ext_dns_strlen (msg), 1, file);
 	axl_free (msg);
 
 	/* show pending childs */
@@ -1520,7 +1520,7 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 			diff = time (NULL) - children[iterator].stamp;
 			msg  = axl_strdup_printf ("Child busy: pid %d, working for: %d secs, cmd: %s\n", 
 						  children[iterator].pid, diff, children[iterator].last_command);
-			fwrite (msg, strlen (msg), 1, file);
+			fwrite (msg, ext_dns_strlen (msg), 1, file);
 			axl_free (msg);	
 
 			if (diff > command_timeout) {
@@ -1609,7 +1609,7 @@ void start_child_applications (void)
 
 	/* get child resolver */
 	child_resolver = ATTR_VALUE (node, "value");
-	if (child_resolver == NULL || strlen (child_resolver) == 0) {
+	if (child_resolver == NULL || ext_dns_strlen (child_resolver) == 0) {
 		syslog (LOG_INFO, "no <child-resolver> value config was found, enable forward for all requests");
 		return;
 		/* printf ("ERROR: child resolver application wasn't found defined (it is empty or NULL)\n");
@@ -1625,7 +1625,7 @@ void start_child_applications (void)
 		   exit (-1); */
 	} /* end if */
 
-	if (! ATTR_VALUE (node, "value") || strlen (ATTR_VALUE (node, "value")) == 0) {
+	if (! ATTR_VALUE (node, "value") || ext_dns_strlen (ATTR_VALUE (node, "value")) == 0) {
 		printf ("ERROR: child number value not defined\n");
 		exit (-1);
 	}
@@ -1733,7 +1733,7 @@ void start_etc_hosts_resolution (void) {
 	while ((read = getline (&line, &len, fp)) != -1) {
 		/* clear and check for empty lines */
 		axl_stream_trim (line);
-		if (line == NULL || strlen (line) == 0)
+		if (line == NULL || ext_dns_strlen (line) == 0)
 			continue;
 		
 		/* skip comments */
@@ -1821,7 +1821,7 @@ void setup_thread_num (void) {
 	if (node == NULL)
 		return;
 	number_str = ATTR_VALUE (node, "value");
-	if (number_str == NULL || strlen (number_str) == 0) {
+	if (number_str == NULL || ext_dns_strlen (number_str) == 0) {
 		syslog (LOG_INFO, "no <child-number> value config was found, defaulting to 5");
 		return;
 		/* printf ("ERROR: child resolver application wasn't found defined (it is empty or NULL)\n");
