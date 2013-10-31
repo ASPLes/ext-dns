@@ -895,8 +895,8 @@ axl_bool                  ext_dns_io_waiting_use (extDnsCtx * ctx, extDnsIoWaiti
 
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "I/O API changed with result=%s%s%s", 
 		    result ? "ok" : "fail",
-		    (strlen (mech) > 0) ? ", now using: " :"",
-		    (strlen (mech) > 0) ? mech            : "");
+		    (ext_dns_strlen (mech) > 0) ? ", now using: " :"",
+		    (ext_dns_strlen (mech) > 0) ? mech            : "");
 
 	/* notify that the API change process have finished */
 	if (do_notify) {

@@ -1290,9 +1290,27 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
 	iterator ++;
 
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Total length encoded was: %d, iter=%d (for: %s, real length: %d)", 
-		     strlen (buffer) + 1, iterator, value, strlen (value));
+		     ext_dns_strlen (buffer) + 1, iterator, value, ext_dns_strlen (value));
 
-	return strlen (buffer) + 1;
+	return ext_dns_strlen (buffer) + 1;
+}
+
+/** 
+ * @brief Simple wrapper around ext_dns_strlen with support for NULL.
+ *
+ * @return The number of bytes content string has or 0 if NULL or
+ * empty string is received.
+ */
+int    ext_dns_strlen (const char * content)
+{
+	int iterator = 0;
+
+	if (content == NULL)
+		return 0;
+
+	while (content[iterator])
+		iterator++;
+	return iterator;
 }
 
 /** 

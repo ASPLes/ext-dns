@@ -207,6 +207,7 @@ ext_dns_set_16bit
 ext_dns_set_32bit
 ext_dns_set_bit
 ext_dns_show_byte
+ext_dns_strlen
 ext_dns_support_getenv
 ext_dns_support_getenv_int
 ext_dns_support_inet_ntoa
