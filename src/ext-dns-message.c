@@ -1896,7 +1896,8 @@ void            ext_dns_message_write_header_id (extDnsMessage * message, char *
  * query was sent. In the case the function return axl_false, the
  * query won't be sent and your on_message handler won't be called.
  */
-axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type, extDnsClass _class, const char * name, 
+axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type, 
+					       extDnsClass _class, const char * name, 
 					       const char * server, int server_port,
 					       extDnsOnMessageReceived on_message, axlPointer data)
 {
@@ -1909,6 +1910,8 @@ axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type
 	if (_type == -1) 
 		return axl_false;
 	if (_class == -1) 
+		return axl_false;
+	if (name == NULL || name[0] == '\0')
 		return axl_false;
 
 	/* build the query */

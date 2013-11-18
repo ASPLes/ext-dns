@@ -1236,6 +1236,10 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
 	int          iterator = 0;
 	char       * last_position = buffer;
 
+	/* check empty null values and empty records */
+	if (value == NULL || value[0] == '\0')
+		return -1;
+
 	/* support for root (.) domain */
 	if (axl_cmp (value, ".")) {
 		buffer[0] = 0;
@@ -1286,7 +1290,6 @@ int    ext_dns_encode_domain_name (extDnsCtx * ctx, const char * value, char * b
 
 	/* write last \0 */
 	buffer[iterator + 1] = 0;
-
 	iterator ++;
 
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Total length encoded was: %d, iter=%d (for: %s, real length: %d)", 
