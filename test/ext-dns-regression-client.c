@@ -1884,6 +1884,73 @@ axl_bool test_23 (void) {
 	return axl_true;
 }
 
+axl_bool test_24 (void) {
+	extDnsCtx        * ctx;
+	extDnsMessage    * message;
+	extDnsAsyncQueue * queue;
+	int                bytes_written;
+	char               buffer[512];
+
+	/* create context object */
+	ctx = ext_dns_ctx_new ();
+	if (ctx == NULL) {
+		printf ("ERROR: failed to allocate ctx object..\n");
+		return axl_false;
+	}
+
+	/* init context */
+	if (! ext_dns_init_ctx (ctx)) {
+		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
+		return axl_false;
+	}
+
+	/* check we cannot pass wrong values */
+	queue = ext_dns_async_queue_new ();
+	ext_dns_message_query (ctx, "a", "in", '\0', dns_server, dns_server_port, queue_reply, queue);
+	ext_dns_message_query (ctx, "a", "in", NULL, dns_server, dns_server_port, queue_reply, queue);
+
+	/* build query */
+	bytes_written = ext_dns_message_build_query (ctx, "www.aspl.es", extDnsTypeA, extDnsClassIN, buffer, NULL);
+	printf ("Test 24: bytes written into the buffer: %d bytes\n", bytes_written);
+
+	/* break request */
+	buffer[12] = 0;
+	buffer[13] = 0;
+
+	/* send content */
+	if (ext_dns_session_send_udp (ctx, (const char *) buffer, bytes_written, dns_server, dns_server_port, NULL, NULL) != bytes_written) {
+		printf ("ERROR: failed to send content to regression test server (content length=%d)\n", bytes_written);
+		return axl_false;
+	} /* end if */
+
+	/* break request */
+	buffer[12] = '.';
+
+	/* send content */
+	if (ext_dns_session_send_udp (ctx, (const char *) buffer, bytes_written, dns_server, dns_server_port, NULL, NULL) != bytes_written) {
+		printf ("ERROR: failed to send content to regression test server (content length=%d)\n", bytes_written);
+		return axl_false;
+	} /* end if */
+
+	printf ("Test 24: message sent..\n");
+
+	/* get reply (timeout in 3seconds) */
+	message = ext_dns_async_queue_timedpop (queue, 3000000);
+	if (message != NULL) {
+		printf ("ERROR: expected to find NULL message reply but found reference defined..\n");
+		return axl_false;
+	}
+
+	/* release queue */
+	ext_dns_async_queue_unref (queue);
+
+	/* terminate process */
+	ext_dns_exit_ctx (ctx, axl_true);
+	
+
+	return axl_true;
+}
+
 
 typedef axl_bool  (*extDnsRegressionTest) (void);
 
@@ -2121,6 +2188,8 @@ int main (int argc, char ** argv) {
 	run_test (test_22, "Test 22", "testing requests that fails", -1, -1);
 
 	run_test (test_23, "Test 23", "testing requests that timeouts", -1, -1);
+
+	run_test (test_24, "Test 24", "testing sending broken packages with NULL at resource name", -1, -1);
 	
 	/* test sending q query where the replies should have several
 	   but only were found a few */
