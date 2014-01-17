@@ -1,0 +1,22 @@
+* actualizar documentación (doc center) del producto en la web.
+
+* hacer release note.
+
+* subir producto a code.google.com
+
+* publicar en listas de correo de aspl.
+
+* publicar en freshmeat.net
+
+* actualizar web de ext-dns (actualizar sección de noticias y a la gestión
+  de releases notes)
+
+* publicar noticia en aspl.es.
+
+* publicar en twitter (aspl_es). 
+
+* Generar paquetes debian/ubuntu
+
+
+
+
