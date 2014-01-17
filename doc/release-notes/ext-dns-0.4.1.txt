@@ -1,0 +1,85 @@
+                 --== ext-Dns toolkit ==--
+                   Un peldaño adelante!
+                          0.4.1
+
+Advanced Software Production Line is proud to announce a new stable
+public release of ext-Dns toolkit.
+
+ext-Dns is a ready to use toolkit that includes a core-library, a
+ready to use forwarding DNS server and some additional tools that will
+allow you building DNS solutions that performs additional operations
+when a request is received.
+
+Resources
+~~~~~~~~~
+
+   ext-Dns homepage
+   [ http://www.aspl.es/ext-dns ]
+
+   Advanced Software Production Line, S.L.
+   [ http://www.aspl.es ]
+
+This release in short
+~~~~~~~~~~~~~~~~~~~~~
+
+  New stable release that includes fixings and official support for
+  Debian Wheezy and Ubuntu LTS Precise.
+
+  
+Changes from previous release
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* [fix] Fixed clear host internal cache (it wasn't releasing memory).
+
+* [fix] Fixed wrong return handling at ext_dnsd_send_reply inside
+  ext-dnsd.
+
+* [fix] Various compilation error spotted by gcc.
+
+* [fix] Updated ext-dns package to be compilable at wheezy. Updated
+  postinst to configure default ext-dns.conf if it doesn't exists.
+
+* [fix] Added support to also resolve through /etc/hosts when forward
+  all requests mode is enabled (no child resolver).
+
+* [fix] Making ext-dns regression tests to work over the port 54.
+
+* [fix] Fixed ext-dns client API to honour port configured and not
+  used 53 as a fixed value.
+
+* [fix] Updated ext-dnsd server to allow getting the running IP of the
+  service to allow implementing script watching or other configuration
+  checkings. Used this new setup to implement ext-dnsd-watcher cron
+  now included in debian packages.
+
+* [fix] Replaced all calls to strlen with ext_dns_strlen to better
+  handle NULL values.
+
+* [fix] Added additional checks to detect wrong data received by the
+  API or from the network. Added additional regression test (test_24)
+  to check support for crafted messages with broken records. No bug
+  found. Nice.
+
+* [fix] Fixed compilation warnings at server/main.c due to gcc
+  complaining.
+
+* [fix] Added support to ubuntu precise.
+
+About Advanced Software Production Line, S.L. (ASPL)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  Advanced Software Production Line (ASPL) provides GNU/Linux support
+  and consulting services to enable organization to introduce
+  GNU/Linux into their processes, making other platforms to properly
+  interact with it.
+
+  You can contact us, using English or Spanish, at:
+
+       http://www.aspl.es - info@aspl.es
+
+  We hope ext-Dns may be useful you. Enjoy ext-Dns toolkit!
+
+--
+Francis Brosnan Blázquez           - francis@aspl.es
+Advanced Software Production Line  - http://www.aspl.es
+17th Jan 2014, Madrid (Spain)
