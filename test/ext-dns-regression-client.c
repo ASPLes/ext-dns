@@ -633,7 +633,7 @@ axl_bool test_05 (void) {
 		return axl_false;
 	}
 
-	if (! axl_cmp (message->answers[1].name_content, "212.170.101.196")) {
+	if (! axl_cmp (message->answers[1].name_content, "213.96.140.9")) {
 		printf ("ERROR: expected to find dolphin.aspl.es as CNAME result for bugzilla.aspl.es but found: %s\n", message->answers[1].name_content);
 		return axl_false;
 	} 
@@ -786,7 +786,7 @@ axl_bool test_07 (void) {
 		return axl_false;
 
 	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content);  */
-	if (! check_answer (ctx, &message->answers[0], "aspl.es", extDnsTypeTXT, extDnsClassIN, "v=spf1 a mx ip4:194.140.166.76 ip4:212.170.101.196 mx:aspl.es ~all"))
+	if (! check_answer (ctx, &message->answers[0], "aspl.es", extDnsTypeTXT, extDnsClassIN, "v=spf1 a mx ip4:194.140.166.76 ip4:213.96.140.9 mx:aspl.es ~all"))
 		return axl_false;
 
 	/* release message */
