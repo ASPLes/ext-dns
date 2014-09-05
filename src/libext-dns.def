@@ -99,6 +99,7 @@ ext_dns_listener_new
 ext_dns_listener_new2
 ext_dns_listener_new_full
 ext_dns_listener_sock_listen
+ext_dns_load_etc_hosts
 ext_dns_log2_enable
 ext_dns_log2_is_enabled
 ext_dns_log_enable

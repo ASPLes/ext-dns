@@ -1951,6 +1951,82 @@ axl_bool test_24 (void) {
 	return axl_true;
 }
 
+axl_bool __test_25_foreach (axlPointer key, axlPointer data, axlPointer user_data)
+{
+	printf ("Test 25: '%s' => '%s'\n", (const char *) key, (const char *) data);
+	return axl_false; /* do not stop */
+}
+
+void test_25_check (axlHash * ipv4, const char * host, const char * key)
+{
+	if (! axl_cmp ((const char *) axl_hash_get (ipv4, (axlPointer) host), key)) {
+		printf ("ERROR: expected to find %s for host %s but found: %s\n", key, host, (const char *) axl_hash_get (ipv4, (axlPointer) host));
+		exit (-1);
+	}
+	return;
+}
+
+axl_bool test_25 (void) {
+
+	extDnsCtx        * ctx;
+	axlHash          * ipv4;
+	axlHash          * ipv6;
+
+	/* create context object */
+	ctx = ext_dns_ctx_new ();
+	if (ctx == NULL) {
+		printf ("ERROR: failed to allocate ctx object..\n");
+		return axl_false;
+	}
+
+	/* init context */
+	if (! ext_dns_init_ctx (ctx)) {
+		printf ("ERROR: failed to initiatialize ext-dns server context..\n");
+		exit (-1);
+	} 
+
+	/* load file */
+	ext_dns_load_etc_hosts (ctx, "hosts", &ipv4, &ipv6);
+
+	printf ("Test 25: loaded IPv4 %d items\n", axl_hash_items (ipv4));
+	axl_hash_foreach (ipv4, __test_25_foreach, NULL);
+	printf ("Test 25: loaded IPv6 %d items\n", axl_hash_items (ipv6));
+
+	if (axl_hash_items (ipv4) != 12) {
+		printf ("ERROR: expected to find 12 elements but found %d\n", axl_hash_items (ipv4));
+		return axl_false;
+	}
+
+	if (axl_hash_items (ipv6) != 0) {
+		printf ("ERROR: expected to find 0 elements but found %d\n", axl_hash_items (ipv6));
+		return axl_false;
+	}
+
+	test_25_check (ipv4, "prueba", "192.168.0.100");
+	test_25_check (ipv4, "prueba2", "192.168.0.100");
+	test_25_check (ipv4, "prueba3", "192.168.0.100");
+	test_25_check (ipv4, "prueba4", "192.168.0.100");
+
+	test_25_check (ipv4, "prueba5", "192.168.1.100");
+	test_25_check (ipv4, "test1", "192.168.1.100");
+	test_25_check (ipv4, "test2", "192.168.1.100");
+
+	test_25_check (ipv4, "localhost", "127.0.0.1");
+	test_25_check (ipv4, "desktop1", "192.168.1.100");
+	test_25_check (ipv4, "desktop2", "192.168.1.101");
+	test_25_check (ipv4, "desktop3", "192.168.1.102");
+	test_25_check (ipv4, "desktop4", "192.168.1.103");
+
+	/* release hashes */
+	axl_hash_free (ipv4);
+	axl_hash_free (ipv6);
+
+	/* release content */
+	ext_dns_exit_ctx (ctx, axl_true);
+
+	return axl_true;
+}
+
 
 typedef axl_bool  (*extDnsRegressionTest) (void);
 
@@ -2040,7 +2116,9 @@ int main (int argc, char ** argv) {
 	printf ("**       Providing --run-test=NAME will run only the provided regression test.\n");
 	printf ("**       Test available: test_01, test_02, test_03, test_04, test_04a, test_05\n");
 	printf ("**                       test_06, test_07, test_08, test_09, test_10\n");
-	printf ("**                       test_11, test_12\n");
+	printf ("**                       test_11, test_12, test_13, test_14, test_15\n");
+	printf ("**                       test_16, test_17, test_18, test_19, test_20\n");
+	printf ("**                       test_21, test_22, test_23, test_24, test_25\n");
 	printf ("**\n");
 
 	/* check for disable-time-checks */
@@ -2135,6 +2213,12 @@ int main (int argc, char ** argv) {
 		if (check_and_run_test (run_test_name, "test_23"))
 			run_test (test_23, "Test 23", "testing requests that timeouts", -1, -1);
 
+		if (check_and_run_test (run_test_name, "test_24"))
+			run_test (test_24, "Test 24", "testing sending broken packages with NULL at resource name", -1, -1);
+
+		if (check_and_run_test (run_test_name, "test_25"))
+			run_test (test_25, "Test 25", "testing local /etc/hosts support", -1, -1);
+
 		goto finish;
 	}
 
@@ -2190,6 +2274,8 @@ int main (int argc, char ** argv) {
 	run_test (test_23, "Test 23", "testing requests that timeouts", -1, -1);
 
 	run_test (test_24, "Test 24", "testing sending broken packages with NULL at resource name", -1, -1);
+
+	run_test (test_25, "Test 25", "testing local /etc/hosts support", -1, -1);
 	
 	/* test sending q query where the replies should have several
 	   but only were found a few */

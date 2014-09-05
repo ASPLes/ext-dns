@@ -38,6 +38,10 @@
 #include <ext-dns.h>
 #include <ext-dns-private.h>
 
+#if !defined(getline)
+ssize_t getline(char **lineptr, size_t *n, FILE *stream);
+#endif
+
 /**
  * @brief Allows to get the integer value stored in the provided
  * environment varible.
@@ -324,5 +328,83 @@ long int ext_dns_atoi (const char * number)
 	if (number == NULL)
 		return 0;
 	return atoi (number);
+}
+
+/** 
+ * @brief Allows to load from the provided file IPv4 and IPv6
+ * resolution.
+ *
+ * @param etc_hosts Reference to the path to load.
+ *
+ */
+void     ext_dns_load_etc_hosts (extDnsCtx * ctx, const char * etc_hosts, axlHash ** ipv4, axlHash ** ipv6)
+{
+	char      * line = NULL;
+	size_t      len  = 0;
+	FILE      * fp;
+	ssize_t     read;
+	int         iterator;
+	char     ** items;
+
+	/* load file */
+	fp = fopen (etc_hosts, "r");
+	if (fp == NULL) {
+		return;
+	} /* end if */
+
+	/* create temporal hashes */
+	(*ipv4) = axl_hash_new (axl_hash_string, axl_hash_equal_string);
+	(*ipv6) = axl_hash_new (axl_hash_string, axl_hash_equal_string);
+
+	/* ok, load the new etc/hosts */
+	while ((read = getline (&line, &len, fp)) != -1) {
+		/* clear and check for empty lines */
+		axl_stream_trim (line);
+		if (line == NULL || ext_dns_strlen (line) == 0)
+			continue;
+		
+		/* skip comments */
+		if (line[0] == '#')
+			continue;
+
+		/* prepare the line */
+		iterator = 0;
+		while (line[iterator]) {
+			if (line[iterator] == '\t' || line[iterator] == '\r')
+				line[iterator] = ' ';
+			iterator++;
+		} /* end while */
+
+		/* process line */
+		items = axl_split (line, 1, " ");
+		axl_stream_clean_split (items);
+		if (items[0] == NULL || items[1] == NULL) {
+			axl_freev (items);
+			continue;
+		} /* end if */
+
+		iterator = 1;
+		while (items[iterator]) {
+			ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Found resolution %s -> %s", items[iterator], items[0]);
+			
+			/* check if this is a ipv4 or ipv6 value */
+			if (!(strstr (items[0], ":") == NULL)) 
+				axl_hash_insert_full ((*ipv6), axl_strdup (items[iterator]), axl_free, axl_strdup(items[0]), axl_free);
+			else
+				axl_hash_insert_full ((*ipv4), axl_strdup (items[iterator]), axl_free, axl_strdup (items[0]), axl_free);
+
+			iterator++;
+		} /* end if */
+
+		/* clear first position */
+		axl_freev (items);
+	}
+
+	/* release and close */
+	if (line)
+		free (line);
+	fclose (fp);
+
+	return;
 }
 

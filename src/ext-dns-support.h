@@ -56,8 +56,13 @@ int      ext_dns_support_itoa                       (unsigned int   value,
 char   * ext_dns_support_inet_ntoa                  (extDnsCtx          * ctx, 
 						     struct sockaddr_in * sin);
 
-long int ext_dns_atoi (const char * number);     
+long int ext_dns_atoi                               (const char * number);     
 
-axl_bool ext_dns_support_is_ipv4 (const char * value);
+axl_bool ext_dns_support_is_ipv4                    (const char * value);
+
+void     ext_dns_load_etc_hosts                     (extDnsCtx    * ctx, 
+						     const char   * etc_hosts, 
+						     axlHash     ** ipv4, 
+						     axlHash     ** ipv6);
 
 #endif /* __EXT_DNS_SUPPORT_H__ */

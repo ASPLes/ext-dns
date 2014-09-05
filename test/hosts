@@ -1,0 +1,12 @@
+# This is a test
+
+192.168.0.100 prueba prueba2 prueba3 prueba4 prueba5
+
+192.168.1.100 prueba5 test1 test2
+
+127.0.0.1     localhost
+
+192.168.1.100	desktop1
+192.168.1.101	desktop2
+192.168.1.102	desktop3
+192.168.1.103	desktop4
