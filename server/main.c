@@ -1698,12 +1698,6 @@ void clear_etc_hosts (void) {
 
 void start_etc_hosts_resolution (void) {
 	axlNode  * node;
-	char     * line = NULL;
-	size_t     len  = 0;
-	FILE     * fp;
-	ssize_t    read;
-	char    ** items;
-	int        iterator;
 
 	/* hashes built */
 	axlHash  * temp1;
@@ -1726,63 +1720,8 @@ void start_etc_hosts_resolution (void) {
 		return ;
 	} /* end if */
 
-	fp = fopen("/etc/hosts", "r");
-	if (fp == NULL) {
-		return;
-	} /* end if */
-
-	/* create temporal hashes */
-	temp1 = axl_hash_new (axl_hash_string, axl_hash_equal_string);
-	temp2 = axl_hash_new (axl_hash_string, axl_hash_equal_string);
-
-	/* ok, load the new etc/hosts */
-	while ((read = getline (&line, &len, fp)) != -1) {
-		/* clear and check for empty lines */
-		axl_stream_trim (line);
-		if (line == NULL || ext_dns_strlen (line) == 0)
-			continue;
-		
-		/* skip comments */
-		if (line[0] == '#')
-			continue;
-
-		/* prepare the line */
-		iterator = 0;
-		while (line[iterator]) {
-			if (line[iterator] == '\t' || line[iterator] == '\r')
-				line[iterator] = ' ';
-			iterator++;
-		} /* end while */
-
-		/* process line */
-		items = axl_split (line, 1, " ");
-		axl_stream_clean_split (items);
-		if (items[0] == NULL || items[1] == NULL) {
-			axl_freev (items);
-			continue;
-		} /* end if */
-
-		iterator = 1;
-		while (items[iterator]) {
-			ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Found resolution %s -> %s", items[iterator], items[0]);
-			
-			/* check if this is a ipv4 or ipv6 value */
-			if (!(strstr (items[0], ":") == NULL)) 
-				axl_hash_insert_full (temp2, axl_strdup (items[iterator]), axl_free, axl_strdup(items[0]), axl_free);
-			else
-				axl_hash_insert_full (temp1, axl_strdup (items[iterator]), axl_free, axl_strdup (items[0]), axl_free);
-
-			iterator++;
-		} /* end if */
-
-		/* clear first position */
-		axl_freev (items);
-	}
-
-	/* release and close */
-	if (line)
-		free (line);
-	fclose (fp);
+	/* call to load from file */
+	ext_dns_load_etc_hosts (ctx, "/etc/hosts", &temp1, &temp2);
 
 	/* now set new values */
 	ext_dns_mutex_lock (&etchosts_mutex);
