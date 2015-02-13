@@ -49,10 +49,14 @@ void queue_reply (extDnsCtx     * ctx,
 		  axlPointer      data) 
 {
 	extDnsAsyncQueue * queue = data;
+	
+	if (message == NULL)
+		return;
 
 	/* acquire reference to the message */
 	if (! ext_dns_message_ref (message)) {
-		printf ("ERROR: failed to acquire reference to the message..\n");
+		printf ("ERROR: failed to acquire reference to the message (ctx=%p, message=%p, session=%p, source_address=%s)..\n",
+			ctx, message, session, source_address);
 		return;
 	} /* end if */
 		
@@ -1411,7 +1415,7 @@ axl_bool test_15 (void) {
 
 	/* printf ("Message size: %d\n", message->message_size); */
 	if (message->message_size != 86) {
-		printf ("ERROR: expected a message size reply of 86 but found %d\n", 
+		printf ("ERROR (15): expected a message size reply of 86 but found %d\n", 
 			message->message_size);
 		return axl_false;
 	} /* end if */
@@ -1481,7 +1485,7 @@ axl_bool test_16 (void) {
 	/* printf ("Message size: %d\n", message->message_size); */
 	if (message->message_size != 86 &&
 	    message->message_size != 89) {
-		printf ("ERROR: expected a message size reply of 86 but found %d\n", 
+		printf ("ERROR (16): expected a message size reply of 86 but found %d\n", 
 			message->message_size);
 		return axl_false;
 	} /* end if */
@@ -1523,7 +1527,7 @@ axl_bool test_17 (void) {
 
 	/* run query and check results */
 	queue = ext_dns_async_queue_new ();
-	ext_dns_message_query (ctx, "a", "in", "www.google-analytics.com", dns_server, dns_server_port, queue_reply, queue);
+	ext_dns_message_query (ctx, "a", "in", "msrv-smtp-01.aspl.es", dns_server, dns_server_port, queue_reply, queue);
 
 	/* get reply (timeout in 3seconds) */
 	message = ext_dns_async_queue_timedpop (queue, 3000000);
@@ -1533,9 +1537,10 @@ axl_bool test_17 (void) {
 	}
 
 	/* check header */
+	printf ("Test 17: checking msrv-smtp-01.aspl.es (A) resolution..\n");
 	if (! check_header (message, 
 			    /* is query */ axl_false, 
-			    /* ans count */ 9, 
+			    /* ans count */ 5, 
 			    /* query count */ 1,
 			    /* authority count */ 0,
 			    /* additional count */ 0))
@@ -1549,8 +1554,8 @@ axl_bool test_17 (void) {
 	} /* end if */
 
 	/* printf ("Message size: %d\n", message->message_size); */
-	if (message->message_size != 505) {
-		printf ("ERROR: expected a message size reply of 86 but found %d\n", 
+	if (message->message_size != 218) {
+		printf ("ERROR (17): expected a message size reply of 218 but found %d\n", 
 			message->message_size);
 		return axl_false;
 	} /* end if */
@@ -1748,9 +1753,10 @@ axl_bool test_21 (void) {
 		}
 		
 		/* check header */
+		printf ("Test 21: checking (A) resolution for www.google.com...\n");
 		if (! check_header (message, 
 				    /* is query */ axl_false, 
-				    /* ans count */ 5, 
+				    /* ans count */ 1, 
 				    /* query count */ 1,
 				    /* authority count */ 0,
 				    /* additional count */ 0))
@@ -1776,6 +1782,7 @@ axl_bool test_21 (void) {
 		}
 		
 		/* check header */
+		printf ("Test 21: checking (AAAA) resolution for www.google.com...\n");
 		if (! check_header (message, 
 				    /* is query */ axl_false, 
 				    /* ans count */ 1, 
