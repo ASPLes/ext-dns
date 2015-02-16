@@ -1313,7 +1313,7 @@ int ext_dns_create_child (int fds[2], const char * child_resolver) {
 	/* redirect standard file descriptors */
 	/* stdin */
 	close (0);
-	if (dup (pipes[2] < 0)) {
+	if (dup (pipes[2]) < 0) {
 	  printf ("ERROR: failed to create child process, dup() call failed on pipes[2] with errno=%d (%s)\n", errno, strerror (errno));
 	  exit (0);
 	}
