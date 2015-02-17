@@ -2,14 +2,20 @@
 
 * hacer release note.
 
-* subir producto a code.google.com
+* subir producto a aspl.es/ext-dns/downloads:
+
+  >> scp ext-dns*.tar.gz aspl-web@www.aspl.es:www/ext-dns/downloads/
 
 * publicar en listas de correo de aspl.
 
-* publicar en freshmeat.net
+* publicar en freecode.club
 
 * actualizar web de ext-dns (actualizar sección de noticias y a la gestión
-  de releases notes)
+  de releases notes). 
+
+  - index.html
+  - news.html
+  - downloads.html
 
 * publicar noticia en aspl.es.
 
