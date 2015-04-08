@@ -55,6 +55,8 @@ PACKAGE="ext-dns: a framework to build DNS solutions"
 echo "Generating configuration files for $PACKAGE, please wait...." 
 echo; 
 
+export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/local/lib/pkgconfig
+
 touch NEWS README AUTHORS ChangeLog 
 libtoolize --force;
 aclocal $ACLOCAL_FLAGS; 
