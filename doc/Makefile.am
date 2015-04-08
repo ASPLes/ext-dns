@@ -4,7 +4,10 @@ EXTRA_DIST = ext-dns.doxygen \
 	     main-page-logo.png \
 	     ext-dns.css \
 	     body_back.gif \
-	     aspl-logo-header.png
+	     aspl-logo-header.png \
+	     ext-dnsd-init.d \
+	     ext-dnsd-rpm-init.d
+
 bin_SCRIPTS = initial_build_doc
 
 help:

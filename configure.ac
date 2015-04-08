@@ -38,12 +38,11 @@ dnl
 AC_INIT(src/ext-dns.h)
 
 configure_dir=`dirname "$0"`
-EXT_DNS_SUBVERSION=b`LANG=C svn info .  | grep "Revision:" | sed 's/Revision: //g' | sed 's/ //g'`
-EXT_DNS_VERSION=`cat $configure_dir/VERSION`.${EXT_DNS_SUBVERSION}
+EXT_DNS_VERSION=`cat $configure_dir/VERSION`
 AC_SUBST(EXT_DNS_VERSION)
 
 AC_CONFIG_AUX_DIR(.)
-AM_INIT_AUTOMAKE(ext_dns, $EXT_DNS_VERSION)
+AM_INIT_AUTOMAKE(ext-dns, $EXT_DNS_VERSION)
 AM_CONFIG_HEADER(config.h)
 AM_MAINTAINER_MODE
 
