@@ -1,3 +1,4 @@
+%define release_date %(date +"%a %b %d %Y")
 %define ext_dns_version %(cat VERSION)
 
 Name:           ext-dns
@@ -125,6 +126,6 @@ on host tool.
 
 
 %changelog
-* Sun Apr 07 2015 Francis Brosnan Blázquez <francis@aspl.es> - %{ext_dns_version}
-- New upstream release
+%include rpm/SPECS/changelog.inc
+
 

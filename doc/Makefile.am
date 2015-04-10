@@ -28,10 +28,10 @@ build_doc: prepare_xmls
 	rm -rf html/
 	@echo "Generating module documentation..";
 	doxygen ext-dns.doxygen
-	cp $(top_srcdir)/doc/main-page-logo.png html
-	cp $(top_srcdir)/doc/aspl-logo-header.png html
-	cp $(top_srcdir)/doc/ext-dns.css html
-	cp $(top_srcdir)/doc/body_back.gif html
+	cp -f $(top_srcdir)/doc/main-page-logo.png html
+	cp -f $(top_srcdir)/doc/aspl-logo-header.png html
+	cp -f $(top_srcdir)/doc/ext-dns.css html
+	cp -f $(top_srcdir)/doc/body_back.gif html
 
 prepare_xmls:
 	axl-knife -i ../server/ext-dns.example.conf -o ext-dns.example.conf.xml -e -p fragment
