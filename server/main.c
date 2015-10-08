@@ -1813,6 +1813,33 @@ void reload_configuration (int _signal) {
 	return;
 }
 
+int  get_config_value_int (const char * path, const char * attr, int default_value) {
+        axlNode    * node;
+	const char * number_str;
+	int          number;
+
+	/* find first listener node */
+	node = axl_doc_get (config, path);
+	if (node == NULL) {
+	        syslog (LOG_INFO, "Path %s not found, defaulting to %d", path, default_value);
+	        return default_value;
+	}
+
+	number_str = ATTR_VALUE (node, attr);
+	if (number_str == NULL || ext_dns_strlen (number_str) == 0) {
+	        syslog (LOG_INFO, "no <%s> value config was found at path %s, defaulting to %d", attr, path, default_value);
+		return default_value;
+	} /* end if */
+	
+	number = ext_dns_atoi (number_str);
+	if (number <= 0) {
+	        syslog (LOG_ERR, "Negative value found for <%s> at path %s, defaulting to %d", attr, path, default_value);
+		return default_value;
+	} /* end if */
+
+	return number;
+}
+
 void setup_thread_num (void) {
 	axlNode    * node;
 	const char * number_str;
@@ -1956,7 +1983,7 @@ int main (int argc, char ** argv) {
 	init_structures_and_handlers ();
 
 	/* init cache */
-	ext_dns_cache_init (ctx, 1000);
+	ext_dns_cache_init (ctx, get_config_value_int ("/ext-dns-server/cache-size", "value", 1000));
 
 	/* check and start /etc/hosts resolution */
 	ext_dns_mutex_create (&etchosts_mutex);
