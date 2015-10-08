@@ -116,6 +116,9 @@ void            ext_dns_cache_init (extDnsCtx * ctx, int max_cache_size)
 	if (ctx == NULL)
 		return;
 
+	/* init max cache size */
+	ctx->max_cache_size = max_cache_size;
+
 	if (ctx->cache) {
 		/* user is calling to flush the cache, hold the mutex then */
 		old_value  = ctx->cache;
@@ -138,9 +141,6 @@ void            ext_dns_cache_init (extDnsCtx * ctx, int max_cache_size)
 	ctx->cache        = axl_hash_new (axl_hash_string, axl_hash_equal_string);
 	ctx->cache_cursor = axl_hash_cursor_new (ctx->cache);
 	ext_dns_mutex_create (&ctx->cache_mutex);
-
-	/* init max cache size */
-	ctx->max_cache_size = 1000;
 
 	/* start event to cleanup cache every 10 seconds */
 	ext_dns_thread_pool_new_event (ctx, 10 * 1000000, __ext_dns_cache_cleanup, ctx, NULL);
