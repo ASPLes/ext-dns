@@ -1469,11 +1469,12 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 	/* place stamp */
 	msg = axl_strdup_printf ("Stamp: %d\n", time (NULL));
 	value = fwrite (msg, ext_dns_strlen (msg), 1, file);
-	axl_free (msg);
 	if (value != ext_dns_strlen (msg)) {
+	      axl_free (msg);
 	      fclose (file);
 	      return axl_false; /* do not remove the event */
 	}
+  	axl_free (msg);
 	
 	/* child status */
 	if (children_ready == 0)
