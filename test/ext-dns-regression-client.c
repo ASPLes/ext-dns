@@ -790,7 +790,8 @@ axl_bool test_07 (void) {
 		return axl_false;
 
 	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content);  */
-	if (! check_answer (ctx, &message->answers[0], "aspl.es", extDnsTypeTXT, extDnsClassIN, "v=spf1 a mx ip4:194.140.166.76 ip4:213.96.140.9 mx:aspl.es ~all"))
+	if (! check_answer (ctx, &message->answers[0], "aspl.es", extDnsTypeTXT, extDnsClassIN, 
+			    "v=spf1 a mx ip4:194.140.166.76 ip4:213.96.140.9 mx:aspl.es ip4:46.16.60.0/23 ~all"))
 		return axl_false;
 
 	/* release message */
