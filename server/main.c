@@ -1481,53 +1481,61 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 		label = " (all children busy)";
 	msg = axl_strdup_printf ("Child status: %d/%d (working/total)%s\n", children_number - children_ready, children_number, label);
 	value = fwrite (msg, 1, ext_dns_strlen (msg), file);
-	axl_free (msg);
 	if (value != ext_dns_strlen (msg)) {
+	      axl_free (msg);	
 	      fclose (file);
 	      return axl_false; /* do not remove the event */
 	}
+	axl_free (msg);	
 
 	if (children_dead > 0) {
 		msg = axl_strdup_printf ("Children dead: %d%s\n", children_dead);
 		value = fwrite (msg, 1, ext_dns_strlen (msg), file);
-		axl_free (msg);
 		if (value != ext_dns_strlen (msg)) {
+		       axl_free (msg);	
 		       fclose (file);
 		       return axl_false; /* do not remove the event */
 		}
+		axl_free (msg);	
 	} /* end if */
 
 	/* some stas */
 	msg = axl_strdup_printf ("Requests received: %d\n", requests_received);
 	value = fwrite (msg, 1, ext_dns_strlen (msg), file);
-	axl_free (msg);
 	if (value != ext_dns_strlen (msg)) {
+	        axl_free (msg);	
 	        fclose (file);
 		return axl_false; /* do not remove the event */
 	}
+	axl_free (msg);	
 
 	msg = axl_strdup_printf ("Requests served: %d\n", requests_served);
 	value = fwrite (msg, 1, ext_dns_strlen (msg), file);
-	axl_free (msg);
 	if (value != ext_dns_strlen (msg)) {
 	        fclose (file);
+		axl_free (msg);	
 		return axl_false; /* do not remove the event */
 	}
+	axl_free (msg);	
 
 	msg = axl_strdup_printf ("Failures found: %d\n", failures_found);
 	value = fwrite (msg, 1, ext_dns_strlen (msg), file);
 	if (value != ext_dns_strlen (msg)) {
+	        axl_free (msg);	
 	        fclose (file);
 		return axl_false; /* do not remove the event */
 	}
+	axl_free (msg);	
 
 	/* pending requests */
 	msg = axl_strdup_printf ("Pending requests: %d\n", axl_list_length (pending_requests));
 	value = fwrite (msg, 1, ext_dns_strlen (msg), file);
 	if (value != ext_dns_strlen (msg)) {
+	        axl_free (msg);	
 	        fclose (file);
 		return axl_false; /* do not remove the event */
 	}
+	axl_free (msg);	
 
 	/* pending requests */
 	ext_dns_cache_stats (ctx, &cache_stats);
@@ -1539,11 +1547,12 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 				 cache_stats.cache_hits, cache_stats.cache_access,
 				 ratio);
 	value = fwrite (msg, 1, ext_dns_strlen (msg), file);
-	axl_free (msg);
 	if (value != ext_dns_strlen (msg)) {
+	        axl_free (msg);	
 	        fclose (file);
 		return axl_false; /* do not remove the event */
 	}
+	axl_free (msg);	
 
 	/* show command timeout */
 	if (command_timeout > 0) 
@@ -1551,11 +1560,12 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 	else 
 		msg = axl_strdup_printf ("Command timeout: disabled\n", command_timeout);
 	value = fwrite (msg, 1, ext_dns_strlen (msg), file);
-	axl_free (msg);
 	if (value != ext_dns_strlen (msg)) {
+	        axl_free (msg);	
 	        fclose (file);
 		return axl_false; /* do not remove the event */
 	}
+	axl_free (msg);	
 
 	/* show pending childs */
 	ext_dns_mutex_lock (&children_mutex);
@@ -1569,11 +1579,12 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 			msg  = axl_strdup_printf ("Child busy: pid %d, working for: %d secs, cmd: %s\n", 
 						  children[iterator].pid, diff, children[iterator].last_command);
 			value = fwrite (msg, 1, ext_dns_strlen (msg), file);
-			axl_free (msg);	
 			if (value != ext_dns_strlen (msg)) {
+			        axl_free (msg);	
 			        fclose (file);
 				return axl_false; /* do not remove the event */
 			}
+			axl_free (msg);	
 
 			if (diff > command_timeout) {
 				/* call to implement kill */
