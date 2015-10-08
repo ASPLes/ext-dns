@@ -36,8 +36,8 @@
  *         info@aspl.es - http://www.aspl.es/ext-dns
  */
 
-#define HELP_HEADER "ext-dnsd: another, but configurable, DNS server \n\
-Copyright (C) 2012  Advanced Software Production Line, S.L.\n"
+#define HELP_HEADER "ext-dnsd: Extensible DNS server \n\
+Copyright (C) 2015  Advanced Software Production Line, S.L.\n"
 
 
 #define POST_HEADER "\n\
@@ -1468,7 +1468,7 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 
 	/* place stamp */
 	msg = axl_strdup_printf ("Stamp: %d\n", time (NULL));
-	value = fwrite (msg, ext_dns_strlen (msg), 1, file);
+	value = fwrite (msg, 1, ext_dns_strlen (msg), file);
 	if (value != ext_dns_strlen (msg)) {
 	      axl_free (msg);
 	      fclose (file);
@@ -1480,7 +1480,7 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 	if (children_ready == 0)
 		label = " (all children busy)";
 	msg = axl_strdup_printf ("Child status: %d/%d (working/total)%s\n", children_number - children_ready, children_number, label);
-	value = fwrite (msg, ext_dns_strlen (msg), 1, file);
+	value = fwrite (msg, 1, ext_dns_strlen (msg), file);
 	axl_free (msg);
 	if (value != ext_dns_strlen (msg)) {
 	      fclose (file);
@@ -1489,7 +1489,7 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 
 	if (children_dead > 0) {
 		msg = axl_strdup_printf ("Children dead: %d%s\n", children_dead);
-		value = fwrite (msg, ext_dns_strlen (msg), 1, file);
+		value = fwrite (msg, 1, ext_dns_strlen (msg), file);
 		axl_free (msg);
 		if (value != ext_dns_strlen (msg)) {
 		       fclose (file);
@@ -1499,7 +1499,7 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 
 	/* some stas */
 	msg = axl_strdup_printf ("Requests received: %d\n", requests_received);
-	value = fwrite (msg, ext_dns_strlen (msg), 1, file);
+	value = fwrite (msg, 1, ext_dns_strlen (msg), file);
 	axl_free (msg);
 	if (value != ext_dns_strlen (msg)) {
 	        fclose (file);
@@ -1507,7 +1507,7 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 	}
 
 	msg = axl_strdup_printf ("Requests served: %d\n", requests_served);
-	value = fwrite (msg, ext_dns_strlen (msg), 1, file);
+	value = fwrite (msg, 1, ext_dns_strlen (msg), file);
 	axl_free (msg);
 	if (value != ext_dns_strlen (msg)) {
 	        fclose (file);
@@ -1515,7 +1515,7 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 	}
 
 	msg = axl_strdup_printf ("Failures found: %d\n", failures_found);
-	value = fwrite (msg, ext_dns_strlen (msg), 1, file);
+	value = fwrite (msg, 1, ext_dns_strlen (msg), file);
 	if (value != ext_dns_strlen (msg)) {
 	        fclose (file);
 		return axl_false; /* do not remove the event */
@@ -1523,7 +1523,7 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 
 	/* pending requests */
 	msg = axl_strdup_printf ("Pending requests: %d\n", axl_list_length (pending_requests));
-	value = fwrite (msg, ext_dns_strlen (msg), 1, file);
+	value = fwrite (msg, 1, ext_dns_strlen (msg), file);
 	if (value != ext_dns_strlen (msg)) {
 	        fclose (file);
 		return axl_false; /* do not remove the event */
@@ -1538,7 +1538,7 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 				 cache_stats.cache_items, cache_stats.cache_size, 
 				 cache_stats.cache_hits, cache_stats.cache_access,
 				 ratio);
-	value = fwrite (msg, ext_dns_strlen (msg), 1, file);
+	value = fwrite (msg, 1, ext_dns_strlen (msg), file);
 	axl_free (msg);
 	if (value != ext_dns_strlen (msg)) {
 	        fclose (file);
@@ -1550,7 +1550,7 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 		msg = axl_strdup_printf ("Command timeout: %d secs\n", command_timeout);
 	else 
 		msg = axl_strdup_printf ("Command timeout: disabled\n", command_timeout);
-	value = fwrite (msg, ext_dns_strlen (msg), 1, file);
+	value = fwrite (msg, 1, ext_dns_strlen (msg), file);
 	axl_free (msg);
 	if (value != ext_dns_strlen (msg)) {
 	        fclose (file);
@@ -1568,7 +1568,7 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 			diff = time (NULL) - children[iterator].stamp;
 			msg  = axl_strdup_printf ("Child busy: pid %d, working for: %d secs, cmd: %s\n", 
 						  children[iterator].pid, diff, children[iterator].last_command);
-			value = fwrite (msg, ext_dns_strlen (msg), 1, file);
+			value = fwrite (msg, 1, ext_dns_strlen (msg), file);
 			axl_free (msg);	
 			if (value != ext_dns_strlen (msg)) {
 			        fclose (file);
