@@ -1556,9 +1556,11 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 	axl_free (msg);	
 
 	/* client resolution cache */
-	msg = axl_strdup_printf ("Client getaddrinfo hash: %d/%d (items/size)\n", 
+	msg = axl_strdup_printf ("Client getaddrinfo hash: %d/%d (items/size) %d/%d (hits/queries)\n", 
 				 axl_hash_items (ctx->hostname_hash), 
-				 axl_hash_capacity (ctx->hostname_hash));
+				 axl_hash_capacity (ctx->hostname_hash),
+				 ctx->hostname_hash_hits,
+				 ctx->hostname_hash_queries);
 	value = fwrite (msg, 1, ext_dns_strlen (msg), file);
 	if (value != ext_dns_strlen (msg)) {
 	        axl_free (msg);	

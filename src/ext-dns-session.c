@@ -950,32 +950,45 @@ void __ext_dns_free_addr_info (axlPointer ptr)
  */
 struct addrinfo * ext_dns_session_getaddrinfo (extDnsCtx  * ctx, 
 					       const char * hostname,
-					       const char * port)
+					       const char * port,
+					       axl_bool   * should_release)
 {
 	/* get current context */
 	struct addrinfo    req, *ans = NULL;
 	int                ret_val;
 	char             * key;
+	axl_bool           skip_cache;
 
 	/* check that context and hostname are valid */
-	if (ctx == NULL || hostname == NULL)
+	if (ctx == NULL || hostname == NULL || port == NULL)
 		return NULL;
 
-	key = axl_strdup_printf ("%s:%s", hostname, port);
-	if (key == NULL) 
-		return NULL; /* allocation failure */
+	/* different port, do not cache it */
+	skip_cache = (! axl_cmp (port, "53"));
 
-	/* lock and resolv */
-	ext_dns_mutex_lock (&ctx->hostname_mutex);
+	if (! skip_cache) {
+		/*** CACHE CODE ***/
 
-	/* resolv using the hash */
-	ans = axl_hash_get (ctx->hostname_hash, (axlPointer) key);
-	if (ans) {
-		/* unlock and return the result */
-		ext_dns_mutex_unlock (&ctx->hostname_mutex);
-		axl_free (key);
+		ctx->hostname_hash_queries++;
 
-		return ans;		
+		key = axl_strdup_printf ("%s:%s", hostname, port);
+		if (key == NULL) 
+			return NULL; /* allocation failure */
+
+		/* lock and resolv */
+		ext_dns_mutex_lock (&ctx->hostname_mutex);
+
+		/* resolv using the hash */
+		ans = axl_hash_get (ctx->hostname_hash, (axlPointer) key);
+		if (ans) {
+			ctx->hostname_hash_hits++;
+			
+			/* unlock and return the result */
+			ext_dns_mutex_unlock (&ctx->hostname_mutex);
+			axl_free (key);
+			
+			return ans;		
+		} /* end if */
 	} /* end if */
 
 	/* resolve hostname */
@@ -984,20 +997,26 @@ struct addrinfo * ext_dns_session_getaddrinfo (extDnsCtx  * ctx,
 	req.ai_socktype = SOCK_DGRAM;
 	
 	ret_val = getaddrinfo (hostname, port, &req, &ans);
-	if (ret_val == 0 && ans) {
+	if (ret_val == 0 && ans && ! skip_cache) {
+		/*** CACHE CODE ***/
+
 		/* now store the result */
 		axl_hash_insert_full (ctx->hostname_hash, 
 				      /* the hostname */
 				      key, axl_free,
 				      /* the address */
 				      ans, __ext_dns_free_addr_info);
-		/* nullify key to avoid deallocation */
-		key = NULL;
 	} /* end if */
-	
-	/* unlock and return the result */
-	ext_dns_mutex_unlock (&ctx->hostname_mutex);
-	axl_free (key);
+
+	if (! skip_cache) {
+		/***  CACHE CODE ***/
+
+		/* unlock and return the result */
+		ext_dns_mutex_unlock (&ctx->hostname_mutex);
+	} /* end if */
+
+	if (should_release)
+		(*should_release) = skip_cache;
 
 	return ans;
 	
@@ -1023,9 +1042,10 @@ int               __ext_dns_session_send_udp_common   (extDnsCtx     * ctx,
 	struct   addrinfo  * res;
 	int                  val = IP_PMTUDISC_DONT;
 	char               * str_port = axl_strdup_printf ("%d", port);
+	axl_bool             should_release = axl_false;
 	
 	/* convertimos el hostname a su direccion IP */
-	if ((res = ext_dns_session_getaddrinfo (ctx, address, str_port)) == NULL) {
+	if ((res = ext_dns_session_getaddrinfo (ctx, address, str_port, &should_release)) == NULL) {
 		axl_free (str_port);
 		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to get host by name for address=%s", address);
 		return -1;
@@ -1038,6 +1058,10 @@ int               __ext_dns_session_send_udp_common   (extDnsCtx     * ctx,
 	if (session == -1) {
 		/* create socket */
 		if ((session = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+
+			/* release addrinfo if indicated */
+			if (should_release) { freeaddrinfo (res); }
+
 			ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to create socket, error was errno=%d", errno);
 			return -1;
 		}
@@ -1058,8 +1082,14 @@ int               __ext_dns_session_send_udp_common   (extDnsCtx     * ctx,
 		if (close_socket)
 			ext_dns_close_socket (session);
 
+		/* release addrinfo if indicated */
+		if (should_release) { freeaddrinfo (res); }
+
 		return -1;
 	}
+
+	/* release addrinfo if indicated */
+	if (should_release) { freeaddrinfo (res); }
 
 	if (source_port || source_address) {
 		sin_size = sizeof (dest_addr);
