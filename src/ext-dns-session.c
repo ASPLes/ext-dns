@@ -956,7 +956,7 @@ struct addrinfo * ext_dns_session_getaddrinfo (extDnsCtx  * ctx,
 	/* get current context */
 	struct addrinfo    req, *ans = NULL;
 	int                ret_val;
-	char             * key;
+	char             * key = NULL;
 	axl_bool           skip_cache;
 
 	/* check that context and hostname are valid */
@@ -997,7 +997,7 @@ struct addrinfo * ext_dns_session_getaddrinfo (extDnsCtx  * ctx,
 	req.ai_socktype = SOCK_DGRAM;
 	
 	ret_val = getaddrinfo (hostname, port, &req, &ans);
-	if (ret_val == 0 && ans && ! skip_cache) {
+	if (ret_val == 0 && ans && key && ! skip_cache) {
 		/*** CACHE CODE ***/
 
 		/* now store the result */
