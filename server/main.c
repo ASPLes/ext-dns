@@ -45,6 +45,7 @@ If you have question, bugs to report, patches, you can reach us\n\
 at <ext-dns@lists.aspl.es>."
 
 #include <ext-dnsd.h>
+#include <ext-dns-private.h>
 
 axl_bool verbose = axl_false;
 axl_bool forward_all_requests = axl_true;
@@ -1546,6 +1547,18 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 				 cache_stats.cache_items, cache_stats.cache_size, 
 				 cache_stats.cache_hits, cache_stats.cache_access,
 				 ratio);
+	value = fwrite (msg, 1, ext_dns_strlen (msg), file);
+	if (value != ext_dns_strlen (msg)) {
+	        axl_free (msg);	
+	        fclose (file);
+		return axl_false; /* do not remove the event */
+	}
+	axl_free (msg);	
+
+	/* client resolution cache */
+	msg = axl_strdup_printf ("Client getaddrinfo hash: %d/%d (items/size)\n", 
+				 axl_hash_items (ctx->hostname_hash), 
+				 axl_hash_capacity (ctx->hostname_hash));
 	value = fwrite (msg, 1, ext_dns_strlen (msg), file);
 	if (value != ext_dns_strlen (msg)) {
 	        axl_free (msg);	
