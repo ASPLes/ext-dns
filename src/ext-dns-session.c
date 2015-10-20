@@ -1482,11 +1482,16 @@ EXT_DNS_SOCKET     ext_dns_listener_sock_listen      (extDnsCtx           * ctx,
 	/* resolve hostname */
 	he = gethostbyname (host);
         if (he == NULL) {
-		axl_error_report (error, extDnsNameResolvFailure, "unable to get hostname by calling gethostbyname");
+		axl_error_report (error, extDnsNameResolvFailure, "Unable to get hostname by calling gethostbyname");
 		return -1;
 	} /* end if */
 
 	haddr = ((struct in_addr *) (he->h_addr_list)[0]);
+	if (haddr == NULL) {
+		axl_error_report (error, extDnsNameResolvFailure, "NULL reference (he->h_addr_list)[0], unable to resolve host name");
+		return -1;
+	}
+
 	/* according to type, create a kind of socket */
 	if (type == extDnsTcpSession)
 		fd = socket (AF_INET, SOCK_STREAM, 0);
