@@ -140,6 +140,8 @@ struct _extDnsCtx {
 	/* hostname resolution hash and mutex */
 	extDnsMutex          hostname_mutex;
 	axlHash            * hostname_hash;
+	int                  hostname_hash_hits;
+	int                  hostname_hash_queries;
 
 	/*** handler for message received ***/
 	extDnsOnMessageReceived  on_message;
