@@ -186,7 +186,7 @@ ext_dns_session_get_id
 ext_dns_session_get_port
 ext_dns_session_get_role
 ext_dns_session_get_socket
-ext_dns_session_gethostbyname
+ext_dns_session_getaddrinfo
 ext_dns_session_is_ok
 ext_dns_session_new_empty
 ext_dns_session_new_empty_from_session
