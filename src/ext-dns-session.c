@@ -1486,11 +1486,12 @@ EXT_DNS_SOCKET     ext_dns_listener_sock_listen      (extDnsCtx           * ctx,
 		return -1;
 	} /* end if */
 
+	/* get and check haddr returned */
 	haddr = ((struct in_addr *) (he->h_addr_list)[0]);
 	if (haddr == NULL) {
 		axl_error_report (error, extDnsNameResolvFailure, "NULL reference (he->h_addr_list)[0], unable to resolve host name");
 		return -1;
-	}
+	} /* end if */
 
 	/* according to type, create a kind of socket */
 	if (type == extDnsTcpSession)
