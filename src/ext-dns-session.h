@@ -147,8 +147,9 @@ extDnsSession    * ext_dns_listener_new2    (extDnsCtx           * ctx,
 					     extDnsListenerReady   on_ready, 
 					     axlPointer            user_data);
 
-struct in_addr * ext_dns_session_gethostbyname (extDnsCtx  * ctx, 
-						const char * hostname);
+struct addrinfo * ext_dns_session_getaddrinfo (extDnsCtx  * ctx, 
+					       const char * hostname,
+					       const char * port);
 
 axl_bool          ext_dns_session_set_sock_tcp_nodelay   (EXT_DNS_SOCKET socket,
 							  axl_bool      enable);

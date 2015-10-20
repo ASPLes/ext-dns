@@ -38,6 +38,7 @@
 #include <ext-dns.h>
 /* include local private definitions */
 #include <ext-dns-private.h>
+#include <ext-dns-private-defs.h>
 
 #if defined(AXL_OS_UNIX)
 # include <netinet/tcp.h>
@@ -929,6 +930,12 @@ void               ext_dns_session_unref                  (extDnsSession * sessi
 	return;
 }
 
+void __ext_dns_free_addr_info (axlPointer ptr)
+{
+	freeaddrinfo (ptr);
+	return;
+}
+
 /** 
  * @internal wrapper to avoid possible problems caused by the
  * gethostbyname implementation which is not required to be reentrant
@@ -941,46 +948,58 @@ void               ext_dns_session_unref                  (extDnsSession * sessi
  * @return A reference to the struct hostent or NULL if it fails to
  * resolv the hostname.
  */
-struct in_addr * ext_dns_session_gethostbyname (extDnsCtx  * ctx, 
-						const char * hostname)
+struct addrinfo * ext_dns_session_getaddrinfo (extDnsCtx  * ctx, 
+					       const char * hostname,
+					       const char * port)
 {
 	/* get current context */
-	struct in_addr * result;
-	struct hostent * _result;
+	struct addrinfo    req, *ans = NULL;
+	int                ret_val;
+	char             * key;
 
 	/* check that context and hostname are valid */
 	if (ctx == NULL || hostname == NULL)
 		return NULL;
-	
+
+	key = axl_strdup_printf ("%s:%s", hostname, port);
+	if (key == NULL) 
+		return NULL; /* allocation failure */
+
 	/* lock and resolv */
 	ext_dns_mutex_lock (&ctx->hostname_mutex);
 
 	/* resolv using the hash */
-	result = axl_hash_get (ctx->hostname_hash, (axlPointer) hostname);
-	if (result == NULL) {
-		_result = gethostbyname (hostname);
-		if (_result != NULL) {
-			/* alloc and get the address */
-			result         = axl_new (struct in_addr, 1);
-			if (result == NULL) {
-				ext_dns_mutex_unlock (&ctx->hostname_mutex);
-				return NULL;
-			} /* end if */
-			result->s_addr = ((struct in_addr *) (_result->h_addr_list)[0])->s_addr;
+	ans = axl_hash_get (ctx->hostname_hash, (axlPointer) key);
+	if (ans) {
+		/* unlock and return the result */
+		ext_dns_mutex_unlock (&ctx->hostname_mutex);
+		axl_free (key);
 
-			/* now store the result */
-			axl_hash_insert_full (ctx->hostname_hash, 
-					      /* the hostname */
-					      axl_strdup (hostname), axl_free,
-					      /* the address */
-					      result, axl_free);
-		} /* end if */
+		return ans;		
 	} /* end if */
 
+	/* resolve hostname */
+	memset (&req, 0, sizeof(struct addrinfo));
+	req.ai_family   = AF_INET;
+	req.ai_socktype = SOCK_DGRAM;
+	
+	ret_val = getaddrinfo (hostname, port, &req, &ans);
+	if (ret_val == 0 && ans) {
+		/* now store the result */
+		axl_hash_insert_full (ctx->hostname_hash, 
+				      /* the hostname */
+				      key, axl_free,
+				      /* the address */
+				      ans, __ext_dns_free_addr_info);
+		/* nullify key to avoid deallocation */
+		key = NULL;
+	} /* end if */
+	
 	/* unlock and return the result */
 	ext_dns_mutex_unlock (&ctx->hostname_mutex);
+	axl_free (key);
 
-	return result;
+	return ans;
 	
 }
 
@@ -1001,14 +1020,17 @@ int               __ext_dns_session_send_udp_common   (extDnsCtx     * ctx,
 #else    	
 	socklen_t            sin_size  = sizeof (dest_addr);
 #endif	
-	struct   in_addr * haddr;
-	int val = IP_PMTUDISC_DONT;
+	struct   addrinfo  * res;
+	int                  val = IP_PMTUDISC_DONT;
+	char               * str_port = axl_strdup_printf ("%d", port);
 	
 	/* convertimos el hostname a su direccion IP */
-	if ((haddr = ext_dns_session_gethostbyname (ctx, address)) == NULL) {
+	if ((res = ext_dns_session_getaddrinfo (ctx, address, str_port)) == NULL) {
+		axl_free (str_port);
 		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to get host by name for address=%s", address);
 		return -1;
 	}
+	axl_free (str_port);
 
 	/* set default state for closing socket */
 	close_socket = axl_false;
@@ -1027,15 +1049,9 @@ int               __ext_dns_session_send_udp_common   (extDnsCtx     * ctx,
 	/* remove DF flag */
 	setsockopt (session, IPPROTO_IP, IP_MTU_DISCOVER, &val, sizeof(val));
 	
-	/* where to send data */
-	memset(&dest_addr, 0, sizeof (struct sockaddr_in));
-	dest_addr.sin_family = AF_INET; /* usa host byte order */
-	dest_addr.sin_port = htons(port); /* usa network byte order */
-        memcpy(&dest_addr.sin_addr, haddr, sizeof(struct in_addr));
-	
 	/* enviamos el mensaje */
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "Sending UDP message to %s:%d (size: %d)", address, port, length);
-	if ((numbytes = sendto (session, content, length, MSG_DONTWAIT,(struct sockaddr *)&dest_addr, sizeof (struct sockaddr))) == -1) {
+	if ((numbytes = sendto (session, content, length, MSG_DONTWAIT, res->ai_addr, res->ai_addrlen)) == -1) {
 		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "Failed to send message, error was=%d (%s)", errno, ext_dns_errno_get_last_error ());
 
 		/* close socket */
@@ -1459,9 +1475,7 @@ EXT_DNS_SOCKET     ext_dns_listener_sock_listen      (extDnsCtx           * ctx,
 						      const char          * port,
 						      axlError           ** error)
 {
-	struct hostent     * he;
-	struct in_addr     * haddr;
-	struct sockaddr_in   saddr;
+
 	struct sockaddr_in   sin;
 	EXT_DNS_SOCKET        fd;
 #if defined(AXL_OS_WIN32)
@@ -1471,25 +1485,26 @@ EXT_DNS_SOCKET     ext_dns_listener_sock_listen      (extDnsCtx           * ctx,
 	int                  unit      = 1; 
 	socklen_t            sin_size  = sizeof (sin);
 #endif	
-	uint16_t             int_port;
 	int                  backlog   = 0;
 	int                  bind_res;
+
+	struct addrinfo      req, *ans;
+	int                  ret_val;
 
 	v_return_val_if_fail (ctx,  -2);
 	v_return_val_if_fail (host, -2);
 	v_return_val_if_fail (port || ext_dns_strlen (port) == 0, -2);
 
 	/* resolve hostname */
-	he = gethostbyname (host);
-        if (he == NULL) {
-		axl_error_report (error, extDnsNameResolvFailure, "Unable to get hostname by calling gethostbyname");
-		return -1;
-	} /* end if */
-
-	/* get and check haddr returned */
-	haddr = ((struct in_addr *) (he->h_addr_list)[0]);
-	if (haddr == NULL) {
-		axl_error_report (error, extDnsNameResolvFailure, "NULL reference (he->h_addr_list)[0], unable to resolve host name");
+	memset (&req, 0, sizeof(struct addrinfo));
+	req.ai_flags    = AI_PASSIVE | AI_NUMERICHOST; 
+	req.ai_family   = AF_INET;
+	req.ai_socktype = SOCK_DGRAM;
+	
+	/* try to resolve */
+	ret_val = getaddrinfo (host, port, &req, &ans);
+	if (ret_val != 0) {
+		axl_error_report (error, extDnsNameResolvFailure, "Unable to get hostname by calling getaddrinfo");
 		return -1;
 	} /* end if */
 
@@ -1523,20 +1538,16 @@ EXT_DNS_SOCKET     ext_dns_listener_sock_listen      (extDnsCtx           * ctx,
 	setsockopt (fd, SOL_SOCKET, SO_REUSEADDR, &unit, sizeof (unit));
 #endif 
 
-	/* get integer port */
-	int_port  = (uint16_t) atoi (port);
-
-	memset(&saddr, 0, sizeof(struct sockaddr_in));
-	saddr.sin_family  = AF_INET;
-	saddr.sin_port    = htons(int_port);
-	memcpy(&saddr.sin_addr, haddr, sizeof(struct in_addr));
-
 	/* call to bind */
-	bind_res = bind(fd, (struct sockaddr *)&saddr,  sizeof (struct sockaddr_in));
+	bind_res = bind(fd, ans->ai_addr,  ans->ai_addrlen);
+
+	/* release addrinfo */
+	freeaddrinfo (ans);
+
 	ext_dns_log (EXT_DNS_LEVEL_DEBUG, "bind(2) call returned: %d", bind_res);
 	if (bind_res == EXT_DNS_SOCKET_ERROR) {
-		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "unable to bind address (port:%u already in use or insufficient permissions). Closing socket: %d", int_port, fd);
-		axl_error_report (error, extDnsBindError, "unable to bind address (port:%u already in use or insufficient permissions). Closing socket: %d", int_port, fd);
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "unable to bind address (port:%s already in use or insufficient permissions). Closing socket: %d", port, fd);
+		axl_error_report (error, extDnsBindError, "unable to bind address (port:%s already in use or insufficient permissions). Closing socket: %d", port, fd);
 		ext_dns_close_socket (fd);
 		return -1;
 	}
