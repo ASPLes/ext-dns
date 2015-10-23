@@ -180,7 +180,7 @@ AM_CONDITIONAL(DEFAULT_EPOLL, test "x$default_platform" = "xepoll")
 AM_CONDITIONAL(DEFAULT_POLL, test "x$default_platform" = "xpoll")
 
 dnl check for doxygen documentation
-AC_ARG_ENABLE(vortex-doc, [  --enable-ext-dns-doc       Enable building extDns documentation (doxygen required) [default=yes]], 
+AC_ARG_ENABLE(extdns-doc, [  --enable-ext-dns-doc       Enable building extDns documentation (doxygen required) [default=yes]], 
 	      enable_ext_dns_doc="$enableval", 
 	      enable_ext_dns_doc=yes)
 if test x$enable_ext_dns_doc = xyes ; then
