@@ -2,6 +2,6 @@
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 # restart agent if found to be failing
-*/1   *         * * * root /usr/sbin/ext-dns-watcher.py
+*/1   *         * * * root /usr/bin/ext-dns-watcher.py
 
 
