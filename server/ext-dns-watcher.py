@@ -233,14 +233,26 @@ def check_ext_dns_running ():
     hostip = output.strip ()
 
     # run command to get resolution
-    (status, output) = run ("edq www.aspl.es %s" % hostip)
-    if status:
-        log ("ERROR: host resolution from %s is failing (0x80004), output was: %s" % (hostip, output))
-        return False
+    attempts = 0
+    while attempts < 3:
+        # call to get resolution
+        (status, output)  = run ("edq www.aspl.es %s" % hostip)
+        attempts         += 1
 
-    if "has address" not in output:
-        log ("ERROR: expected 'has address' result but found something different: %s (0x80005), calling to restart ext-dnsd" % output)
-        return False
+        if status:
+            log ("ERROR: host resolution from %s is failing (0x80004), output was: %s" % (hostip, output))
+            if attempts < 3:
+                continue
+
+            # attemps reached
+            return False
+        # end if
+
+        if "has address" not in output:
+            log ("ERROR: expected 'has address' result but found something different: %s (0x80005), calling to restart ext-dnsd" % output)
+            return False
+        # end if
+    # end while
 
     # reported everything is working
     return True
