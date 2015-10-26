@@ -282,7 +282,8 @@ childState * ext_dnsd_find_free_child (char * command)
 
 	ext_dns_mutex_unlock (&children_mutex);
 
-	syslog (LOG_ERR, "ERROR: failed to get a free child, all of them are busy (%d), please check what are blocking them or increase them", children_number);
+	syslog (LOG_ERR, "ERROR: failed to get a free child, all of them are busy (%d), please check what are blocking them or increase them. Check %s for more information", 
+		children_number, __blkbrd);
 	
 	/* no child was found */
 	return NULL;
