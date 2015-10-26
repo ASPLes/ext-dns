@@ -840,15 +840,20 @@ void on_received  (extDnsCtx     * ctx,
 		/* update stats */
 		increase_failures_found ();
 
-		syslog (LOG_ERR, "ERROR: failed to get a child to attend request %s, replying unknown", command);
-
 		if (axl_list_length (pending_requests) < max_pnd_reqs) {
+
+		        syslog (LOG_ERR, "ERROR: failed to get a child to attend request %s, queueing it to reply it later (pending_requests=%d < max_pnd_reqs=%d)", 
+				command, axl_list_length (pending_requests), max_pnd_reqs);
+
 			/* call to queue */
 			ext_dnsd_queue_pending_reply (ctx, session, message, command, source_address, source_port);
 			axl_free (command);
 			return;
 		} /* end if */
 		axl_free (command);
+
+		syslog (LOG_ERR, "ERROR: failed to get a child to attend request %s, replying unknown (pending_requests=%d >= max_pnd_reqs=%d), replying unknown", command,
+			axl_list_length (pending_requests), max_pnd_reqs);
 		
 		/* build the unknown reply */
 		reply = ext_dns_message_build_unknown_reply (ctx, message);
