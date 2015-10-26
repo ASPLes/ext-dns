@@ -1,8 +1,8 @@
 if ENABLE_EXT_DNS_DOC
-EXT_DNS_DOR_DIR = doc
+EXT_DNS_DOC_DIR = doc
 endif
 
-SUBDIRS = src test query server $(ENABLE_EXT_DNS_DOC)
+SUBDIRS = src test query server $(EXT_DNS_DOC_DIR)
 EXTRA_DIST = VERSION
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = ext-dns.pc
