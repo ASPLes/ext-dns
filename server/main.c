@@ -1743,7 +1743,7 @@ void child_terminated (int _signal) {
 	int pid;
 
 	pid = wait (&exit_status);
-	syslog (LOG_INFO, "Child %d finished with %d\n", pid, exit_status);
+	syslog (LOG_INFO, "Child %d finished with %d (child_terminated)\n", pid, exit_status);
 
 	/* reinstall signal */
 	signal (SIGCHLD, child_terminated);
@@ -1940,6 +1940,21 @@ void __block_server (int value)
 }
 #endif
 
+axl_bool __ext_dns_server_waitpid (extDnsCtx * ctx, axlPointer _data, axlPointer _data2) 
+{
+        int pid;
+	int status = 0;
+	/* call to wait for pid */
+	pid = waitpid (-1, &status, WNOHANG);
+	if (pid > 0) {
+	        syslog (LOG_INFO, "Child pid %d finished with error code %d (__ext_dns_server_waitpid)", pid, status);
+		/* release child by pid */
+		ext_dnsd_release_child_by_pid (pid);
+	} /* end if */
+
+        return axl_false; /* ask the system to keep on calling this handler */
+}
+
 int main (int argc, char ** argv) {
 
 	/* install default handling to get notification about
@@ -2003,6 +2018,9 @@ int main (int argc, char ** argv) {
 	/* check and start /etc/hosts resolution */
 	ext_dns_mutex_create (&etchosts_mutex);
 	start_etc_hosts_resolution ();
+
+	/* start waitpid thread (every 1second) */
+	ext_dns_thread_pool_new_event (ctx, 1000000, __ext_dns_server_waitpid, ctx, NULL);
 
 	/* start listener declarations */
 	start_listeners ();
