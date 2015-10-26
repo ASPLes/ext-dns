@@ -233,7 +233,7 @@ def check_ext_dns_running ():
     hostip = output.strip ()
 
     # run command to get resolution
-    (status, output) = run ("host www.aspl.es %s" % hostip)
+    (status, output) = run ("edq www.aspl.es %s" % hostip)
     if status:
         log ("ERROR: host resolution from %s is failing (0x80004), output was: %s" % (hostip, output))
         return False
