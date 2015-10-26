@@ -2,6 +2,8 @@ usr/bin/ext-dnsd
 etc/ext-dns/ext-dns.example.conf
 etc/init.d/ext-dnsd
 etc/cron.d/ext-dnsd-watcher
+usr/bin/ext-dns-watcher.py
+
 
 
 

@@ -104,6 +104,7 @@ track which DNS requests are allowed.
    /etc/ext-dns/ext-dns.example.conf
    /usr/bin/ext-dnsd
    /etc/init.d/ext-dnsd
+   /usr/bin/ext-dns-watcher.py
 %post -n ext-dnsd
 chkconfig ext-dnsd on
 if [ ! -f /etc/ext-dns/ext-dns.conf ]; then
