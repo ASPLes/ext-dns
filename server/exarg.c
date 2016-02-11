@@ -538,9 +538,9 @@ char  * exarg_strdup_printfv    (char * chunk, va_list args)
 	
 	/* copy current size */
 #  if defined(OS_WIN32) && ! defined (__GNUC__)
-	new_size = _vsnprintf_s (result, size + 1, size, chunk, args);
+	size = _vsnprintf_s (result, size + 1, size, chunk, args);
 #  else
-	new_size = vsnprintf (result, size + 1, chunk, args);
+	size = vsnprintf (result, size + 1, chunk, args);
 #  endif
 #endif
 	/* return the result */
