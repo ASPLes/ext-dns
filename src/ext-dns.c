@@ -902,7 +902,6 @@ void _ext_dns_log_common (extDnsCtx        * ctx,
 	char * log_string;
 	struct timeval stamp;
 	char   buffer[1024];
-	va_list empty_va_list;
 	  
 
 	/* if not EXT_DNS_DEBUG FLAG, do not output anything */
@@ -931,7 +930,7 @@ void _ext_dns_log_common (extDnsCtx        * ctx,
 		if (ctx->prepare_log_string) {
 			/* pass the string already prepared */
 			log_string = axl_strdup_printfv (message, args);
-			ctx->debug_handler (file, line, log_level, log_string, empty_va_list);
+			ctx->debug_handler (file, line, log_level, log_string, args);
 			axl_free (log_string);
 		} else {
 			/* call a custom debug handler if one has been set */
