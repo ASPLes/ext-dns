@@ -8,7 +8,7 @@ etc_DATA = ext-dns.example.conf
 crondir = $(sysconfdir)/cron.d/
 cron_DATA = ext-dnsd-watcher
 
-EXTRA_DIST = $(etc_DATA) $(cron_DATA) child-resolver-skel.py
+EXTRA_DIST = $(etc_DATA) $(cron_DATA) child-resolver-skel.py ext-dns-watcher.py
 
 bin_PROGRAMS = ext-dnsd
 
