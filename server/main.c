@@ -782,12 +782,12 @@ void ext_dnsd_queue_pending_reply (extDnsCtx     * ctx,
 	return;
 }
 
-void on_received  (extDnsCtx     * ctx,
-		   extDnsSession * session,
-		   const char    * source_address,
-		   int             source_port,
-		   extDnsMessage * message,
-		   axlPointer      _data)
+static void on_received  (extDnsCtx     * ctx,
+			  extDnsSession * session,
+			  const char    * source_address,
+			  int             source_port,
+			  extDnsMessage * message,
+			  axlPointer      _data)
 {
 	char            * command;
 	childState      * child;
