@@ -64,6 +64,8 @@ axlHash    * etchosts = NULL;
 axlHash    * etchosts_ipv6 = NULL;
 extDnsMutex  etchosts_mutex;
 
+long         startup_stamp;
+
 
 typedef struct _HandleReplyData {
 	int             id;
@@ -1220,6 +1222,10 @@ void load_configuration_file (void)
 	/* reached this point we are starting server, show log */
 	syslog (LOG_INFO, "Starting server, configuration from %s loaded ok", path);
 
+	/* get startup stamp to know since when this server's been
+	 * running */
+	startup_stamp = time (NULL);
+
 	return;
 }
 
@@ -1476,6 +1482,16 @@ axl_bool check_pending_tasks  (extDnsCtx * ctx,
 
 	/* call to check pending requests to be requeued */
 	file = fopen (__blkbrd, "w");
+
+	/* place stamp */
+	msg = axl_strdup_printf ("Running since stamp: %ld\n", startup_stamp);
+	value = fwrite (msg, 1, ext_dns_strlen (msg), file);
+	if (value != ext_dns_strlen (msg)) {
+	      axl_free (msg);
+	      fclose (file);
+	      return axl_false; /* do not remove the event */
+	}
+  	axl_free (msg);
 
 	/* place stamp */
 	msg = axl_strdup_printf ("Stamp: %d\n", time (NULL));
