@@ -241,6 +241,7 @@ int main (int argc, char ** argv) {
 	ext_dns_session_set_on_badrequest (listener, on_bad_request, NULL);
 
 	/* wait and process requests */
+	printf ("ext-DNS regression test running and waiting for requests..\n");
 	ext_dns_ctx_wait (ctx);
 
 	/* terminate process */

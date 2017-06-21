@@ -229,12 +229,15 @@ axl_bool test_02 (void) {
 	} /* end if */
 
 	/* check values inside */
-	/* printf ("values: %s %d %d\n", message->answers[0].name, message->answers[0].type, message->answers[0].class);*/
-	if (ext_dns_get_8bit (message->answers[0].rdata) != 89 ||
-	    ext_dns_get_8bit (message->answers[0].rdata + 1) != 140 ||
-	    ext_dns_get_8bit (message->answers[0].rdata + 2) != 237  ||
-	    ext_dns_get_8bit (message->answers[0].rdata + 3) != 75) {
-		printf ("ERROR: expected a different value at rdata section..\n");
+	printf ("Test 02: values: %s %d %d\n", message->answers[0].name, message->answers[0].type, message->answers[0].class);
+	/* 185.195.96.40 -> rdata=185, rdata[1]=195, rdata[2]=96, rdata[3]=40 */
+	if (ext_dns_get_8bit (message->answers[0].rdata)     != 185 ||
+	    ext_dns_get_8bit (message->answers[0].rdata + 1) != 195 ||
+	    ext_dns_get_8bit (message->answers[0].rdata + 2) != 96  ||
+	    ext_dns_get_8bit (message->answers[0].rdata + 3) != 40) {
+		printf ("ERROR: expected a different value at rdata section: %d, %d, %d, %d..\n",
+			ext_dns_get_8bit (message->answers[0].rdata), ext_dns_get_8bit (message->answers[0].rdata + 1),
+			ext_dns_get_8bit (message->answers[0].rdata + 2), ext_dns_get_8bit (message->answers[0].rdata + 3));
 		return axl_false;
 	} /* end if */
 
@@ -288,7 +291,7 @@ axl_bool test_03 (void) {
 
 	/* check message values */
 	if (message->header->answer_count != 2) {
-		printf ("ERROR: expected to find a 2 answer but found: %d\n", message->header->answer_count);
+		printf ("ERROR: (test.03, ->answer_count for mx aspl.es) expected to find a 2 answer but found: %d\n", message->header->answer_count);
 		return axl_false;
 	}
 
@@ -391,7 +394,7 @@ axl_bool test_04 (void) {
 
 	/* run query and check results */
 	queue = ext_dns_async_queue_new ();
-	ext_dns_message_query (ctx, "cname", "in", "bugzilla.aspl.es", dns_server, dns_server_port, queue_reply, queue);
+	ext_dns_message_query (ctx, "cname", "in", "cvs.aspl.es", dns_server, dns_server_port, queue_reply, queue);
 
 	/* get reply (timeout in 3seconds) */
 	message = ext_dns_async_queue_timedpop (queue, 3000000);
@@ -408,7 +411,7 @@ axl_bool test_04 (void) {
 
 	/* check message values */
 	if (message->header->answer_count != 1) {
-		printf ("ERROR: expected to find a 2 answer but found: %d\n", message->header->answer_count);
+		printf ("ERROR: (test.04 cname for cvs.aspl.es) expected to find a 2 answer but found: %d\n", message->header->answer_count);
 		return axl_false;
 	}
 
@@ -431,7 +434,7 @@ axl_bool test_04 (void) {
 	}
 
 	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content); */
-	if (! axl_cmp (message->answers[0].name, "bugzilla.aspl.es")) {
+	if (! axl_cmp (message->answers[0].name, "cvs.aspl.es")) {
 		printf ("ERROR: expected to find bugzilla.aspl.es but found: %s\n", message->answers[0].name);
 		return axl_false;
 	}
@@ -525,8 +528,8 @@ axl_bool test_04a (void) {
 		return axl_false;
 	}
 
-	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content); */
-	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content);  */
+	printf ("Test 04-a: values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content); 
+	printf ("Test 04-a: values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content);  
 	if (! check_answer (ctx, &message->answers[0], "cname.asplhosting.com", extDnsTypeCNAME, extDnsClassIN, "cname.aspl.es"))
 		return axl_false;
 	if (! check_answer (ctx, &message->answers[1], "cname.aspl.es", extDnsTypeA, extDnsClassIN, "182.192.10.20"))
@@ -565,7 +568,7 @@ axl_bool test_05 (void) {
 
 	/* run query and check results */
 	queue = ext_dns_async_queue_new ();
-	ext_dns_message_query (ctx, "a", "in", "bugzilla.aspl.es", dns_server, dns_server_port, queue_reply, queue);
+	ext_dns_message_query (ctx, "a", "in", "cvs.aspl.es", dns_server, dns_server_port, queue_reply, queue);
 
 	/* get reply (timeout in 3seconds) */
 	message = ext_dns_async_queue_timedpop (queue, 3000000);
@@ -582,7 +585,7 @@ axl_bool test_05 (void) {
 
 	/* check message values */
 	if (message->header->answer_count != 2) {
-		printf ("ERROR: expected to find a 2 answer but found: %d\n", message->header->answer_count);
+		printf ("ERROR: (test 05) expected to find a 2 answer but found: %d\n", message->header->answer_count);
 		return axl_false;
 	}
 
@@ -606,8 +609,8 @@ axl_bool test_05 (void) {
 
 	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content); 
 	   printf ("values: %s %d %d %s\n", message->answers[1].name, message->answers[1].type, message->answers[1].class, message->answers[1].name_content); */
-	if (! axl_cmp (message->answers[0].name, "bugzilla.aspl.es")) {
-		printf ("ERROR: expected to find bugzilla.aspl.es but found: %s\n", message->answers[0].name);
+	if (! axl_cmp (message->answers[0].name, "cvs.aspl.es")) {
+		printf ("ERROR: expected to find cvs.aspl.es but found: %s\n", message->answers[0].name);
 		return axl_false;
 	}
 	if (message->answers[0].type != extDnsTypeCNAME) {
@@ -620,12 +623,12 @@ axl_bool test_05 (void) {
 	}
 
 	if (! axl_cmp (message->answers[0].name_content, "dolphin.aspl.es")) {
-		printf ("ERROR: expected to find dolphin.aspl.es as CNAME result for bugzilla.aspl.es but found: %s\n", message->answers[0].name_content);
+		printf ("ERROR: expected to find dolphin.aspl.es as CNAME result for cvs.aspl.es but found: %s\n", message->answers[0].name_content);
 		return axl_false;
 	} 
 
 	if (! axl_cmp (message->answers[1].name, "dolphin.aspl.es")) {
-		printf ("ERROR: expected to find bugzilla.aspl.es but found: %s\n", message->answers[1].name);
+		printf ("ERROR: expected to find cvs.aspl.es but found: %s\n", message->answers[1].name);
 		return axl_false;
 	}
 	if (message->answers[1].type != extDnsTypeA) {
@@ -637,8 +640,8 @@ axl_bool test_05 (void) {
 		return axl_false;
 	}
 
-	if (! axl_cmp (message->answers[1].name_content, "213.96.140.9")) {
-		printf ("ERROR: expected to find dolphin.aspl.es as CNAME result for bugzilla.aspl.es but found: %s\n", message->answers[1].name_content);
+	if (! axl_cmp (message->answers[1].name_content, "213.98.90.76")) {
+		printf ("ERROR: expected to find dolphin.aspl.es as CNAME result for cvs.aspl.es but found: %s\n", message->answers[1].name_content);
 		return axl_false;
 	} 
 
@@ -790,9 +793,11 @@ axl_bool test_07 (void) {
 		return axl_false;
 
 	/* printf ("values: %s %d %d %s\n", message->answers[0].name, message->answers[0].type, message->answers[0].class, message->answers[0].name_content);  */
-	if (! check_answer (ctx, &message->answers[0], "aspl.es", extDnsTypeTXT, extDnsClassIN, 
-			    "v=spf1 a mx ip4:194.140.166.76 ip4:213.96.140.9 mx:aspl.es ip4:46.16.60.0/23 ~all"))
-		return axl_false;
+	if (! check_answer (ctx, &message->answers[0], "aspl.es", extDnsTypeTXT, extDnsClassIN,
+			    "v=spf1 ip4:185.195.96.8 ip4:213.98.90.76 ip4:185.195.96.64/26 ~all"))
+		if (! check_answer (ctx, &message->answers[0], "aspl.es", extDnsTypeTXT, extDnsClassIN,
+				    "v=spf1 ip4:185.195.96.64/26 ~all"))
+			return axl_false;
 
 	/* release message */
 	ext_dns_message_unref (message);
