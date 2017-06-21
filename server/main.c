@@ -1193,9 +1193,8 @@ void load_configuration_file (void)
 		axl_error_free (error);
 		exit (-1);
 	}
-	
-	syslog (LOG_INFO, "configuration from %s loaded ok", path);
 
+	/* show listen ip */
 	if (exarg_is_defined ("show-listen-ip")) {
 		/* find first listener node */
 		node = axl_doc_get (config, "/ext-dns-server/listen");
@@ -1217,6 +1216,9 @@ void load_configuration_file (void)
 		exarg_end ();	
 		exit (0);
 	}
+
+	/* reached this point we are starting server, show log */
+	syslog (LOG_INFO, "Starting server, configuration from %s loaded ok", path);
 
 	return;
 }
