@@ -1,6 +1,6 @@
 /* 
  *  ext-dnsd: another, but configurable, DNS server
- *  Copyright (C) 2012 Advanced Software Production Line, S.L.
+ *  Copyright (C) 2017 Advanced Software Production Line, S.L.
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public License
@@ -27,9 +27,8 @@
  *          
  *      Postal address:
  *         Advanced Software Production Line, S.L.
- *         C/ Antonio Suarez Nº 10, 
- *         Edificio Alius A, Despacho 102
- *         Alcalá de Henares 28802 (Madrid)
+ *         Avenida Juan Carlos I Nº13, 2ºC (Torre Garena)
+ *         Alcalá de Henares 28806 Madrid
  *         Spain
  *
  *      Email address:

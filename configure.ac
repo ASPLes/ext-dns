@@ -1,5 +1,5 @@
 dnl  ext-dns: a DNS framework
-dnl  Copyright (C) 2012 Advanced Software Production Line, S.L.
+dnl  Copyright (C) 2017 Advanced Software Production Line, S.L.
 dnl
 dnl  This program is free software; you can redistribute it and/or
 dnl  modify it under the terms of the GNU Lesser General Public License
@@ -27,8 +27,8 @@ dnl  For comercial support:
 dnl          
 dnl      Postal address:
 dnl         Advanced Software Production Line, S.L.
-dnl         C/ Antonio Suarez Nº10, Edificio Alius A, Despacho 102
-dnl         Alcalá de Henares 28802 Madrid
+dnl         Avenida Juan Carlos I Nº13, 2ºC (Torre Garena)
+dnl         Alcalá de Henares 28806 Madrid
 dnl         Spain
 dnl
 dnl      Email address:
