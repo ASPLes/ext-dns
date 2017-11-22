@@ -54,7 +54,7 @@ void on_received  (extDnsCtx     * ctx,
 {
 	axl_bool          result;
 	extDnsMessage   * reply;
-	char              buffer[512];
+	char              buffer[EXT_DNS_MESSAGE_BUFFER_SIZE];
 	int               bytes_written;
 
 	/* skip messages that are queries */
@@ -112,7 +112,7 @@ void on_received  (extDnsCtx     * ctx,
 		ext_dns_cache_store (ctx, reply, source_address);
 
 		/* build buffer reply */
-		bytes_written = ext_dns_message_to_buffer (ctx, reply, buffer, 512);
+		bytes_written = ext_dns_message_to_buffer (ctx, reply, buffer, EXT_DNS_MESSAGE_BUFFER_SIZE);
 		if (bytes_written <= 0) {
 			printf ("ERROR: failed to dump message into the buffer, unable to reply to resolver..\n");
 			return;

@@ -1545,7 +1545,7 @@ axl_bool test_17 (void) {
 	printf ("Test 17: checking msrv-smtp-01.aspl.es (A) resolution..\n");
 	if (! check_header (message, 
 			    /* is query */ axl_false, 
-			    /* ans count */ 13, 
+			    /* ans count */ 14, 
 			    /* query count */ 1,
 			    /* authority count */ 0,
 			    /* additional count */ 0))
@@ -1559,8 +1559,8 @@ axl_bool test_17 (void) {
 	} /* end if */
 
 	/* printf ("Message size: %d\n", message->message_size); */
-	if (message->message_size != 506) {
-		printf ("ERROR (17): expected a message size reply of 218 but found %d\n", 
+	if (message->message_size != 542) {
+		printf ("ERROR (17): expected a message size reply of 542 but found %d\n", 
 			message->message_size);
 		return axl_false;
 	} /* end if */
@@ -1613,7 +1613,7 @@ axl_bool test_18 (void) {
 axl_bool test_19 (void) {
 
 	extDnsCtx        * ctx;
-	char               buffer[512];
+	char               buffer[EXT_DNS_MESSAGE_BUFFER_SIZE];
 	int                iterator;
 
 	if (! axl_cmp (dns_server, "localhost")) {
@@ -1637,7 +1637,7 @@ axl_bool test_19 (void) {
 	
 	/* now send header with no content */
 	iterator = 0;
-	while (iterator < 512) {
+	while (iterator < EXT_DNS_MESSAGE_BUFFER_SIZE) {
 		if (ext_dns_session_send_udp (ctx, (const char *) buffer, iterator, dns_server, dns_server_port, NULL, NULL) != iterator) {
 			printf ("ERROR: failed to send content to regression test server (content length=%d)\n", iterator);
 			return axl_false;
@@ -1654,7 +1654,7 @@ axl_bool test_19 (void) {
 	buffer[11] = 21;
 
 	iterator = 0;
-	while (iterator < 512) {
+	while (iterator < EXT_DNS_MESSAGE_BUFFER_SIZE) {
 		if (ext_dns_session_send_udp (ctx, (const char *) buffer, iterator, dns_server, dns_server_port, NULL, NULL) != iterator) {
 			printf ("ERROR: failed to send content to regression test server (content length=%d)\n", iterator);
 			return axl_false;
@@ -1673,7 +1673,7 @@ axl_bool test_19 (void) {
 axl_bool test_20 (void) {
 
 	extDnsCtx        * ctx;
-	char               buffer[512];
+	char               buffer[EXT_DNS_MESSAGE_BUFFER_SIZE];
 	int                bytes_written;
 	int                iterator;
 
@@ -1901,7 +1901,7 @@ axl_bool test_24 (void) {
 	extDnsMessage    * message;
 	extDnsAsyncQueue * queue;
 	int                bytes_written;
-	char               buffer[512];
+	char               buffer[EXT_DNS_MESSAGE_BUFFER_SIZE];
 
 	/* create context object */
 	ctx = ext_dns_ctx_new ();
