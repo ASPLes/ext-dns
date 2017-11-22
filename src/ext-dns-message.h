@@ -47,7 +47,7 @@
 /** 
  * @brief Max buffer size for DNS messages received.
  */
-#define DNS_MESSAGE_BUFFER_SIZE (2048)
+#define EXT_DNS_MESSAGE_BUFFER_SIZE (2048)
 
 /** 
  * @}

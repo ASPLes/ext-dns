@@ -227,7 +227,7 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 				      extDnsSession * session)
 {
 
-	char            buf[DNS_MESSAGE_BUFFER_SIZE];
+	char            buf[EXT_DNS_MESSAGE_BUFFER_SIZE];
 	struct sockaddr_in remote_addr;
 	socklen_t       sin_size;
 	int             bytes_read;
@@ -254,10 +254,10 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 
 	/* read content from socket */
 	sin_size        = sizeof (remote_addr);
-	bytes_read      = recvfrom (session->session, buf, DNS_MESSAGE_BUFFER_SIZE, MSG_DONTWAIT, (struct sockaddr *) &remote_addr, &sin_size);
+	bytes_read      = recvfrom (session->session, buf, EXT_DNS_MESSAGE_BUFFER_SIZE, MSG_DONTWAIT, (struct sockaddr *) &remote_addr, &sin_size);
 	/* ensure bytes_read have a value inside the buffer */
-	if (bytes_read >= DNS_MESSAGE_BUFFER_SIZE)
-		bytes_read = (DNS_MESSAGE_BUFFER_SIZE - 1);
+	if (bytes_read >= EXT_DNS_MESSAGE_BUFFER_SIZE)
+		bytes_read = (EXT_DNS_MESSAGE_BUFFER_SIZE - 1);
 	buf[bytes_read] = 0;
 
 	/* get source and port address */
@@ -276,15 +276,15 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 		     ext_dns_session_get_id (session), bytes_read, source_address, source_port);
 
 	/* check here message size to limit incoming queries */
-	if (bytes_read > DNS_MESSAGE_BUFFER_SIZE || bytes_read < 12) {
+	if (bytes_read > EXT_DNS_MESSAGE_BUFFER_SIZE || bytes_read < 12) {
 		/* check to close session for thise reply */
 		if (session->close_on_reply)  
 			ext_dns_session_close (session);
 
 		/* notify bad request */
-		if (bytes_read > DNS_MESSAGE_BUFFER_SIZE)
+		if (bytes_read > EXT_DNS_MESSAGE_BUFFER_SIZE)
 			__ext_dns_session_notify_bad_request (ctx, session, source_address, source_port, buf, bytes_read,
-							      "Received a DNS message that is bigger than allowed value (%d > %d)", bytes_read, DNS_MESSAGE_BUFFER_SIZE);
+							      "Received a DNS message that is bigger than allowed value (%d > %d)", bytes_read, EXT_DNS_MESSAGE_BUFFER_SIZE);
 		else
 			__ext_dns_session_notify_bad_request (ctx, session, source_address, source_port, buf, bytes_read,
 							      "Received a DNS message that is smaller than allowed value (%d < 12)", bytes_read);
@@ -362,7 +362,7 @@ void __ext_dns_reader_process_socket (extDnsCtx     * ctx,
 				     ext_dns_message_query_type (ctx, reply));
 
 			/* build buffer reply */
-			bytes_written = ext_dns_message_to_buffer (ctx, reply, buf, DNS_MESSAGE_BUFFER_SIZE);
+			bytes_written = ext_dns_message_to_buffer (ctx, reply, buf, EXT_DNS_MESSAGE_BUFFER_SIZE);
 			if (bytes_written <= 0) {
 				/* release reply */
 				ext_dns_message_unref (reply);
