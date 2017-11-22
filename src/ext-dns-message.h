@@ -39,6 +39,20 @@
 
 #include <ext-dns.h>
 
+/** 
+ * \addtogroup ext_dns_message
+ * @{
+ */
+
+/** 
+ * @brief Max buffer size for DNS messages received.
+ */
+#define DNS_MESSAGE_BUFFER_SIZE (2048)
+
+/** 
+ * @}
+ */
+
 extDnsHeader  * ext_dns_message_parse_header (extDnsCtx * ctx, const char * buf, int buf_size);
 
 extDnsMessage * ext_dns_message_parse_message (extDnsCtx * ctx, extDnsHeader * header, const char * buf, int buf_size);

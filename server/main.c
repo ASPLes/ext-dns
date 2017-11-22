@@ -373,12 +373,12 @@ axl_bool send_command (const char * command, childState * child, char * reply, i
 
 axl_bool ext_dnsd_send_reply (extDnsCtx * ctx, extDnsSession * session, const char * source_address, int source_port, extDnsMessage * reply, axl_bool release_message)
 {
-	char     buffer[512];
+	char     buffer[DNS_MESSAGE_BUFFER_SIZE];
 	int      bytes_written;
 	axl_bool result = axl_false;
 
 	/* build buffer reply */
-	bytes_written = ext_dns_message_to_buffer (ctx, reply, buffer, 512);
+	bytes_written = ext_dns_message_to_buffer (ctx, reply, buffer, DNS_MESSAGE_BUFFER_SIZE);
 	if (bytes_written <= 0) {
 		syslog (LOG_ERR, "ERROR: failed to dump message into the buffer, unable to reply to resolver..");
 		goto return_result;

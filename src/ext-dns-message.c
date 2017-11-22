@@ -41,6 +41,7 @@
  * \defgroup ext_dns_message extDns Message: API functions to handle and produce DNS requsts and replies
  */
 
+
 /** 
  * \addtogroup ext_dns_message
  * @{
@@ -1450,8 +1451,8 @@ int __ext_dns_message_write_resource_record (extDnsCtx * ctx, extDnsResourceReco
 	 * name, type, class and ttl) */
 	limit = position + __ext_dns_message_get_resource_size (rr);
 	if (limit > buffer_size) {
-		ext_dns_log (EXT_DNS_LEVEL_WARNING, "found more content %d (bytes) to be placed into the buffer than is accepted %d (bytes) while writting record",
-			     limit, buffer_size);
+		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "found more content %d (bytes) to be placed into the buffer than is accepted %d (bytes) while writting record as response for %s",
+			     limit, buffer_size, rr->name);
 		return -1;
 	} /* end if */
 
@@ -1611,7 +1612,7 @@ int __ext_dns_message_write_resource_record (extDnsCtx * ctx, extDnsResourceReco
  *
  * @param buffer The buffer where the content will be placed.
  *
- * @param buffer_size The buffer size. It must be 512 bytes size long.
+ * @param buffer_size The buffer size. It must be minimum (DNS_MESSAGE_BUFFER_SIZE) bytes size long.
  *
  * @return The function returns the number of bytes written into the
  * buffer or -1 if it fails.
@@ -1624,7 +1625,7 @@ int             ext_dns_message_to_buffer (extDnsCtx * ctx, extDnsMessage * mess
 	int limit;
 
 	/* check buffer size received */
-	if (buffer_size < 512)
+	if (buffer_size < DNS_MESSAGE_BUFFER_SIZE)
 		return -1;
 
 	/* check values received */
@@ -1632,7 +1633,7 @@ int             ext_dns_message_to_buffer (extDnsCtx * ctx, extDnsMessage * mess
 		return -1;
 
 	/* clear buffer */
-	memset (buffer, 0, 512);
+	memset (buffer, 0, DNS_MESSAGE_BUFFER_SIZE - 1);
 
 	/* set ID */
 	ext_dns_set_16bit (message->header->id, buffer);
@@ -1900,7 +1901,7 @@ axl_bool            ext_dns_message_query_int (extDnsCtx * ctx, extDnsType _type
 					       const char * server, int server_port,
 					       extDnsOnMessageReceived on_message, axlPointer data)
 {
-	char                 buffer[512];
+	char                 buffer[DNS_MESSAGE_BUFFER_SIZE];
 	extDnsSession      * listener;
 	int                  bytes_written;
 	extDnsHeader       * header = NULL;
@@ -2103,7 +2104,7 @@ void ext_dns_message_handle_reply (extDnsCtx     * ctx,
 				   extDnsMessage * message,
 				   axlPointer      data)
 {
-	char                    buffer[512];
+	char                    buffer[DNS_MESSAGE_BUFFER_SIZE];
 	int                     bytes_written;
 	extDnsHandleReplyData * reply_data = data;
 	axl_bool                should_release_message = axl_false;
@@ -2123,7 +2124,7 @@ void ext_dns_message_handle_reply (extDnsCtx     * ctx,
 	message->header->id = reply_data->id;
 
 	/* get the reply into a buffer */
-	bytes_written = ext_dns_message_to_buffer (ctx, message, buffer, 512);
+	bytes_written = ext_dns_message_to_buffer (ctx, message, buffer, DNS_MESSAGE_BUFFER_SIZE);
 	if (bytes_written == -1) {
 		/* release message before continue */
 		if (should_release_message)
@@ -2477,14 +2478,14 @@ axl_bool        ext_dns_message_send_udp_s (extDnsCtx      * ctx,
 					    int              port)
 {
 	int  bytes_written;
-	char buffer[512];
+	char buffer[DNS_MESSAGE_BUFFER_SIZE];
 
 	/* check input values received */
 	if (ctx == NULL || session == NULL || message == NULL || address == NULL || port <= 0)
 		return axl_false;
 
 	/* build buffer reply */
-	bytes_written = ext_dns_message_to_buffer (ctx, message, buffer, 512);
+	bytes_written = ext_dns_message_to_buffer (ctx, message, buffer, DNS_MESSAGE_BUFFER_SIZE);
 	if (bytes_written <= 0) {
 		ext_dns_log (EXT_DNS_LEVEL_CRITICAL, "failed to dump message into the buffer, unable to send message to %s:%d", address, port);
 		return axl_false;
@@ -2511,7 +2512,7 @@ axl_bool        ext_dns_message_send_udp_s (extDnsCtx      * ctx,
  * @param qclass The query class
  *
  * @param buffer A pointer to an already allocated buffer with at
- * least 512 bytes.
+ * least DNS_MESSAGE_BUFFER_SIZE bytes.
  *
  * @param header A reference to the extDnsHeader that represents the
  * query sent.
@@ -2537,7 +2538,7 @@ int             ext_dns_message_build_query (extDnsCtx * ctx, const char * qname
 	}
 
 	/* clear buffer received */
-	memset (buffer, 0, 512);
+	memset (buffer, 0, DNS_MESSAGE_BUFFER_SIZE - 1);
 
 	/* get id */
 	_header->id = ext_dns_message_rand () % 65536;
@@ -2555,7 +2556,7 @@ int             ext_dns_message_build_query (extDnsCtx * ctx, const char * qname
 	position = 12;
 
 	/* now write question */
-	result = ext_dns_encode_domain_name (ctx, qname, buffer + position, 512 - position);
+	result = ext_dns_encode_domain_name (ctx, qname, buffer + position, DNS_MESSAGE_BUFFER_SIZE - position);
 	if (result == -1) {
 		axl_free (_header);
 		return -1;
