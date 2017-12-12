@@ -61,6 +61,15 @@
 #define FD_SETSIZE 1024
 #endif
 
+/** 
+ * @internal 
+ * Added to compile ext-dns on Debian Stretch to avoid
+ * ext-dns-thread.c:803:23: error: storage size of 'timeout' isn't known
+ *    struct timespec      timeout;
+ *                         ^~~~~~~
+ */
+ #define _POSIX_C_SOURCE 199309L 
+
 /* External header includes */
 #include <string.h>
 #include <stdio.h>
