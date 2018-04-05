@@ -8,6 +8,9 @@ if os.path.exists ("/etc/debian_version"):
     if "8" == version[0]:
         # Jessie
         struct_addrinfo_defined = True
+    elif "7" == version[0]:
+        # Wheezy
+        struct_addrinfo_defined = True
     # end if
 # end if
 
