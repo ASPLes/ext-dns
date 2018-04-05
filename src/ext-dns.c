@@ -545,9 +545,10 @@ axl_bool ext_dns_is_exiting           (extDnsCtx * ctx)
 	axl_bool result;
 	if (ctx == NULL)
 		return axl_false;
-	ext_dns_mutex_lock (&ctx->ref_mutex);
+
+	/* ext_dns_mutex_lock (&ctx->ref_mutex); */
 	result = ctx->exit;
-	ext_dns_mutex_unlock (&ctx->ref_mutex);
+	/* ext_dns_mutex_unlock (&ctx->ref_mutex); */
 	return result;
 }
 
