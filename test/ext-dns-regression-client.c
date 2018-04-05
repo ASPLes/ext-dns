@@ -1545,7 +1545,7 @@ axl_bool test_17 (void) {
 	printf ("Test 17: checking msrv-smtp-01.aspl.es (A) resolution..\n");
 	if (! check_header (message, 
 			    /* is query */ axl_false, 
-			    /* ans count */ 14, 
+			    /* ans count */ 16, 
 			    /* query count */ 1,
 			    /* authority count */ 0,
 			    /* additional count */ 0))
@@ -1559,7 +1559,7 @@ axl_bool test_17 (void) {
 	} /* end if */
 
 	/* printf ("Message size: %d\n", message->message_size); */
-	if (message->message_size != 542) {
+	if (message->message_size != 614) {
 		printf ("ERROR (17): expected a message size reply of 542 but found %d\n", 
 			message->message_size);
 		return axl_false;
