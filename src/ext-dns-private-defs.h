@@ -59,6 +59,8 @@
 # define NI_NUMERICSERV 2	/* Don't convert port number to name.  */
 #endif
 
+#include <ext-dns-private-config.h>
+#ifndef STRUCT_ADDRINFO_DEFINED
 /** 
  * NOTE: we are including here static definitions because we are
  * compiling with -ansi flag. However, that flag also hides IPv6 new
@@ -87,6 +89,7 @@ int getnameinfo (const struct sockaddr *sa, socklen_t salen,
 		 char *host, size_t hostlen,
 		 char *serv, size_t servlen,
 		 int flags);
+#endif
 
 const char * gai_strerror (int errcode);
 

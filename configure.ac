@@ -243,6 +243,8 @@ case $host in
 esac
 AC_SUBST(ADDITIONAL_LIBS)
 
+./gen-os-header.py
+
 AC_OUTPUT([
 Makefile
 ext-dns.pc
