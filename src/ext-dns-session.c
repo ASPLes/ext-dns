@@ -2123,6 +2123,10 @@ axl_bool _ext_dns_session_track_pending_replies (extDnsCtx * ctx,
 			data       = session->on_message_data;
 			session->on_message = NULL;
 			session->on_message_data = NULL;
+
+			/* unlock mutex */
+			ext_dns_mutex_unlock (&ctx->ref_mutex);
+			
 			if (on_message) 
 				on_message (ctx, session, NULL, 0, NULL, data);
 
@@ -2131,6 +2135,9 @@ axl_bool _ext_dns_session_track_pending_replies (extDnsCtx * ctx,
 
 			/* flag this function to notify failure by reader when it reaches it */
 			session->notify_failure = axl_true;
+
+			/* lock mutex */
+			ext_dns_mutex_lock (&ctx->ref_mutex);
 
 			/* remove from pending hash */
 			axl_hash_cursor_remove (ctx->pending_cursor);
