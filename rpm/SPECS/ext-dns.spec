@@ -88,6 +88,7 @@ on libext-dns
    /usr/include/ext-dns/ext-dns-types.h
    /usr/include/ext-dns/ext-dns.h
    /usr/include/ext-dns/ext-dns-private-defs.h
+   /usr/include/ext-dns/ext-dns-private-config.h   
    /usr/lib64/pkgconfig/ext-dns.pc
 
 # ext-dnsd package
