@@ -20,6 +20,14 @@ if os.path.exists ("/etc/redhat-release"):
     # end if
 # end if
 
+# Support for Centos6
+if os.path.exists ("/etc/lsb-release"):
+    content = open ("/etc/lsb-release").read ()
+    if "DISTRIB_RELEASE=12" in content:
+        struct_addrinfo_defined = True
+    # end if
+# end if
+
 f = open ("src/ext-dns-private-config.h", "w")
 if struct_addrinfo_defined:
     f.write ("#define STRUCT_ADDRINFO_DEFINED (1)\n")
