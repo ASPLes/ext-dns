@@ -2,11 +2,20 @@
 
 import os
 
+# Support for Squeeze, Wheezy, Jessie
 struct_addrinfo_defined = False
 if os.path.exists ("/etc/debian_version"):
     version = open ("/etc/debian_version").read ()
     if version[0] in ["6", "7", "8"]:
         # Jessie
+        struct_addrinfo_defined = True
+    # end if
+# end if
+
+# Support for Centos6
+if os.path.exists ("/etc/redhat-release"):
+    content = open ("/etc/redhat-release").read ()
+    if "CentOS release 6" in content:
         struct_addrinfo_defined = True
     # end if
 # end if
