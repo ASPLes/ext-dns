@@ -5,11 +5,8 @@ import os
 struct_addrinfo_defined = False
 if os.path.exists ("/etc/debian_version"):
     version = open ("/etc/debian_version").read ()
-    if "8" == version[0]:
+    if version[0] in ["6", "7", "8"]:
         # Jessie
-        struct_addrinfo_defined = True
-    elif "7" == version[0]:
-        # Wheezy
         struct_addrinfo_defined = True
     # end if
 # end if
