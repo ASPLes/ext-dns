@@ -58,7 +58,8 @@ libext_dns_include_HEADERS = \
 	ext-dns-thread-pool.h \
 	ext-dns-support.h \
 	ext-dns-message.h \
-	ext-dns-cache.h
+	ext-dns-cache.h \
+	ext-dns-private-config.h
 
 libext_dns_la_LIBADD = \
 	$(AXL_LIBS) $(PTHREAD_LIBS) $(ADDITIONAL_LIBS)
