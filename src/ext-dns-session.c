@@ -569,6 +569,10 @@ axl_bool                    ext_dns_session_close                  (extDnsSessio
 	/* get a reference to the ctx */
 	ctx = session->ctx;
 
+	/* check if session close was already called without locking */
+	if (session->close_called)
+		return axl_true;
+
 	/* ensure only one call to ext_dns_session_close will
 	   progress */
 	ext_dns_mutex_lock (&session->op_mutex);
