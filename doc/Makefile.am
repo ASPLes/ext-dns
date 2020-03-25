@@ -6,7 +6,8 @@ EXTRA_DIST = ext-dns.doxygen \
 	     body_back.gif \
 	     aspl-logo-header.png \
 	     ext-dnsd-init.d \
-	     ext-dnsd-rpm-init.d
+	     ext-dnsd-rpm-init.d \
+	     hacha-100x171.png
 
 bin_SCRIPTS = initial_build_doc
 
@@ -30,7 +31,7 @@ build_doc: prepare_xmls
 	doxygen ext-dns.doxygen
 	cp -f $(top_srcdir)/doc/main-page-logo.png html
 	cp -f $(top_srcdir)/doc/aspl-logo-header.png html
-	cp -f $(top_srcdir)/doc/hacha-100x171.png html	
+	cp -f $(top_srcdir)/doc/hacha-100x171.png html
 	cp -f $(top_srcdir)/doc/ext-dns.css html
 	cp -f $(top_srcdir)/doc/body_back.gif html
 
