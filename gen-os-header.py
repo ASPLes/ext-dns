@@ -17,6 +17,8 @@ if os.path.exists ("/etc/redhat-release"):
     content = open ("/etc/redhat-release").read ()
     if "CentOS release 6" in content:
         struct_addrinfo_defined = True
+    if "CentOS Linux release 7" in content:
+        struct_addrinfo_defined = True
     # end if
 # end if
 
